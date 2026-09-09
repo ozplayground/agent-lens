@@ -3,11 +3,203 @@
 :root {
   --background: #0d1117;
   --foreground: #f0f6fc;
+  color-scheme: dark;
+}
+
+[data-theme="light"],
+html.light {
+  --background: #f6f8fa;
+  --foreground: #1f2328;
+  color-scheme: light;
 }
 
 body {
   background-color: #0d1117;
   color: #f0f6fc;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
+/* ==========================================================================
+   GitHub Light Theme Overrides
+   ========================================================================== */
+[data-theme="light"] body,
+html.light body {
+  background-color: #f6f8fa !important;
+  color: #1f2328 !important;
+}
+
+/* Background surfaces */
+[data-theme="light"] .bg-\[\#0d1117\],
+html.light .bg-\[\#0d1117\] {
+  background-color: #f6f8fa !important;
+}
+
+[data-theme="light"] .bg-\[\#161b22\],
+html.light .bg-\[\#161b22\] {
+  background-color: #ffffff !important;
+}
+
+[data-theme="light"] .bg-\[\#21262d\],
+html.light .bg-\[\#21262d\] {
+  background-color: #f3f4f6 !important;
+}
+
+[data-theme="light"] .bg-\[\#30363d\],
+html.light .bg-\[\#30363d\] {
+  background-color: #eaeef2 !important;
+}
+
+/* Borders */
+[data-theme="light"] .border-\[\#30363d\],
+html.light .border-\[\#30363d\] {
+  border-color: #d0d7de !important;
+}
+
+[data-theme="light"] .border-\[\#21262d\],
+html.light .border-\[\#21262d\] {
+  border-color: #d0d7de !important;
+}
+
+[data-theme="light"] .border-\[\#30363d\]\/60,
+html.light .border-\[\#30363d\]\/60 {
+  border-color: #d0d7de !important;
+}
+
+/* Text colors */
+[data-theme="light"] .text-\[\#f0f6fc\],
+html.light .text-\[\#f0f6fc\] {
+  color: #1f2328 !important;
+}
+
+[data-theme="light"] .text-\[\#c9d1d9\],
+html.light .text-\[\#c9d1d9\] {
+  color: #24292f !important;
+}
+
+[data-theme="light"] .text-\[\#8b949e\],
+html.light .text-\[\#8b949e\] {
+  color: #656d76 !important;
+}
+
+/* Hover effects */
+[data-theme="light"] .hover\:bg-\[\#21262d\]:hover,
+html.light .hover\:bg-\[\#21262d\]:hover {
+  background-color: #eaeef2 !important;
+}
+
+[data-theme="light"] .hover\:bg-\[\#30363d\]:hover,
+html.light .hover\:bg-\[\#30363d\]:hover {
+  background-color: #d0d7de !important;
+}
+
+[data-theme="light"] .hover\:bg-\[\#161b22\]:hover,
+html.light .hover\:bg-\[\#161b22\]:hover {
+  background-color: #f3f4f6 !important;
+}
+
+[data-theme="light"] .hover\:text-\[\#f0f6fc\]:hover,
+html.light .hover\:text-\[\#f0f6fc\]:hover {
+  color: #1f2328 !important;
+}
+
+[data-theme="light"] .hover\:text-\[\#c9d1d9\]:hover,
+html.light .hover\:text-\[\#c9d1d9\]:hover {
+  color: #1f2328 !important;
+}
+
+[data-theme="light"] .hover\:border-\[\#8b949e\]:hover,
+[data-theme="light"] .hover\:border-\[\#8b949e\]\/60:hover,
+html.light .hover\:border-\[\#8b949e\]:hover,
+html.light .hover\:border-\[\#8b949e\]\/60:hover {
+  border-color: #8c959f !important;
+}
+
+/* Accent blue */
+[data-theme="light"] .text-\[\#58a6ff\],
+html.light .text-\[\#58a6ff\] {
+  color: #0969da !important;
+}
+
+[data-theme="light"] .hover\:text-\[\#58a6ff\]:hover,
+html.light .hover\:text-\[\#58a6ff\]:hover {
+  color: #0550ae !important;
+}
+
+[data-theme="light"] .group:hover .group-hover\:text-\[\#58a6ff\],
+html.light .group:hover .group-hover\:text-\[\#58a6ff\] {
+  color: #0969da !important;
+}
+
+[data-theme="light"] .border-\[\#58a6ff\],
+html.light .border-\[\#58a6ff\] {
+  border-color: #0969da !important;
+}
+
+[data-theme="light"] .focus\:border-\[\#58a6ff\]:focus,
+html.light .focus\:border-\[\#58a6ff\]:focus {
+  border-color: #0969da !important;
+}
+
+[data-theme="light"] .bg-\[\#58a6ff\]\/10,
+html.light .bg-\[\#58a6ff\]\/10 {
+  background-color: rgba(9, 105, 218, 0.1) !important;
+}
+
+[data-theme="light"] .bg-\[\#388bfd\]\/15,
+html.light .bg-\[\#388bfd\]\/15 {
+  background-color: rgba(9, 105, 218, 0.1) !important;
+}
+
+/* Form inputs & Controls */
+[data-theme="light"] input,
+[data-theme="light"] textarea,
+[data-theme="light"] select,
+html.light input,
+html.light textarea,
+html.light select {
+  background-color: #ffffff !important;
+  border-color: #d0d7de !important;
+  color: #1f2328 !important;
+}
+
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder,
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #8c959f !important;
+}
+
+/* Modal shadows & backdrop */
+[data-theme="light"] .shadow-2xl,
+html.light .shadow-2xl {
+  box-shadow: 0 16px 48px rgba(31, 35, 40, 0.18), 0 4px 12px rgba(31, 35, 40, 0.1) !important;
+}
+
+[data-theme="light"] .bg-black\/60,
+[data-theme="light"] .bg-black\/70,
+html.light .bg-black\/60,
+html.light .bg-black\/70 {
+  background-color: rgba(31, 35, 40, 0.45) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* Pre / Code blocks */
+[data-theme="light"] pre,
+[data-theme="light"] code,
+html.light pre,
+html.light code {
+  background-color: #f6f8fa !important;
+  color: #1f2328 !important;
+}
+
+/* Scrollbars */
+[data-theme="light"] ::-webkit-scrollbar-thumb,
+html.light ::-webkit-scrollbar-thumb {
+  background-color: #d0d7de;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-track,
+html.light ::-webkit-scrollbar-track {
+  background-color: #f6f8fa;
+}
