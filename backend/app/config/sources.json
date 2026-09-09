@@ -1,0 +1,286 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-09-09T05:33:46.367081+00:00",
+  "rss_feeds": [
+    {
+      "id": "geeknews",
+      "name": "GeekNews (긱뉴스)",
+      "url": "https://news.hada.io/rss/news",
+      "site_url": "https://news.hada.io",
+      "category_hint": "ai_news",
+      "country": "KR",
+      "enabled": true,
+      "description": "국내 1위 개발자 및 AI 트렌드 큐레이션 커뮤니티"
+    },
+    {
+      "id": "aitimes",
+      "name": "AI타임스",
+      "url": "https://www.aitimes.com/rss/allArticle.xml",
+      "site_url": "https://www.aitimes.com",
+      "category_hint": "ai_news",
+      "country": "KR",
+      "enabled": true,
+      "description": "국내 최대 인공지능 전문 뉴스 미디어"
+    },
+    {
+      "id": "yozm_it",
+      "name": "요즘IT",
+      "url": "https://yozm.wishket.com/magazine/feed/",
+      "site_url": "https://yozm.wishket.com",
+      "category_hint": "agent_tech",
+      "country": "KR",
+      "enabled": true,
+      "description": "국내 실무 개발자 기술 칼럼 및 AI 아키텍처"
+    },
+    {
+      "id": "naver_d2",
+      "name": "네이버 D2",
+      "url": "https://d2.naver.com/d2.atom",
+      "site_url": "https://d2.naver.com",
+      "category_hint": "agent_tech",
+      "country": "KR",
+      "enabled": true,
+      "description": "네이버 기술 연구 및 AI 엔지니어링 블로그"
+    },
+    {
+      "id": "toss_tech",
+      "name": "토스 테크",
+      "url": "https://toss.tech/rss.xml",
+      "site_url": "https://toss.tech",
+      "category_hint": "agent_tech",
+      "country": "KR",
+      "enabled": true,
+      "description": "토스 엔지니어링 테크 피드"
+    },
+    {
+      "id": "swe_bench_releases",
+      "name": "SWE-bench Official Releases",
+      "url": "https://github.com/princeton-nlp/SWE-bench/releases.atom",
+      "site_url": "https://github.com/princeton-nlp/SWE-bench",
+      "category_hint": "harness",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "에이전트 벤치마크 및 회귀 테스트 하네스 공식 릴리즈"
+    },
+    {
+      "id": "mcp_servers_releases",
+      "name": "Model Context Protocol Servers",
+      "url": "https://github.com/modelcontextprotocol/servers/releases.atom",
+      "site_url": "https://github.com/modelcontextprotocol/servers",
+      "category_hint": "mcp_plugins_skills",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "공식 MCP 서버 및 도구 레퍼런스 릴리즈"
+    },
+    {
+      "id": "langgraph_releases",
+      "name": "LangGraph Engine",
+      "url": "https://github.com/langchain-ai/langgraph/releases.atom",
+      "site_url": "https://github.com/langchain-ai/langgraph",
+      "category_hint": "agent_tech",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "멀티에이전트 오케스트레이션 런타임 릴리즈"
+    },
+    {
+      "id": "crewai_releases",
+      "name": "CrewAI Autonomous Agents",
+      "url": "https://github.com/crewAIInc/crewAI/releases.atom",
+      "site_url": "https://github.com/crewAIInc/crewAI",
+      "category_hint": "agent_tech",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "자율 에이전트 팀 프레임워크 릴리즈"
+    },
+    {
+      "id": "huggingface_blog",
+      "name": "Hugging Face Blog",
+      "url": "https://huggingface.co/blog/feed.xml",
+      "site_url": "https://huggingface.co/blog",
+      "category_hint": "ai_news",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "오픈소스 모델, 에이전트 평가, 최신 테크 블로그"
+    },
+    {
+      "id": "simon_willison",
+      "name": "Simon Willison Weblog",
+      "url": "https://simonwillison.net/atom/everything/",
+      "site_url": "https://simonwillison.net",
+      "category_hint": "mcp_plugins_skills",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "MCP, 프롬프트 엔지니어링, LLM 도구 활용 전문 블로그"
+    },
+    {
+      "id": "openai_news",
+      "name": "OpenAI News",
+      "url": "https://openai.com/news/rss.xml",
+      "site_url": "https://openai.com/news",
+      "category_hint": "ai_news",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "OpenAI 공식 발표 및 프론티어 모델 출시"
+    },
+    {
+      "id": "langchain_blog",
+      "name": "LangChain Blog",
+      "url": "https://blog.langchain.dev/rss/",
+      "site_url": "https://blog.langchain.dev",
+      "category_hint": "agent_tech",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "에이전트 아키텍처, 벤치마크, 툴 생태계"
+    },
+    {
+      "id": "latent_space",
+      "name": "Latent Space",
+      "url": "https://www.latent.space/feed",
+      "site_url": "https://www.latent.space",
+      "category_hint": "ai_news",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "AI 엔지니어 및 에이전트 전문가 심층 팟캐스트/글"
+    },
+    {
+      "id": "interconnects",
+      "name": "Interconnects (Nathan Lambert)",
+      "url": "https://www.interconnects.ai/feed",
+      "site_url": "https://www.interconnects.ai",
+      "category_hint": "harness",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "AI 벤치마크, 사후학습, RL 에이전트 평가 전문"
+    },
+    {
+      "id": "ahead_of_ai",
+      "name": "Ahead of AI",
+      "url": "https://magazine.sebastianraschka.com/feed",
+      "site_url": "https://magazine.sebastianraschka.com",
+      "category_hint": "ai_news",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "Ahead of AI focuses on machine learning and AI research and is read by more than 200,000 researchers and practitioners who want to stay ahead in a rapidly evolving field.",
+      "added_at": "2026-09-09T03:53:29.208121+00:00"
+    },
+    {
+      "id": "microsoft_research",
+      "name": "Microsoft Research",
+      "url": "https://www.microsoft.com/en-us/research/feed/",
+      "site_url": "https://www.microsoft.com/en-us/research/",
+      "category_hint": "agent_tech",
+      "country": "GLOBAL",
+      "enabled": true,
+      "description": "",
+      "added_at": "2026-09-09T05:33:46.367074+00:00"
+    }
+  ],
+  "github_sources": {
+    "enabled": true,
+    "search_queries": [
+      "topic:mcp-server",
+      "model-context-protocol in:name,description",
+      "agent harness in:name,description",
+      "swe-bench in:name,description",
+      "ai-agent stars:>500"
+    ],
+    "monitored_repos": [
+      {
+        "repo": "modelcontextprotocol/servers",
+        "category": "mcp_plugins_skills",
+        "enabled": true,
+        "description": "공식 MCP 레퍼런스 서버 컬렉션 (Postgres, SQLite, Git, Filesystem 등)",
+        "stars_hint": 18500
+      },
+      {
+        "repo": "modelcontextprotocol/python-sdk",
+        "category": "mcp_plugins_skills",
+        "enabled": true,
+        "description": "공식 MCP Python 클라이언트 및 서버 SDK",
+        "stars_hint": 4200
+      },
+      {
+        "repo": "princeton-nlp/SWE-bench",
+        "category": "harness",
+        "enabled": true,
+        "description": "실제 소프트웨어 엔지니어링 문제 해결 에이전트 벤치마크 하네스",
+        "stars_hint": 7900
+      },
+      {
+        "repo": "langchain-ai/langgraph",
+        "category": "agent_tech",
+        "enabled": true,
+        "description": "멀티에이전트 그래프 오케스트레이션 및 상태 영속화 프레임워크",
+        "stars_hint": 14300
+      },
+      {
+        "repo": "microsoft/autogen",
+        "category": "agent_tech",
+        "enabled": true,
+        "description": "마이크로소프트 차세대 멀티에이전트 협업 프레임워크",
+        "stars_hint": 36500
+      },
+      {
+        "repo": "browser-use/browser-use",
+        "category": "agent_tech",
+        "enabled": true,
+        "description": "자율 브라우징 및 헤드리스 웹 자동화 에이전트 툴킷",
+        "stars_hint": 26000
+      },
+      {
+        "repo": "jlowin/fastmcp",
+        "category": "mcp_plugins_skills",
+        "enabled": true,
+        "description": "가장 빠르고 인체공학적인 Python MCP 서버 빌더",
+        "stars_hint": 3100
+      },
+      {
+        "repo": "OpenDevin/OpenDevin",
+        "category": "harness",
+        "enabled": true,
+        "description": "소프트웨어 개발 자율 에이전트 및 하네스 벤치마크",
+        "stars_hint": 34000
+      }
+    ]
+  },
+  "reddit_sources": {
+    "enabled": true,
+    "subreddits": [
+      "LocalLLaMA",
+      "MachineLearning",
+      "OpenAI",
+      "ArtificialInteligence"
+    ],
+    "keywords": [
+      "agent",
+      "harness",
+      "mcp",
+      "eval",
+      "tool",
+      "benchmark",
+      "reasoning"
+    ]
+  },
+  "hackernews_sources": {
+    "enabled": true,
+    "queries": [
+      "AI agent",
+      "Model Context Protocol",
+      "agent harness",
+      "agent benchmark",
+      "LLM eval",
+      "autonomous agent"
+    ]
+  },
+  "arxiv_sources": {
+    "enabled": true,
+    "queries": [
+      "all:\"agent harness\" OR all:\"agent evaluation\"",
+      "all:\"model context protocol\" OR all:\"tool-use agent\"",
+      "all:\"coding agent\" OR all:\"software engineering agent\""
+    ]
+  },
+  "huggingface_sources": {
+    "enabled": true
+  }
+}
