@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Clock, Terminal, CheckCircle2, Cpu, Rss, Bell, Trash2, AlertTriangle, Globe } from 'lucide-react';
+import { RefreshCw, Clock, Terminal, CheckCircle2, Cpu, Rss, Bell, Trash2, AlertTriangle, Globe, Sun, Moon } from 'lucide-react';
 import { ScheduleStatus } from '@/types/news';
 import { fetchScheduleStatus, triggerManualCollect, fetchCrawlProgress, resetAndRecollect } from '@/lib/api';
+import { useTheme } from '@/context/ThemeContext';
 
 interface HeaderProps {
   onRefresh: () => void;
@@ -14,6 +15,7 @@ interface HeaderProps {
 }
 
 export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWebhook, onOpenSources }: HeaderProps) {
+  const { theme, toggleTheme } = useTheme();
   const [status, setStatus] = useState<ScheduleStatus | null>(null);
   const [isCollecting, setIsCollecting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -106,7 +108,7 @@ export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWeb
           <div className="flex items-center gap-2">
             <h1 className="text-base font-bold text-[#f0f6fc] tracking-tight">AgentLens</h1>
             <span className="text-[11px] font-mono text-[#8b949e] bg-[#21262d] px-1.5 py-0.5 rounded border border-[#30363d]">
-              v1.0
+              v1.1
             </span>
             <span className="hidden sm:flex items-center gap-1 text-xs text-[#8b949e] ml-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#3fb950]" />
@@ -120,6 +122,20 @@ export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWeb
 
         {/* Actions */}
         <div className="flex items-center flex-wrap gap-2">
+          {/* Theme Toggle (Light / Dark) */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center justify-center w-7 h-7 rounded-md bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-[#c9d1d9] hover:text-[#f0f6fc] transition-colors cursor-pointer"
+            title={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
+            aria-label="테마 전환"
+          >
+            {theme === 'dark' ? (
+              <Sun className="w-3.5 h-3.5 text-[#d29922]" />
+            ) : (
+              <Moon className="w-3.5 h-3.5 text-[#0969da]" />
+            )}
+          </button>
+
           {onOpenSources && (
             <button
               onClick={onOpenSources}

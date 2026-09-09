@@ -204,6 +204,8 @@ export default function SourcesModal({ isOpen, onClose, onSourcesUpdated }: Sour
           </div>
           <button
             onClick={onClose}
+            title="닫기"
+            aria-label="닫기"
             className="text-[#8b949e] hover:text-[#f0f6fc] p-1.5 rounded-md hover:bg-[#21262d] transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
