@@ -1,0 +1,73 @@
+# =================================================================
+# AgentLens Unified Docker Compose Deployment
+# - Backend: FastAPI 0.115 + APScheduler + SQLite (Port 8000)
+# - Frontend: Next.js 16 Standalone (Port 3001)
+# =================================================================
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agentlens-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      - PROJECT_NAME=AgentLens
+      - VERSION=1.2.0
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DATABASE_URL=sqlite+aiosqlite:///./data/agentlens.db
+      - CRAWL_SCHEDULE_HOURS=${CRAWL_SCHEDULE_HOURS:-0,6,12,18}
+      - CRAWL_TIMEZONE=${CRAWL_TIMEZONE:-UTC}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-flash-latest}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+    volumes:
+      - agentlens-data:/app/data
+      - ./config.json:/app/config.json:ro
+      - ./sources.json:/app/sources.json:rw
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/schedule/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - agentlens-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: agentlens-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - INTERNAL_API_URL=http://backend:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - agentlens-network
+
+volumes:
+  agentlens-data:
+    name: agentlens-data
+    driver: local
+
+networks:
+  agentlens-network:
+    name: agentlens-network
+    driver: bridge

@@ -26,3 +26,18 @@ reset:
 	@echo "==> Resetting all collected data and triggering clean re-crawl..."
 	@curl -s -X POST http://localhost:8000/api/schedule/reset-and-collect | python3 -m json.tool || true
 
+docker-build:
+	@echo "==> Building Docker images for Backend and Frontend..."
+	docker compose build
+
+docker-up:
+	@echo "==> Launching AgentLens services via Docker Compose..."
+	docker compose up -d
+
+docker-down:
+	@echo "==> Stopping Docker Compose services..."
+	docker compose down
+
+docker-logs:
+	docker compose logs -f
+

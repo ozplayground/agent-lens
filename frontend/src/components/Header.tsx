@@ -108,7 +108,7 @@ export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWeb
           <div className="flex items-center gap-2">
             <h1 className="text-base font-bold text-[#f0f6fc] tracking-tight">AgentLens</h1>
             <span className="text-[11px] font-mono text-[#8b949e] bg-[#21262d] px-1.5 py-0.5 rounded border border-[#30363d]">
-              v1.1
+              v1.2
             </span>
             <span className="hidden sm:flex items-center gap-1 text-xs text-[#8b949e] ml-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#3fb950]" />
