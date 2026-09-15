@@ -43,6 +43,7 @@ class AskQuestionResponse(BaseModel):
     news_id: int
     question: str
     answer: str
+    model_used: Optional[str] = None
 
 class BriefingCategoryItem(BaseModel):
     id: Optional[int] = None

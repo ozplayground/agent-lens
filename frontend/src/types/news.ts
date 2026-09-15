@@ -110,6 +110,7 @@ export interface AskQuestionResponse {
   news_id: number;
   question: string;
   answer: string;
+  model_used?: string;
 }
 
 export interface CrawlLog {

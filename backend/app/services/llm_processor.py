@@ -2,10 +2,10 @@ import os
 import re
 import json
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 import httpx
-from app.config import settings
+from app.config import settings, load_json_config
 
 logger = logging.getLogger("agentlens.llm")
 
@@ -72,16 +72,27 @@ class LLMProcessor:
         self.gemini_key = getattr(settings, "GEMINI_API_KEY", "")
         self.openai_key = getattr(settings, "OPENAI_API_KEY", "")
         self.ollama_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
+        self._qa_cache: Dict[str, Tuple[str, str]] = {}
 
-    async def _call_gemini(self, prompt: str) -> Optional[str]:
-        key = getattr(settings, "GEMINI_API_KEY", "") or self.gemini_key
+    async def _call_gemini(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
+        json_cfg = load_json_config()
+        key = (
+            getattr(settings, "GEMINI_API_KEY", "")
+            or json_cfg.get("llm", {}).get("gemini_api_key", "")
+            or os.environ.get("GEMINI_API_KEY", "")
+            or self.gemini_key
+        )
         if not key:
-            return None
-        configured_model = getattr(settings, "GEMINI_MODEL", "gemini-flash-latest")
+            return None, None
+        configured_model = (
+            getattr(settings, "GEMINI_MODEL", "")
+            or json_cfg.get("llm", {}).get("gemini_model", "")
+            or "gemini-3.5-flash"
+        )
         candidates = []
-        if configured_model:
+        if configured_model and configured_model not in ["gemini-2.0-flash", "gemini-flash-latest"]:
             candidates.append(configured_model)
-        for m in ["gemini-flash-latest", "gemini-3.6-flash", "gemini-2.5-flash"]:
+        for m in ["gemini-3.5-flash", "gemini-3.6-flash"]:
             if m not in candidates:
                 candidates.append(m)
 
@@ -89,52 +100,72 @@ class LLMProcessor:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1000}
+                "generationConfig": {"temperature": 0.3, "maxOutputTokens": 2048}
             }
             try:
-                async with httpx.AsyncClient(timeout=15.0) as client:
+                async with httpx.AsyncClient(timeout=20.0) as client:
                     res = await client.post(url, json=payload)
                     if res.status_code == 200:
                         data = res.json()
                         candidates_list = data.get("candidates", [])
                         if candidates_list:
                             parts = candidates_list[0].get("content", {}).get("parts", [])
-                            if parts and "text" in parts[0]:
+                            # Extract all non-thought text parts
+                            ans_parts = [
+                                p["text"].strip() for p in parts
+                                if not p.get("thought") and "text" in p and p["text"].strip()
+                            ]
+                            if ans_parts:
+                                ans_text = "\n\n".join(ans_parts).strip()
                                 logger.info(f"Gemini generation succeeded with model {model}")
-                                return parts[0]["text"].strip()
+                                return ans_text, f"Google {model}"
+                            elif parts and "text" in parts[0]:
+                                return parts[0]["text"].strip(), f"Google {model}"
+                    elif res.status_code == 429:
+                        logger.warning(f"Gemini API ({model}) rate limited (429), will fallback gracefully")
                     else:
                         logger.warning(f"Gemini API ({model}) returned {res.status_code}: {res.text[:120]}")
             except Exception as e:
                 logger.warning(f"Gemini API call ({model}) failed: {e}")
-        return None
+        return None, None
 
-    async def _call_openai(self, prompt: str) -> Optional[str]:
-        key = getattr(settings, "OPENAI_API_KEY", "") or self.openai_key
+    async def _call_openai(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
+        json_cfg = load_json_config()
+        key = (
+            getattr(settings, "OPENAI_API_KEY", "")
+            or json_cfg.get("llm", {}).get("openai_api_key", "")
+            or os.environ.get("OPENAI_API_KEY", "")
+            or self.openai_key
+        )
         if not key:
-            return None
-        model = getattr(settings, "OPENAI_MODEL", "gpt-4o-mini")
+            return None, None
+        model = (
+            getattr(settings, "OPENAI_MODEL", "")
+            or json_cfg.get("llm", {}).get("openai_model", "")
+            or "gpt-4o-mini"
+        )
         url = "https://api.openai.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3,
-            "max_tokens": 1000
+            "max_tokens": 1500
         }
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 res = await client.post(url, headers=headers, json=payload)
                 if res.status_code == 200:
                     data = res.json()
-                    return data["choices"][0]["message"]["content"].strip()
+                    return data["choices"][0]["message"]["content"].strip(), f"OpenAI {model}"
         except Exception as e:
             logger.warning(f"OpenAI API call failed: {e}")
-        return None
+        return None, None
 
-    async def _call_ollama(self, prompt: str) -> Optional[str]:
+    async def _call_ollama(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
         base_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434") or self.ollama_url
         if not base_url:
-            return None
+            return None, None
         model = getattr(settings, "OLLAMA_MODEL", "llama3.2:latest")
         url = f"{base_url.rstrip('/')}/api/generate"
         payload = {"model": model, "prompt": prompt, "stream": False}
@@ -143,30 +174,30 @@ class LLMProcessor:
                 res = await client.post(url, json=payload)
                 if res.status_code == 200:
                     data = res.json()
-                    return data.get("response", "").strip()
+                    return data.get("response", "").strip(), f"Ollama {model}"
         except Exception as e:
             logger.debug(f"Ollama call failed or not running: {e}")
-        return None
+        return None, None
 
-    async def _generate_live_answer(self, prompt: str) -> Optional[str]:
+    async def _generate_live_answer(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
         provider = getattr(settings, "LLM_PROVIDER", "auto").lower()
         if provider == "gemini":
-            ans = await self._call_gemini(prompt)
-            if ans: return ans
+            ans, model = await self._call_gemini(prompt)
+            if ans: return ans, model
         elif provider == "openai":
-            ans = await self._call_openai(prompt)
-            if ans: return ans
+            ans, model = await self._call_openai(prompt)
+            if ans: return ans, model
         elif provider == "ollama":
-            ans = await self._call_ollama(prompt)
-            if ans: return ans
+            ans, model = await self._call_ollama(prompt)
+            if ans: return ans, model
         else: # auto
             if getattr(settings, "GEMINI_API_KEY", ""):
-                ans = await self._call_gemini(prompt)
-                if ans: return ans
+                ans, model = await self._call_gemini(prompt)
+                if ans: return ans, model
             if getattr(settings, "OPENAI_API_KEY", ""):
-                ans = await self._call_openai(prompt)
-                if ans: return ans
-        return None
+                ans, model = await self._call_openai(prompt)
+                if ans: return ans, model
+        return None, None
 
     def extract_tech_stack(self, text: str) -> List[str]:
         t_lower = text.lower()
@@ -258,50 +289,98 @@ class LLMProcessor:
             "tech_stack": tech_entities
         }
 
-    async def answer_question(self, item_title: str, item_summary: str, category: str, tech_stack: List[str], question: str) -> str:
-        """Interactive Ask AI answer generator with live LLM and heuristic fallback."""
+    async def answer_question_with_meta(
+        self,
+        item_title: str,
+        item_summary: str,
+        category: str,
+        tech_stack: List[str],
+        question: str
+    ) -> Tuple[str, str]:
+        """Interactive Ask AI answer generator returning (answer_text, model_used)."""
+        cache_key = f"{item_title.strip()}:{question.strip().lower()}"
+        if cache_key in self._qa_cache:
+            logger.info(f"Returning cached answer for key: {cache_key[:60]}...")
+            return self._qa_cache[cache_key]
+
         prompt = (
-            f"당신은 AI 에이전트 및 하네스 엔지니어링 전문가입니다.\n"
-            f"다음 기술 소식을 바탕으로 사용자의 질문에 한국어로 명확하고 실질적인 기술 답변을 마크다운으로 작성해주세요.\n\n"
-            f"[기사 정보]\n"
+            f"당신은 최신 AI 기술, 자율 에이전트(Autonomous Agents), 하네스(Harness) 벤치마크 및 MCP(Model Context Protocol) 생태계 전문 수석 아키텍트입니다.\n"
+            f"제공된 기술 기사 정보를 바탕으로 사용자의 질문에 대해 실무 아키텍처 및 엔지니어링 관점에서 구체적이고 깊이 있는 기술 답변을 한국어 마크다운(Markdown)으로 작성해주세요.\n\n"
+            f"[분석 대상 소식]\n"
             f"- 제목: {item_title}\n"
-            f"- 요약: {item_summary}\n"
-            f"- 카테고리: {category}\n"
-            f"- 관련 기술스택: {', '.join(tech_stack) if tech_stack else 'AI / Agent'}\n\n"
+            f"- 내용 및 맥락: {item_summary}\n"
+            f"- 기술 분류: {category}\n"
+            f"- 연관 기술 스택: {', '.join(tech_stack) if tech_stack else 'AI / Agent Framework'}\n\n"
             f"[사용자 질문]\n"
-            f"{question}"
+            f"{question}\n\n"
+            f"[작성 가이드라인]\n"
+            f"1. 기사 제목이나 요약을 단순 나열하거나 앵무새처럼 복사하지 마세요.\n"
+            f"2. 질문자의 의도를 정확히 파악하여 기술적 메커니즘, 실제 프로젝트에 도입/연동하는 구체적 방법, 실무 아키텍처 관점의 장단점 및 트레이드오프를 체계적으로 설명하세요.\n"
+            f"3. 가독성을 위해 마크다운 헤딩(###), 불릿 포인트(-), 볼드체, 인라인 코드(`...`)를 적극 활용하세요.\n"
+            f"4. 실무 개발팀이 바로 실행해볼 수 있는 구체적인 액션 아이템이나 주의점(Caution)을 1~2개 제시해주세요."
         )
-        live_ans = await self._generate_live_answer(prompt)
-        if live_ans:
-            return live_ans
+
+        live_ans, model_name = await self._generate_live_answer(prompt)
+        if live_ans and model_name:
+            self._qa_cache[cache_key] = (live_ans, model_name)
+            return live_ans, model_name
 
         q_lower = question.lower()
-        context = f"제목: {item_title}\n요약: {item_summary}\n카테고리: {category}\n기술스택: {', '.join(tech_stack)}"
+        tech_display = ', '.join(tech_stack) if tech_stack else 'AI 에이전트 인프라'
+        category_insight = CATEGORY_INSIGHTS.get(category, '최신 AI 기술 생태계의 표준화와 워크플로우를 개선합니다.')
 
-        # If question asks about application
-        if any(k in q_lower for k in ["적용", "도입", "사용", "how", "apply"]):
-            return (
-                f"**[적용 방안 가이드]**\n"
-                f"'{item_title}' 소식은 주로 **{category.upper()}** 영역의 워크플로우 개선과 관련이 있습니다.\n\n"
-                f"1. **연동 검토**: {', '.join(tech_stack) if tech_stack else '해당 기술'}의 공식 인터페이스 및 문서를 확인하세요.\n"
-                f"2. **하네스 격리**: 신규 에이전트 또는 MCP 도구를 붙이기 전 샌드박스 환경에서 회귀 테스트를 먼저 수행하는 것을 권장합니다.\n"
-                f"3. **기대 효과**: {CATEGORY_INSIGHTS.get(category, '에이전트 개발 효율성이 향상됩니다.')}"
+        if any(k in q_lower for k in ["적용", "도입", "사용", "구현", "어떻게", "how", "apply", "build"]):
+            answer = (
+                f"### 🛠️ 실무 적용 및 도입 가이드\n\n"
+                f"**{item_title}** 기술을 실무 프로젝트 및 에이전트 워크플로우에 연동하기 위한 핵심 절차입니다:\n\n"
+                f"1. **인터페이스 연동 및 환경 구성**\n"
+                f"   - 주요 기술 스택인 `{tech_display}`의 공식 규격 및 레퍼런스를 검토하고 표준 프로토콜 인터페이스를 선언하세요.\n\n"
+                f"2. **하네스 기반 샌드박스 격리**\n"
+                f"   - 자율 에이전트 환경에 직접 연동하기 전, Docker/가상 샌드박스 환경에서 회귀 테스트 및 도구 실행 권한을 엄격히 제한하세요.\n\n"
+                f"3. **관측성(Observability) 및 로깅 체계**\n"
+                f"   - 에이전트의 도구 호출 입출력과 상태 변경을 실시간 추적할 수 있도록 트레이싱 로깅을 구축하세요.\n\n"
+                f"> 💡 **기대 효과**: {category_insight}"
             )
-        elif any(k in q_lower for k in ["차이", "비교", "장점", "difference", "vs"]):
-            return (
-                f"**[비교 및 차별점 분석]**\n"
-                f"기존 방식 대비 '{item_title}'의 주요 차별점은 표준화 및 자동화 수준입니다.\n\n"
-                f"- **주요 특징**: {item_summary[:180] if item_summary else '표준 스펙 준수'}\n"
-                f"- **기술 스택**: {', '.join(tech_stack) if tech_stack else '표준 에이전트 도구'}\n"
-                f"- **핵심 가치**: 수동 설정 없이 재사용 가능한 하네스 및 프로토콜 규격을 제공합니다."
+        elif any(k in q_lower for k in ["차이", "비교", "장점", "단점", "한계", "vs", "difference", "compare"]):
+            answer = (
+                f"### ⚖️ 기술 비교 및 차별점 분석\n\n"
+                f"기존 방식과 비교했을 때 **{item_title}**의 주요 특징과 트레이드오프는 다음과 같습니다:\n\n"
+                f"- **핵심 차별점**: 표준화된 규격을 통해 파편화된 구현을 통합하고, 재사용성과 확장성을 극대화합니다.\n"
+                f"- **기술 스택 생태계**: `{tech_display}` 기반의 모듈화 아키텍처를 채택하여 기존 파이프라인과의 결합도를 낮춥니다.\n"
+                f"- **도입 시 고려사항 (Trade-off)**: 초기 연동 및 보안 하네스 구성 비용이 발생할 수 있으나 장기적 유지보수성과 평가 신뢰도를 확보할 수 있습니다.\n\n"
+                f"> 📌 **시사점**: {category_insight}"
+            )
+        elif any(k in q_lower for k in ["원리", "구조", "아키텍처", "동작", "왜", "why", "architecture"]):
+            answer = (
+                f"### 💡 핵심 원리 및 아키텍처 분석\n\n"
+                f"**{item_title}**의 내부 동작 구조와 설계 원리입니다:\n\n"
+                f"- **프로토콜 및 인터페이스 레이어**: 클라이언트와 에이전트 간 비동기 메시지 교환 및 도구 실행을 표준화된 방식으로 오케스트레이션합니다.\n"
+                f"- **연관 기술 맥락**: `{tech_display}` 생태계와 결합하여 상태 관리와 런타임 신뢰성을 보장합니다.\n"
+                f"- **설계 목표**: 복합적인 도구 호출 및 멀티에이전트 환경에서 예외 처리와 회귀 검증을 체계화하는 데 목적이 있습니다.\n\n"
+                f"> 🎯 **핵심 요약**: {category_insight}"
+            )
+        elif any(k in q_lower for k in ["보안", "격리", "안전", "안정", "security", "sandbox", "safety"]):
+            answer = (
+                f"### 🔒 보안 및 격리 환경 검토 사항\n\n"
+                f"**{item_title}** 도입 시 필수적으로 고려해야 할 보안 가이드라인입니다:\n\n"
+                f"1. **최소 권한 원칙 (Principle of Least Privilege)**: 에이전트 도구 실행 권한을 읽기 전용 또는 명시적 승인 기반으로 제한하세요.\n"
+                f"2. **런타임 샌드박스**: 컨테이너 격리를 통해 로컬 호스트 자원 및 네트워크로의 무단 탈출을 차단하세요.\n"
+                f"3. **민감정보 마스킹**: API 키 및 환경변수가 프롬프트나 로그에 누출되지 않도록 전처리 필터를 적용하세요."
             )
         else:
-            return (
-                f"**[AI 요약 답변]**\n"
-                f"질문하신 내용에 대한 분석 결과입니다:\n\n"
-                f"- **핵심 요점**: {item_title}\n"
-                f"- **기술 맥락**: {item_summary[:200] if item_summary else '최신 AI 기술 동향'}\n"
-                f"- **개발자 시사점**: {CATEGORY_INSIGHTS.get(category, '최신 AI 동향')}"
+            answer = (
+                f"### 🤖 기술 맥락 및 실무 분석\n\n"
+                f"**{item_title}**에 대한 기술적 분석 결과입니다:\n\n"
+                f"- **기술적 배경**: `{tech_display}` 기반의 최신 워크플로우로, {item_summary[:220] if item_summary else 'AI 에이전트 생태계의 주요 발전 소식입니다.'}\n"
+                f"- **엔지니어링 가치**: {category_insight}\n"
+                f"- **추천 액션**: 실무 프로젝트와의 접점을 탐색하기 위해 공식 문서의 인터페이스 스펙 및 예제 코드를 선행 검토하는 것을 권장합니다."
             )
+
+        return answer, "AgentLens Heuristic Engine"
+
+    async def answer_question(self, item_title: str, item_summary: str, category: str, tech_stack: List[str], question: str) -> str:
+        """Backwards-compatible wrapper returning only answer string."""
+        ans, _ = await self.answer_question_with_meta(item_title, item_summary, category, tech_stack, question)
+        return ans
 
 llm_processor = LLMProcessor()

@@ -8,7 +8,7 @@ def test_config_json_found_and_loaded():
     assert path.exists()
 
     assert settings.PROJECT_NAME == "AgentLens"
-    assert settings.VERSION == "1.3.2"
+    assert settings.VERSION == "1.4.0"
     assert len(settings.CRAWL_SCHEDULE_HOURS) > 0
     assert settings.QUALITY_CUTOFF_SCORE == 5.0
     assert settings.HIGH_SIGNAL_THRESHOLD == 7.0

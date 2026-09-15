@@ -119,7 +119,7 @@ async def ask_about_news_item(
         raise HTTPException(status_code=404, detail="News item not found")
 
     tech_stack = [t.strip() for t in it.tech_stack.split(",") if t.strip()] if it.tech_stack else []
-    answer = await llm_processor.answer_question(
+    answer, model_used = await llm_processor.answer_question_with_meta(
         item_title=it.title,
         item_summary=it.summary or "",
         category=it.category,
@@ -130,7 +130,8 @@ async def ask_about_news_item(
     return AskQuestionResponse(
         news_id=it.id,
         question=body.question,
-        answer=answer
+        answer=answer,
+        model_used=model_used
     )
 
 @router.get("/feed/rss.xml")

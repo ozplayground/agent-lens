@@ -15,14 +15,14 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
       - PROJECT_NAME=AgentLens
-      - VERSION=1.3.2
+      - VERSION=1.4.0
       - HOST=0.0.0.0
       - PORT=8000
       - DATABASE_URL=sqlite+aiosqlite:///./data/agentlens.db
       - CRAWL_SCHEDULE_HOURS=${CRAWL_SCHEDULE_HOURS:-0,6,12,18}
       - CRAWL_TIMEZONE=${CRAWL_TIMEZONE:-UTC}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-flash-latest}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
