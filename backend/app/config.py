@@ -32,7 +32,7 @@ _json_data = load_json_config()
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = _json_data.get("app", {}).get("project_name", "AgentLens")
-    VERSION: str = _json_data.get("app", {}).get("version", "1.3.1")
+    VERSION: str = _json_data.get("app", {}).get("version", "1.3.2")
     DATABASE_URL: str = _json_data.get("app", {}).get("database_url", "sqlite+aiosqlite:///./agentlens.db")
     CRAWL_SCHEDULE_HOURS: str = ",".join(str(h) for h in _json_data.get("scheduler", {}).get("crawl_hours", [0, 6, 12, 18]))
     CRAWL_TIMEZONE: str = _json_data.get("scheduler", {}).get("timezone", "UTC")
