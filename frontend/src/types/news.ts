@@ -33,12 +33,77 @@ export interface NewsListResponse {
   total_pages: number;
 }
 
+export interface BriefingCategoryItem {
+  id?: number;
+  title: string;
+  url: string;
+  source?: string;
+  why_it_matters?: string;
+  summary?: string;
+  tags?: string[];
+  category?: string;
+  category_name?: string;
+  hotness_score?: number;
+}
+
+export interface BriefingCategorySection {
+  id: string;
+  name: string;
+  icon: string;
+  summary: string;
+  items: BriefingCategoryItem[];
+}
+
 export interface DailyBriefing {
+  title?: string;
   date: string;
   headline: string;
+  overview?: string;
+  categories?: BriefingCategorySection[];
+  action_items?: string[];
   markdown_report: string;
   featured_items_count: number;
   generated_at: string;
+}
+
+export interface NotionExportResponse {
+  success: boolean;
+  message: string;
+  url?: string;
+}
+
+export interface EmailSendResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface BriefingSettings {
+  title: string;
+  auto_dispatch_hour: number;
+  notion: {
+    enabled: boolean;
+    has_api_key: boolean;
+    masked_api_key: string;
+    page_id: string;
+    auto_export: boolean;
+  };
+  email: {
+    enabled: boolean;
+    smtp_host: string;
+    smtp_port: number;
+    smtp_user: string;
+    has_password: boolean;
+    smtp_from: string;
+    smtp_to: string;
+    use_tls: boolean;
+    auto_send: boolean;
+  };
+  webhooks: {
+    slack_webhook_url: string;
+    discord_webhook_url: string;
+    auto_dispatch_daily_briefing: boolean;
+    auto_alert_high_signal: boolean;
+  };
 }
 
 export interface AskQuestionResponse {

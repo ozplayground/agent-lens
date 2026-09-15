@@ -13,7 +13,7 @@ import ScheduleModal from '@/components/ScheduleModal';
 import McpModal from '@/components/McpModal';
 import SourcesModal from '@/components/SourcesModal';
 import { TechRadar } from '@/components/TechRadar';
-import { WebhookSettingsModal } from '@/components/WebhookSettingsModal';
+import { BriefingSettingsModal } from '@/components/BriefingSettingsModal';
 import { CategoryType, NewsItem, StatsResponse, DailyBriefing } from '@/types/news';
 import { TechRadarData } from '@/types/trends';
 import { fetchNewsFeed, fetchStats, fetchDailyBriefing, fetchTechRadar } from '@/lib/api';
@@ -394,10 +394,11 @@ export default function HomePage() {
         briefing={briefing}
         isOpen={briefingModalOpen}
         onClose={() => setBriefingModalOpen(false)}
+        onOpenSettings={() => setWebhookModalOpen(true)}
       />
       <ScheduleModal isOpen={schedOpen} onClose={() => setSchedOpen(false)} />
       <McpModal isOpen={mcpOpen} onClose={() => setMcpOpen(false)} />
-      <WebhookSettingsModal isOpen={webhookModalOpen} onClose={() => setWebhookModalOpen(false)} />
+      <BriefingSettingsModal isOpen={webhookModalOpen} onClose={() => setWebhookModalOpen(false)} />
       <SourcesModal
         isOpen={sourcesModalOpen}
         onClose={() => setSourcesModalOpen(false)}

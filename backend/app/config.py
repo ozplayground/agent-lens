@@ -32,7 +32,7 @@ _json_data = load_json_config()
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = _json_data.get("app", {}).get("project_name", "AgentLens")
-    VERSION: str = _json_data.get("app", {}).get("version", "1.2.0")
+    VERSION: str = _json_data.get("app", {}).get("version", "1.3.0")
     DATABASE_URL: str = _json_data.get("app", {}).get("database_url", "sqlite+aiosqlite:///./agentlens.db")
     CRAWL_SCHEDULE_HOURS: str = ",".join(str(h) for h in _json_data.get("scheduler", {}).get("crawl_hours", [0, 6, 12, 18]))
     CRAWL_TIMEZONE: str = _json_data.get("scheduler", {}).get("timezone", "UTC")
@@ -49,6 +49,25 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = _json_data.get("llm", {}).get("ollama_model", "llama3.2:latest")
     QUALITY_CUTOFF_SCORE: float = float(_json_data.get("llm", {}).get("quality_cutoff_score", 5.0))
     HIGH_SIGNAL_THRESHOLD: float = float(_json_data.get("llm", {}).get("high_signal_threshold", 7.8))
+
+    # Briefing & Export Settings
+    BRIEFING_TITLE: str = _json_data.get("briefing", {}).get("title", "오늘의 AI 브리핑")
+    BRIEFING_AUTO_DISPATCH_HOUR: int = int(_json_data.get("briefing", {}).get("auto_dispatch_hour", 0))
+
+    # Notion Settings
+    NOTION_API_KEY: str = _json_data.get("briefing", {}).get("notion", {}).get("api_key", "")
+    NOTION_PAGE_ID: str = _json_data.get("briefing", {}).get("notion", {}).get("page_id", "")
+    NOTION_AUTO_EXPORT: bool = bool(_json_data.get("briefing", {}).get("notion", {}).get("auto_export", False))
+
+    # Email (SMTP) Settings
+    SMTP_HOST: str = _json_data.get("briefing", {}).get("email", {}).get("smtp_host", "")
+    SMTP_PORT: int = int(_json_data.get("briefing", {}).get("email", {}).get("smtp_port", 587))
+    SMTP_USER: str = _json_data.get("briefing", {}).get("email", {}).get("smtp_user", "")
+    SMTP_PASSWORD: str = _json_data.get("briefing", {}).get("email", {}).get("smtp_password", "")
+    SMTP_FROM: str = _json_data.get("briefing", {}).get("email", {}).get("smtp_from", "")
+    SMTP_TO: str = _json_data.get("briefing", {}).get("email", {}).get("smtp_to", "")
+    SMTP_USE_TLS: bool = bool(_json_data.get("briefing", {}).get("email", {}).get("use_tls", True))
+    EMAIL_AUTO_SEND: bool = bool(_json_data.get("briefing", {}).get("email", {}).get("auto_send", False))
 
     # Webhooks
     SLACK_WEBHOOK_URL: str = _json_data.get("webhooks", {}).get("slack_webhook_url", "")
@@ -84,4 +103,24 @@ class Settings(BaseSettings):
         """Retrieves any newly added user key from config.json dynamically."""
         return _json_data.get(section, {}).get(key, default)
 
+    def reload(self):
+        """Reloads settings from disk."""
+        global _json_data
+        _json_data = load_json_config()
+        self.__init__()
+
 settings = Settings()
+
+def save_json_config(data: Dict[str, Any]) -> bool:
+    """Saves updated configuration data back to config.json and reloads settings."""
+    p = find_config_json()
+    if not p:
+        p = Path.cwd() / "config.json"
+    try:
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        settings.reload()
+        return True
+    except Exception as e:
+        print(f"[Config] Error saving config.json: {e}")
+        return False

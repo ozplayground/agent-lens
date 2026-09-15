@@ -25,7 +25,7 @@ export default function DailyBriefingBanner({ briefing, onOpen }: DailyBriefingB
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-mono font-medium text-[#8b949e]">
-                Daily Briefing
+                오늘의 AI 브리핑
               </span>
               <span className="text-[11px] font-mono text-[#8b949e] border-l border-[#30363d] pl-2">
                 {briefing.date}
@@ -38,7 +38,7 @@ export default function DailyBriefingBanner({ briefing, onOpen }: DailyBriefingB
         </div>
 
         <div className="flex items-center gap-1 text-xs text-[#58a6ff] font-medium shrink-0 self-end sm:self-auto group-hover:underline">
-          <span>AI 1분 요약 브리핑</span>
+          <span>브리핑 보기</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </div>
       </div>
