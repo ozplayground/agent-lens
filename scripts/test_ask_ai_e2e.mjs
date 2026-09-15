@@ -82,14 +82,16 @@ async function runTest() {
 
     console.log('7. Waiting for live Gemini AI response (.markdown-viewer)...');
     try {
-      await page.waitForSelector('.markdown-viewer', { timeout: 25000 });
-      console.log('Found .markdown-viewer!');
+      await page.waitForSelector('.markdown-viewer', { timeout: 15000 });
+      console.log('Found .markdown-viewer! Capturing mid-stream screenshot...');
+      await sleep(1500);
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'ask_ai_02_streaming_midway.png') });
     } catch (e) {
       console.log('Timed out waiting for .markdown-viewer');
     }
-    await sleep(5000);
+    await sleep(6000);
 
-    console.log('8. Capturing AI Response in modal...');
+    console.log('8. Capturing completed AI Response in modal...');
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'ask_ai_03_qa_answered.png') });
 
     console.log('🎉 Ask AI E2E Test Completed Successfully!');

@@ -32,7 +32,7 @@ _json_data = load_json_config()
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = _json_data.get("app", {}).get("project_name", "AgentLens")
-    VERSION: str = _json_data.get("app", {}).get("version", "1.4.2")
+    VERSION: str = _json_data.get("app", {}).get("version", "1.4.3")
     DATABASE_URL: str = _json_data.get("app", {}).get("database_url", "sqlite+aiosqlite:///./agentlens.db")
     CRAWL_SCHEDULE_HOURS: str = ",".join(str(h) for h in _json_data.get("scheduler", {}).get("crawl_hours", [0, 6, 12, 18]))
     CRAWL_TIMEZONE: str = _json_data.get("scheduler", {}).get("timezone", "UTC")
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # LLM Settings from config.json or environment
     LLM_PROVIDER: str = _json_data.get("llm", {}).get("provider", "auto")
     GEMINI_API_KEY: str = _json_data.get("llm", {}).get("gemini_api_key", "")
-    GEMINI_MODEL: str = _json_data.get("llm", {}).get("gemini_model", "gemini-3.5-flash")
+    GEMINI_MODEL: str = _json_data.get("llm", {}).get("gemini_model", "gemini-3.5-flash-lite")
     OPENAI_API_KEY: str = _json_data.get("llm", {}).get("openai_api_key", "")
     OPENAI_MODEL: str = _json_data.get("llm", {}).get("openai_model", "gpt-4o-mini")
     OLLAMA_BASE_URL: str = _json_data.get("llm", {}).get("ollama_base_url", "http://localhost:11434")

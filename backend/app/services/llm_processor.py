@@ -93,7 +93,7 @@ class LLMProcessor:
         candidates = []
         if configured_model and configured_model not in ["gemini-2.0-flash", "gemini-flash-latest"]:
             candidates.append(configured_model)
-        for m in ["gemini-3.5-flash", "gemini-3.6-flash"]:
+        for m in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
             if m not in candidates:
                 candidates.append(m)
 
@@ -458,7 +458,12 @@ class LLMProcessor:
             try:
                 from google import genai
                 from google.genai import types
-                client = genai.Client(api_key=gemini_key)
+                client = genai.Client(
+                    api_key=gemini_key,
+                    http_options=types.HttpOptions(
+                        retry_options=types.HttpRetryOptions(attempts=1)
+                    )
+                )
                 for g_model in gemini_candidates:
                     try:
                         chat = client.aio.chats.create(
@@ -469,10 +474,13 @@ class LLMProcessor:
                             )
                         )
                         stream = await chat.send_message_stream(prompt)
-                        yield {"event": "meta", "model": f"Google {g_model}"}
-                        model_used = f"Google {g_model}"
+                        first_chunk = True
                         async for chunk in stream:
                             if chunk.text:
+                                if first_chunk:
+                                    yield {"event": "meta", "model": f"Google {g_model}"}
+                                    model_used = f"Google {g_model}"
+                                    first_chunk = False
                                 full_text += chunk.text
                                 yield {"event": "token", "text": chunk.text}
                         if full_text.strip():

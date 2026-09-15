@@ -437,7 +437,7 @@ export default function NewsDetailModal({
                   <Bot className="w-3.5 h-3.5 text-[#58a6ff]" />
                   <span className="font-semibold text-[#f0f6fc]">AI 어시스턴트</span>
                   <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border border-[#30363d] bg-[#21262d] text-[#58a6ff]">
-                    Gemini 3.5 Flash 실시간 가동
+                    Gemini 실시간 스트리밍 가동
                   </span>
                 </div>
                 {chatHistory.length > 0 && (

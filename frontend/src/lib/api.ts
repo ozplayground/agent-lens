@@ -9,6 +9,19 @@ function getApiBase(): string {
   return process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 }
 
+export function getDirectApiBase(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  if (typeof window !== 'undefined') {
+    // Connect directly to backend port 8000 for SSE streaming to bypass Next.js rewrites chunk buffering
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname || 'localhost';
+    return `${protocol}//${hostname}:8000`;
+  }
+  return process.env.INTERNAL_API_URL || 'http://127.0.0.1:8000';
+}
+
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -81,13 +94,28 @@ export async function askQuestionAboutNewsStream(
   },
   signal?: AbortSignal
 ): Promise<{ answer: string; model_used: string }> {
-  const base = getApiBase();
-  const res = await fetch(`${base}/api/news/${newsId}/ask/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
-    signal
-  });
+  const directBase = getDirectApiBase();
+  let res: Response;
+
+  try {
+    // 1. Direct connection to FastAPI backend (bypasses Next.js proxy chunk buffering)
+    res = await fetch(`${directBase}/api/news/${newsId}/ask/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+      signal
+    });
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err;
+    // 2. Fallback to relative URL if direct backend port is not reachable
+    const fallbackBase = getApiBase();
+    res = await fetch(`${fallbackBase}/api/news/${newsId}/ask/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+      signal
+    });
+  }
 
   if (!res.ok || !res.body) {
     let msg = `AI 스트리밍 연결 실패 (${res.status})`;
