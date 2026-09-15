@@ -17,6 +17,11 @@ async def scheduled_deep_research_job():
     from app.services.deep_researcher import deep_researcher
     await deep_researcher.run_deep_research()
 
+async def scheduled_briefing_dispatch_job():
+    print(f"[Scheduler] Daily Briefing auto-dispatch triggered at {datetime.now(timezone.utc).isoformat()}")
+    from app.services.briefing_service import briefing_service
+    await briefing_service.auto_dispatch_all()
+
 def get_next_run_time() -> datetime:
     job = scheduler.get_job("daily_crawl")
     if job and job.next_run_time:
@@ -47,8 +52,16 @@ def start_scheduler():
             name="Autonomous Deep Research Cycle",
             replace_existing=True
         )
+        briefing_trigger = CronTrigger(hour="0", minute="15", timezone="UTC")
+        scheduler.add_job(
+            scheduled_briefing_dispatch_job,
+            trigger=briefing_trigger,
+            id="daily_briefing_dispatch",
+            name="Daily Briefing Auto Dispatch (Notion, Email, Webhook)",
+            replace_existing=True
+        )
         scheduler.start()
-        print("[Scheduler] Started for Crawl (0,6,12,18 UTC) and Deep Research (3,15 UTC)")
+        print("[Scheduler] Started for Crawl (0,6,12,18 UTC), Briefing (0:15 UTC) and Deep Research (3,15 UTC)")
 
 def stop_scheduler():
     if scheduler.running:

@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict
+from typing import List, Optional, Dict, Any, Union
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 class NewsItemBase(BaseModel):
     title: str
@@ -44,12 +44,88 @@ class AskQuestionResponse(BaseModel):
     question: str
     answer: str
 
+class BriefingCategoryItem(BaseModel):
+    id: Optional[int] = None
+    title: str
+    url: str
+    source: Optional[str] = ""
+    why_it_matters: Optional[str] = ""
+    summary: Optional[str] = ""
+    tags: Optional[List[str]] = []
+    category: Optional[str] = ""
+    category_name: Optional[str] = ""
+    hotness_score: Optional[float] = 0.0
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def parse_tags(cls, v):
+        if isinstance(v, str):
+            return [t.strip() for t in v.split(",") if t.strip()]
+        if isinstance(v, list):
+            return v
+        return []
+
+class BriefingCategorySection(BaseModel):
+    id: str
+    name: str
+    icon: str
+    summary: str
+    items: List[BriefingCategoryItem] = []
+
 class DailyBriefingResponse(BaseModel):
+    title: Optional[str] = "오늘의 AI 브리핑"
     date: str
     headline: str
+    overview: Optional[str] = ""
+    categories: Optional[List[BriefingCategorySection]] = []
+    action_items: Optional[List[str]] = []
     markdown_report: str
     featured_items_count: int
     generated_at: str
+
+class NotionExportRequest(BaseModel):
+    api_key: Optional[str] = None
+    page_id: Optional[str] = None
+
+class NotionExportResponse(BaseModel):
+    success: bool
+    message: str
+    url: Optional[str] = None
+
+class EmailSendRequest(BaseModel):
+    to_email: Optional[str] = None
+    subject: Optional[str] = None
+
+class EmailSendResponse(BaseModel):
+    success: bool
+    message: str
+
+class TestNotionRequest(BaseModel):
+    api_key: Optional[str] = None
+    page_id: Optional[str] = None
+
+class TestEmailRequest(BaseModel):
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = 587
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    use_tls: Optional[bool] = True
+    to_email: Optional[str] = None
+
+class BriefingSettingsUpdate(BaseModel):
+    notion_api_key: Optional[str] = None
+    notion_page_id: Optional[str] = None
+    notion_auto_export: Optional[bool] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from: Optional[str] = None
+    smtp_to: Optional[str] = None
+    smtp_use_tls: Optional[bool] = None
+    email_auto_send: Optional[bool] = None
+    slack_webhook_url: Optional[str] = None
+    discord_webhook_url: Optional[str] = None
 
 class ScheduleStatusResponse(BaseModel):
     current_time: str

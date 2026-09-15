@@ -20,7 +20,7 @@ async def get_mcp_info():
                 "agentlens": {
                     "command": py_path,
                     "args": ["-m", "app.mcp.server"],
-                    "cwd": os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+                    "cwd": os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
                 }
             }
         }

@@ -13,7 +13,7 @@ import ScheduleModal from '@/components/ScheduleModal';
 import McpModal from '@/components/McpModal';
 import SourcesModal from '@/components/SourcesModal';
 import { TechRadar } from '@/components/TechRadar';
-import { WebhookSettingsModal } from '@/components/WebhookSettingsModal';
+import { BriefingSettingsModal } from '@/components/BriefingSettingsModal';
 import { CategoryType, NewsItem, StatsResponse, DailyBriefing } from '@/types/news';
 import { TechRadarData } from '@/types/trends';
 import { fetchNewsFeed, fetchStats, fetchDailyBriefing, fetchTechRadar } from '@/lib/api';
@@ -228,13 +228,15 @@ export default function HomePage() {
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-[#30363d]">
             {/* Search */}
-            <form onSubmit={(e) => { e.preventDefault(); setPage(1); loadNews(); }} className="relative flex-1 max-w-md">
+            <form onSubmit={(e) => { e.preventDefault(); setPage(1); loadNews(); }} className="relative flex-1 max-w-md" suppressHydrationWarning>
               <Search className="w-3.5 h-3.5 text-[#8b949e] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="키워드 검색 (SWE-bench, MCP, LangGraph, Claude 3.7 등)..."
+                autoComplete="off"
+                suppressHydrationWarning
                 className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] focus:outline-none rounded-md pl-9 pr-16 py-1.5 text-xs text-[#f0f6fc] placeholder-[#8b949e]"
               />
               <button
@@ -394,10 +396,11 @@ export default function HomePage() {
         briefing={briefing}
         isOpen={briefingModalOpen}
         onClose={() => setBriefingModalOpen(false)}
+        onOpenSettings={() => setWebhookModalOpen(true)}
       />
       <ScheduleModal isOpen={schedOpen} onClose={() => setSchedOpen(false)} />
       <McpModal isOpen={mcpOpen} onClose={() => setMcpOpen(false)} />
-      <WebhookSettingsModal isOpen={webhookModalOpen} onClose={() => setWebhookModalOpen(false)} />
+      <BriefingSettingsModal isOpen={webhookModalOpen} onClose={() => setWebhookModalOpen(false)} />
       <SourcesModal
         isOpen={sourcesModalOpen}
         onClose={() => setSourcesModalOpen(false)}

@@ -147,7 +147,7 @@ export default function NewsCard({ item, onSelect, isBookmarked, onToggleBookmar
 
             <span className="flex items-center gap-1 text-[11px]">
               <Clock className="w-3 h-3" />
-              <span>{getRelativeTime(item.published_at)}</span>
+              <span suppressHydrationWarning>{getRelativeTime(item.published_at)}</span>
             </span>
           </div>
 

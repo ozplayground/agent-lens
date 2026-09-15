@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Clock, Terminal, CheckCircle2, Cpu, Rss, Bell, Trash2, AlertTriangle, Globe, Sun, Moon } from 'lucide-react';
+import { RefreshCw, Clock, Terminal, CheckCircle2, Cpu, Rss, Bell, Trash2, AlertTriangle, Globe, Sun, Moon, Send } from 'lucide-react';
 import { ScheduleStatus } from '@/types/news';
 import { fetchScheduleStatus, triggerManualCollect, fetchCrawlProgress, resetAndRecollect } from '@/lib/api';
 import { useTheme } from '@/context/ThemeContext';
@@ -108,7 +108,7 @@ export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWeb
           <div className="flex items-center gap-2">
             <h1 className="text-base font-bold text-[#f0f6fc] tracking-tight">AgentLens</h1>
             <span className="text-[11px] font-mono text-[#8b949e] bg-[#21262d] px-1.5 py-0.5 rounded border border-[#30363d]">
-              v1.2
+              v1.3
             </span>
             <span className="hidden sm:flex items-center gap-1 text-xs text-[#8b949e] ml-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#3fb950]" />
@@ -169,9 +169,10 @@ export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWeb
             <button
               onClick={onOpenWebhook}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-xs font-medium text-[#c9d1d9] transition-colors cursor-pointer"
+              title="Notion / 이메일 / 웹훅 브리핑 연동 설정"
             >
-              <Bell className="w-3.5 h-3.5 text-[#8b949e]" />
-              <span>웹훅</span>
+              <Send className="w-3.5 h-3.5 text-[#58a6ff]" />
+              <span>공유 & 알림</span>
             </button>
           )}
 

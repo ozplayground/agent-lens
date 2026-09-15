@@ -4,7 +4,7 @@
 
 **AI 및 에이전트(Agent) 기술 소식을 주기적으로 모아보고 관리하는 웹 애플리케이션**
 
-[![Version](https://img.shields.io/badge/Version-v1.2.0-green?style=flat-square)](https://github.com/ozplayground/agent-lens/releases)
+[![Version](https://img.shields.io/badge/Version-v1.3.1-green?style=flat-square)](https://github.com/ozplayground/agent-lens/releases)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Docker Compose](https://img.shields.io/badge/Docker_Compose-Supported-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
@@ -32,7 +32,7 @@
 - **수집원(Sources) 관리**: 상단 '수집원' 버튼을 통해 수집 대상 피드를 켜고 끄거나 새 소스를 추가할 수 있습니다.
 - **Docker Compose 원클릭 배포**: 컨테이너 환경에서 프론트엔드와 백엔드를 즉시 띄워 사용할 수 있습니다.
 - **MCP(Model Context Protocol) 지원**: Claude Desktop 등 AI 에이전트에서 최신 소식을 직접 검색할 수 있도록 로컬 MCP 서버 기능을 제공합니다.
-- **오늘의 브리핑**: 하루 동안 수집된 주요 소식을 정리한 일일 브리핑 모달을 지원합니다.
+- **오늘의 AI 브리핑 & 공유**: 4대 카테고리별(하네스, MCP, 에이전트, AI 소식) 심층 요약과 핵심 시사점, Action Items를 제공하며, Notion 페이지 즉시 생성 및 이메일(SMTP) 자동 발송/공유를 지원합니다.
 
 ---
 
@@ -90,7 +90,7 @@ make collect
 
 ## ⚙️ 설정 안내
 
-- **`config.json`**: 포트 설정, 수집 주기, 사용할 LLM(Gemini / OpenAI / Ollama) API 키 등을 설정합니다.
+- **`config.json`**: 포트 설정, 수집 주기, 사용할 LLM(Gemini / OpenAI / Ollama) API 키, Notion 연동 및 이메일(SMTP) 설정을 관리합니다.
 - **`sources.json`**: 수집할 RSS 피드 및 사이트 목록입니다. 웹 UI에서 직접 편집하거나 파일에서 수정할 수 있습니다.
 
 ---
