@@ -1,6 +1,6 @@
 # =================================================================
 # AgentLens Unified Docker Compose Deployment
-# - Backend: FastAPI 0.115 + APScheduler + SQLite (Port 8000)
+# - Backend: FastAPI 0.141 + APScheduler + SQLite (Port 8000)
 # - Frontend: Next.js 16 Standalone (Port 3001)
 # =================================================================
 
@@ -15,7 +15,7 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
       - PROJECT_NAME=AgentLens
-      - VERSION=1.2.0
+      - VERSION=1.3.2
       - HOST=0.0.0.0
       - PORT=8000
       - DATABASE_URL=sqlite+aiosqlite:///./data/agentlens.db
