@@ -34,6 +34,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc: Exception):
+    import traceback
+    print(f"[AgentLens ERROR] Unhandled exception on {request.url.path}: {exc}")
+    traceback.print_exc()
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error occurred. Please check server logs.", "error": str(exc)},
+    )
+
 app.include_router(api_router)
 
 @app.get("/")

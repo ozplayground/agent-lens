@@ -22,7 +22,7 @@ export default function CategoryFilter({ currentCategory, onSelectCategory, coun
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
   return (
-    <nav className="flex items-center gap-1 overflow-x-auto border-b border-[#30363d] pb-0 scrollbar-none">
+    <nav className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 pb-0 scrollbar-none">
       {CATEGORIES.map((cat) => {
         const isSel = currentCategory === cat.id;
         const Icon = cat.icon;
@@ -34,15 +34,15 @@ export default function CategoryFilter({ currentCategory, onSelectCategory, coun
             onClick={() => onSelectCategory(cat.id)}
             className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-[1px] whitespace-nowrap cursor-pointer ${
               isSel
-                ? 'border-[#f78166] text-[#f0f6fc] font-semibold'
-                : 'border-transparent text-[#8b949e] hover:text-[#c9d1d9] hover:border-[#8b949e]/30'
+                ? 'border-blue-600 text-blue-600 font-semibold'
+                : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
             }`}
           >
-            <Icon className={`w-3.5 h-3.5 ${isSel ? 'text-[#f0f6fc]' : 'text-[#8b949e]'}`} />
+            <Icon className={`w-3.5 h-3.5 ${isSel ? 'text-blue-600' : 'text-slate-400'}`} />
             <span>{cat.label}</span>
             <span
               className={`text-[11px] font-mono px-2 py-0.5 rounded-full ${
-                isSel ? 'bg-[#30363d] text-[#f0f6fc] font-semibold' : 'bg-[#21262d] text-[#8b949e]'
+                isSel ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-slate-100 text-slate-500'
               }`}
             >
               {count}

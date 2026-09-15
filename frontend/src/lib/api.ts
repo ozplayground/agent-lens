@@ -380,7 +380,7 @@ export async function addRssSource(payload: {
   category_hint?: string;
   country?: string;
   description?: string;
-}): Promise<{ status: string; source: SourceItem }> {
+}): Promise<{ status: string; message?: string; source: SourceItem }> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/sources/rss`, {
     method: 'POST',

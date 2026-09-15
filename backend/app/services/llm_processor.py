@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Optional, Tuple, AsyncGenerator
 from datetime import datetime, timezone
 import httpx
 from app.config import settings, load_json_config
+from app.collectors.categorizer import is_strictly_ai_related, classify_and_tag
 
 logger = logging.getLogger("agentlens.llm")
 
@@ -74,6 +75,7 @@ class LLMProcessor:
         self.openai_key = getattr(settings, "OPENAI_API_KEY", "")
         self.ollama_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
         self._qa_cache: Dict[str, Tuple[str, str]] = {}
+        self._eval_cache: Dict[str, Dict[str, Any]] = {}
 
     async def _call_gemini(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
         json_cfg = load_json_config()
@@ -210,42 +212,62 @@ class LLMProcessor:
 
     def evaluate_quality_and_signal(self, title: str, summary: str, source: str) -> Dict[str, Any]:
         text = f"{title} {summary}".lower()
-        score = 6.0  # Base quality
+
+        # Strict domain gate for mixed/general feeds (GeekNews, general RSS, HackerNews)
+        is_mixed_source = source in ["rss_kr", "rss", "hackernews", "web"]
+        is_ai_domain = is_strictly_ai_related(title, summary)
+        if is_mixed_source and not is_ai_domain:
+            return {
+                "quality_score": 1.0,
+                "is_worthwhile": False,
+                "is_high_signal": False,
+                "rejection_reason": "Non-AI domain topic in mixed feed"
+            }
+
+        # Base quality: mixed feeds start lower (3.5), dedicated AI feeds start at 6.0
+        score = 3.5 if is_mixed_source else 6.0
 
         # Tech depth signals
         high_signals = [
             "benchmark", "swe-bench", "protocol", "architecture", "evaluation", "sandbox",
-            "multi-agent", "reasoning", "open-source", "하네스", "벤치마크", "평가",
+            "multi-agent", "reasoning", "open-source", "하네스", "벤치마크", "평가 프레임워크",
             "아키텍처", "프로토콜", "mcp", "langgraph", "fastmcp", "agent", "에이전트",
-            "모델", "도구", "스킬", "framework"
+            "모델", "도구 호출", "스킬", "framework", "coding agent", "추론 모델"
         ]
         matched_signals = 0
         for kw in high_signals:
             if kw in text:
                 matched_signals += 1
 
-        score += min(2.0, matched_signals * 0.4)
+        score += min(2.5, matched_signals * 0.5)
 
         # Source credibility weight
-        if source in ["github", "arxiv", "huggingface", "rss"]:
-            score += 0.8
-        elif source == "rss_kr":
-            score += 0.8
+        if source in ["github", "arxiv", "huggingface"]:
+            score += 1.0
+        elif source in ["rss", "rss_kr"] and is_ai_domain:
+            score += 0.5
 
         # Spam / noise penalties
-        low_signals = ["sale", "discount", "crypto price", "airdrop", "coupon", "광고", "특가", "할인"]
+        low_signals = [
+            "sale", "discount", "crypto price", "airdrop", "coupon", "광고", "특가", "할인",
+            "해고 통보", "취업", "연봉", "부동산", "사고방식", "파푸아뉴기니", "전자책", "줄무늬"
+        ]
         for kw in low_signals:
             if kw in text:
-                score -= 3.0
+                score -= 3.5
 
         if len(title.strip()) < 10:
-            score -= 1.5
+            score -= 2.0
 
         score = max(1.0, min(10.0, round(score, 1)))
         cutoff = getattr(settings, "QUALITY_CUTOFF_SCORE", 5.0)
         high_thresh = getattr(settings, "HIGH_SIGNAL_THRESHOLD", 7.0)
+
         is_worthwhile = score >= cutoff
-        is_high_signal = score >= high_thresh
+        if is_mixed_source and not is_ai_domain:
+            is_worthwhile = False
+
+        is_high_signal = score >= high_thresh and is_worthwhile
 
         return {
             "quality_score": score,
@@ -253,7 +275,144 @@ class LLMProcessor:
             "is_high_signal": is_high_signal
         }
 
-    def generate_synthesis(self, title: str, summary: str, category: str) -> Dict[str, Any]:
+    async def evaluate_content_with_llm(
+        self,
+        title: str,
+        summary: str,
+        source: str,
+        category_hint: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Deep LLM-grade relevance and quality evaluation.
+        1. Fast heuristic pre-filter to instantly reject obvious non-AI noise without LLM latency.
+        2. Live LLM evaluation (Gemini/OpenAI) for genuine semantic relevance and deep quality scoring.
+        3. Strict heuristic fallback if LLM is unreachable or rate limited.
+        """
+        cache_key = f"{title.strip().lower()}::{source}"
+        if cache_key in self._eval_cache:
+            return self._eval_cache[cache_key]
+
+        is_mixed_source = source in ["rss_kr", "rss", "hackernews", "web"]
+        is_ai_domain = is_strictly_ai_related(title, summary)
+
+        # 1. Fast Pre-Filter: If from general tech feed and has zero AI relevance, reject immediately
+        if is_mixed_source and not is_ai_domain:
+            result = {
+                "quality_score": 1.0,
+                "relevance_score": 0.0,
+                "is_worthwhile": False,
+                "is_high_signal": False,
+                "category": "unrelated",
+                "rejection_reason": "Pre-filter: No AI/Agent/MCP domain relevance found in mixed feed",
+                "why_it_matters": None,
+                "evaluated_by": "pre_filter_gate"
+            }
+            self._eval_cache[cache_key] = result
+            return result
+
+        # 2. Live LLM Evaluation
+        has_gemini = bool(getattr(settings, "GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", ""))
+        has_openai = bool(getattr(settings, "OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", ""))
+
+        if has_gemini or has_openai:
+            prompt = (
+                f"You are a strict, world-class AI & Autonomous Agent Curator for AgentLens.\n"
+                f"AgentLens ONLY indexes topics that are directly and deeply relevant to:\n"
+                f"1. Agent Harnesses, Benchmarks, Evals, Sandboxes (SWE-bench, GAIA, agent testing, regression harnesses)\n"
+                f"2. Model Context Protocol (MCP), Agent Tools, Skills & Plugins (tool calling, FastMCP, MCP servers)\n"
+                f"3. Autonomous Agent Frameworks, Multi-Agent Systems, Coding Agents (LangGraph, CrewAI, AutoGen, browser-use)\n"
+                f"4. Frontier AI Models, LLMs & Reasoning (OpenAI, Anthropic, DeepSeek, Gemini, prompt engineering, RLVR)\n\n"
+                f"CRITICAL REJECTION CRITERIA:\n"
+                f"- General programming (e.g., SQLite single-file apps, CSS frameworks, Java/Rust releases, generic OS/Linux, hardware, terminal fonts) MUST BE REJECTED (is_worthwhile: false).\n"
+                f"- General business, personal career essays, company layoffs, or non-AI software MUST BE REJECTED.\n"
+                f"- Only approve articles that provide genuine engineering value to AI and Agent developers.\n\n"
+                f"[Candidate Article]\n"
+                f"- Title: {title}\n"
+                f"- Summary: {summary}\n"
+                f"- Source: {source}\n\n"
+                f"Respond with JSON ONLY (do not include markdown code block backticks if possible, just the raw JSON object):\n"
+                f"{{\n"
+                f'  "is_relevant_to_ai_agent": true,\n'
+                f'  "category": "harness" | "mcp_plugins_skills" | "agent_tech" | "ai_news" | "irrelevant",\n'
+                f'  "relevance_score": 8.5,\n'
+                f'  "quality_score": 7.5,\n'
+                f'  "is_worthwhile": true,\n'
+                f'  "is_high_signal": true,\n'
+                f'  "rejection_reason": null,\n'
+                f'  "why_it_matters": "1-2 concise Korean sentences explaining developer architectural significance"\n'
+                f"}}"
+            )
+
+            try:
+                live_ans, model_name = await self._generate_live_answer(prompt)
+                if live_ans:
+                    cleaned = re.sub(r'^```(?:json)?\s*', '', live_ans.strip(), flags=re.IGNORECASE)
+                    cleaned = re.sub(r'\s*```$', '', cleaned.strip())
+                    m = re.search(r'\{.*\}', cleaned, re.DOTALL)
+                    if m:
+                        data = json.loads(m.group(0))
+                        is_rel = bool(data.get("is_relevant_to_ai_agent"))
+                        cat = str(data.get("category", "unrelated")).lower()
+                        rel_score = float(data.get("relevance_score", 0.0))
+                        q_score = float(data.get("quality_score", 5.0))
+                        cutoff = getattr(settings, "QUALITY_CUTOFF_SCORE", 5.0)
+                        high_thresh = getattr(settings, "HIGH_SIGNAL_THRESHOLD", 7.0)
+
+                        is_worthwhile = bool(data.get("is_worthwhile")) and is_rel and (cat != "irrelevant") and (rel_score >= 5.0) and (q_score >= cutoff)
+                        is_high_signal = is_worthwhile and (q_score >= high_thresh or bool(data.get("is_high_signal")))
+
+                        result = {
+                            "quality_score": round(q_score, 1),
+                            "relevance_score": round(rel_score, 1),
+                            "is_worthwhile": is_worthwhile,
+                            "is_high_signal": is_high_signal,
+                            "category": cat if (is_worthwhile and cat in CATEGORY_INSIGHTS) else "unrelated",
+                            "rejection_reason": data.get("rejection_reason") if not is_worthwhile else None,
+                            "why_it_matters": data.get("why_it_matters"),
+                            "evaluated_by": model_name
+                        }
+                        self._eval_cache[cache_key] = result
+                        return result
+            except Exception as e:
+                logger.warning(f"Live LLM evaluation error: {e}, falling back to strict heuristic gate")
+
+        # 3. Strict Heuristic Fallback
+        base_eval = self.evaluate_quality_and_signal(title, summary, source)
+        cat, _, _ = classify_and_tag(title, summary)
+
+        if not base_eval["is_worthwhile"] or cat == "unrelated":
+            result = {
+                "quality_score": base_eval["quality_score"],
+                "relevance_score": 0.0,
+                "is_worthwhile": False,
+                "is_high_signal": False,
+                "category": "unrelated",
+                "rejection_reason": base_eval.get("rejection_reason") or "Strict heuristic rejection: Low signal or unrelated",
+                "why_it_matters": None,
+                "evaluated_by": "heuristic_fallback"
+            }
+        else:
+            result = {
+                "quality_score": base_eval["quality_score"],
+                "relevance_score": 7.0,
+                "is_worthwhile": True,
+                "is_high_signal": base_eval["is_high_signal"],
+                "category": cat,
+                "rejection_reason": None,
+                "why_it_matters": None,
+                "evaluated_by": "heuristic_fallback"
+            }
+
+        self._eval_cache[cache_key] = result
+        return result
+
+    def generate_synthesis(
+        self,
+        title: str,
+        summary: str,
+        category: str,
+        why_it_matters_override: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Generates 3-bullet TL;DR and 'Why it matters' developer insight."""
         tech_entities = self.extract_tech_stack(f"{title} {summary}")
         clean_sum = (summary or "").strip()
@@ -277,9 +436,11 @@ class LLMProcessor:
         else:
             bullets.append("공식 레포지토리 및 기술 문서 릴리즈")
 
-        # Developer insight
+        # Developer insight: Use override from LLM evaluation if available
         base_insight = CATEGORY_INSIGHTS.get(category, CATEGORY_INSIGHTS["ai_news"])
-        if tech_entities:
+        if why_it_matters_override and len(why_it_matters_override.strip()) > 10:
+            why_it_matters = why_it_matters_override.strip()
+        elif tech_entities:
             why_it_matters = f"{tech_entities[0]} 기반 구현에서 {base_insight}"
         else:
             why_it_matters = base_insight

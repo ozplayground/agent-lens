@@ -13,28 +13,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`} data-theme="dark" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                var saved = localStorage.getItem('agentlens_theme');
-                var theme = saved || 'dark';
-                document.documentElement.setAttribute('data-theme', theme);
-                if (theme === 'light') {
-                  document.documentElement.classList.remove('dark');
-                  document.documentElement.classList.add('light');
-                } else {
-                  document.documentElement.classList.remove('light');
-                  document.documentElement.classList.add('dark');
-                }
-              } catch (e) {}
-            `,
-          }}
-        />
-      </head>
-      <body className="min-h-full flex flex-col bg-[#0d1117] text-[#f0f6fc]">
+    <html lang="ko" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased light`} data-theme="light">
+      <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
         <ThemeProvider>
           {children}
         </ThemeProvider>

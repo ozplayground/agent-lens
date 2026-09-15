@@ -57,13 +57,13 @@ export default function SourceFilter({
               onClick={() => onSelectSource(s.id)}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors cursor-pointer whitespace-nowrap ${
                 isSel
-                  ? 'bg-[#21262d] text-[#f0f6fc] border border-[#30363d] font-semibold'
-                  : 'text-[#8b949e] hover:text-[#c9d1d9] hover:bg-[#161b22] border border-transparent'
+                  ? 'bg-slate-900 text-white font-medium shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
               }`}
             >
-              <Icon className={`w-3.5 h-3.5 ${isSel ? 'text-[#f0f6fc]' : 'text-[#8b949e]'}`} />
+              <Icon className={`w-3.5 h-3.5 ${isSel ? 'text-white' : 'text-slate-400'}`} />
               <span>{s.label}</span>
-              {count > 0 && <span className="text-[10px] text-[#8b949e] font-mono">({count})</span>}
+              {count > 0 && <span className={`text-[10px] font-mono ${isSel ? 'text-slate-300' : 'text-slate-400'}`}>({count})</span>}
             </button>
           );
         })}
@@ -75,12 +75,12 @@ export default function SourceFilter({
           onClick={onToggleHighSignal}
           className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0 border ${
             highSignalOnly
-              ? 'bg-amber-500/10 text-amber-300 border-amber-500/40 font-semibold'
-              : 'bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-[#c9d1d9] border-[#30363d]'
+              ? 'bg-amber-50 text-amber-800 border-amber-300 font-semibold shadow-xs'
+              : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border-slate-200 shadow-xs'
           }`}
           title="기술 깊이와 실무 가치가 입증된 고품질 소식만 필터링"
         >
-          <Star className={`w-3.5 h-3.5 ${highSignalOnly ? 'text-amber-400 fill-amber-400' : 'text-[#8b949e]'}`} />
+          <Star className={`w-3.5 h-3.5 ${highSignalOnly ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
           <span>Must-Read (High Signal)</span>
         </button>
       )}

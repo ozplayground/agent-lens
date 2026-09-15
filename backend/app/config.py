@@ -2,6 +2,12 @@ import os
 import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
+
+# Pre-load candidate .env files
+for env_path in [Path.cwd() / ".env", Path.cwd() / "backend" / ".env", Path.cwd().parent / ".env", Path(__file__).resolve().parent.parent / ".env"]:
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict, model_validator
 
@@ -32,7 +38,7 @@ _json_data = load_json_config()
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = _json_data.get("app", {}).get("project_name", "AgentLens")
-    VERSION: str = _json_data.get("app", {}).get("version", "1.4.3")
+    VERSION: str = _json_data.get("app", {}).get("version", "1.5.0")
     DATABASE_URL: str = _json_data.get("app", {}).get("database_url", "sqlite+aiosqlite:///./agentlens.db")
     CRAWL_SCHEDULE_HOURS: str = ",".join(str(h) for h in _json_data.get("scheduler", {}).get("crawl_hours", [0, 6, 12, 18]))
     CRAWL_TIMEZONE: str = _json_data.get("scheduler", {}).get("timezone", "UTC")
@@ -82,16 +88,16 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def merge_json_and_env(self):
         llm = _json_data.get("llm", {})
-        if not self.GEMINI_API_KEY and llm.get("gemini_api_key"):
-            self.GEMINI_API_KEY = llm.get("gemini_api_key")
-        if (not self.GEMINI_MODEL or self.GEMINI_MODEL in ["", "gemini-2.0-flash", "gemini-flash-latest"]) and llm.get("gemini_model"):
-            self.GEMINI_MODEL = llm.get("gemini_model")
-        if not self.OPENAI_API_KEY and llm.get("openai_api_key"):
-            self.OPENAI_API_KEY = llm.get("openai_api_key")
+        if not self.GEMINI_API_KEY:
+            self.GEMINI_API_KEY = llm.get("gemini_api_key") or os.environ.get("GEMINI_API_KEY", "")
+        if (not self.GEMINI_MODEL or self.GEMINI_MODEL in ["", "gemini-2.0-flash", "gemini-flash-latest"]):
+            self.GEMINI_MODEL = llm.get("gemini_model") or os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
+        if not self.OPENAI_API_KEY:
+            self.OPENAI_API_KEY = llm.get("openai_api_key") or os.environ.get("OPENAI_API_KEY", "")
         if not self.SLACK_WEBHOOK_URL and _json_data.get("webhooks", {}).get("slack_webhook_url"):
-            self.SLACK_WEBHOOK_URL = _json_data.get("webhooks", {}).get("slack_webhook_url")
+            self.SLACK_WEBHOOK_URL = _json_data.get("webhooks", {}).get("slack_webhook_url") or os.environ.get("SLACK_WEBHOOK_URL", "")
         if not self.DISCORD_WEBHOOK_URL and _json_data.get("webhooks", {}).get("discord_webhook_url"):
-            self.DISCORD_WEBHOOK_URL = _json_data.get("webhooks", {}).get("discord_webhook_url")
+            self.DISCORD_WEBHOOK_URL = _json_data.get("webhooks", {}).get("discord_webhook_url") or os.environ.get("DISCORD_WEBHOOK_URL", "")
         return self
 
     @property

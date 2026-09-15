@@ -88,22 +88,44 @@ class CollectorManager:
 
                         self.items_collected += 1
 
-                        # 1. Quality Gate
-                        quality_eval = llm_processor.evaluate_quality_and_signal(title, summary, source)
-                        if not quality_eval["is_worthwhile"]:
+                        # 1. Strict Relevance & Quality Gate (LLM + Domain Pre-filter)
+                        eval_result = await llm_processor.evaluate_content_with_llm(
+                            title=title,
+                            summary=summary,
+                            source=source,
+                            category_hint=raw.get("category_hint")
+                        )
+
+                        if not eval_result["is_worthwhile"]:
+                            logger.info(f"Filtering out non-AI or low-quality article [{source}]: {title[:60]} (Reason: {eval_result.get('rejection_reason')})")
                             self.items_filtered += 1
                             continue
 
                         # 2. Categorization & Dedup
                         dedup_hash = compute_dedup_hash(title, url)
                         cat, tags, _ = classify_and_tag(title, summary)
+                        # If LLM classified a valid category, use it if heuristic was general
+                        if eval_result.get("category") and eval_result["category"] in ["harness", "mcp_plugins_skills", "agent_tech", "ai_news"]:
+                            if cat in ["unrelated", "ai_news"]:
+                                cat = eval_result["category"]
+
+                        if cat == "unrelated":
+                            logger.info(f"Filtering out article with no AI category [{source}]: {title[:60]}")
+                            self.items_filtered += 1
+                            continue
+
                         pub_at = raw.get("published_at") or datetime.now(timezone.utc)
                         raw_score = raw.get("raw_score", 0)
                         comments_count = raw.get("comments_count", 0)
                         hotness = calculate_hotness(raw_score, comments_count, pub_at)
 
-                        # 3. LLM Synthesis
-                        synth = llm_processor.generate_synthesis(title, summary, cat)
+                        # 3. LLM Synthesis (reusing why_it_matters from LLM eval if present)
+                        synth = llm_processor.generate_synthesis(
+                            title=title,
+                            summary=summary,
+                            category=cat,
+                            why_it_matters_override=eval_result.get("why_it_matters")
+                        )
 
                         existing_q = await session.execute(
                             select(NewsItem).where(NewsItem.dedup_hash == dedup_hash)
@@ -114,8 +136,8 @@ class CollectorManager:
                             existing.raw_score = max(existing.raw_score, raw_score)
                             existing.comments_count = max(existing.comments_count, comments_count)
                             existing.hotness_score = hotness
-                            existing.quality_score = quality_eval["quality_score"]
-                            existing.is_high_signal = quality_eval["is_high_signal"]
+                            existing.quality_score = eval_result["quality_score"]
+                            existing.is_high_signal = eval_result["is_high_signal"]
                             if not existing.why_it_matters:
                                 existing.why_it_matters = synth["why_it_matters"]
                                 existing.tldr_bullets = json.dumps(synth["tldr_bullets"], ensure_ascii=False)
@@ -132,8 +154,8 @@ class CollectorManager:
                                 tldr_bullets=json.dumps(synth["tldr_bullets"], ensure_ascii=False),
                                 why_it_matters=synth["why_it_matters"],
                                 tech_stack=",".join(synth["tech_stack"]),
-                                quality_score=quality_eval["quality_score"],
-                                is_high_signal=quality_eval["is_high_signal"],
+                                quality_score=eval_result["quality_score"],
+                                is_high_signal=eval_result["is_high_signal"],
                                 raw_score=raw_score,
                                 comments_count=comments_count,
                                 hotness_score=hotness,
