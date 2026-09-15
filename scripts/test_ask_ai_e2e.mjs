@@ -73,16 +73,12 @@ async function runTest() {
     console.log('5. Capturing initial Q&A Tab...');
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'ask_ai_02_qa_initial.png') });
 
-    console.log('6. Typing question into input...');
-    const input = await page.$('input[placeholder*="질문"]');
-    if (input) {
-      await input.click();
-      await page.keyboard.type('이 기술의 실무 프로젝트 도입 방법과 아키텍처 관점의 실전 팁을 알려줘', { delay: 10 });
-      await sleep(300);
-      await page.keyboard.press('Enter');
-    } else {
-      console.log('Input not found!');
-    }
+    console.log('6. Clicking quick prompt button (핵심 원리 및 구조)...');
+    await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button'));
+      const promptBtn = btns.find(b => b.textContent?.includes('핵심 원리 및 구조'));
+      promptBtn?.click();
+    });
 
     console.log('7. Waiting for live Gemini AI response (.markdown-viewer)...');
     try {

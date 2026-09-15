@@ -386,6 +386,7 @@ export default function HomePage() {
 
       {/* Modals */}
       <NewsDetailModal
+        key={selectedItem ? `news-modal-${selectedItem.id}` : 'news-modal-empty'}
         item={selectedItem}
         isOpen={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}

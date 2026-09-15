@@ -77,6 +77,57 @@ export default function NewsDetailModal({
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleClose = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setActiveTab('summary');
+    setChatHistory([]);
+    setQuestion('');
+    setAsking(false);
+    setCopiedIndex(null);
+    onClose();
+  };
+
+  // Reset modal state when closed or when news item changes
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveTab('summary');
+      setChatHistory([]);
+      setQuestion('');
+      setAsking(false);
+      setCopiedIndex(null);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    }
+  }, [isOpen, item?.id]);
+
+  // Clean up abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Keyboard shortcut: close on Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -90,6 +141,12 @@ export default function NewsDetailModal({
   const handleAsk = async (queryToAsk?: string) => {
     const q = (queryToAsk || question).trim();
     if (!q || asking) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     setQuestion('');
     setAsking(true);
@@ -110,31 +167,36 @@ export default function NewsDetailModal({
     ]);
 
     try {
-      await askQuestionAboutNewsStream(item.id, q, {
-        onMeta: (modelName) => {
-          setChatHistory((prev) => {
-            if (prev.length === 0) return prev;
-            const updated = [...prev];
-            updated[updated.length - 1] = {
-              ...updated[updated.length - 1],
-              model: modelName
-            };
-            return updated;
-          });
+      await askQuestionAboutNewsStream(
+        item.id,
+        q,
+        {
+          onMeta: (modelName) => {
+            setChatHistory((prev) => {
+              if (prev.length === 0) return prev;
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                ...updated[updated.length - 1],
+                model: modelName
+              };
+              return updated;
+            });
+          },
+          onToken: (token) => {
+            setChatHistory((prev) => {
+              if (prev.length === 0) return prev;
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              updated[updated.length - 1] = {
+                ...last,
+                a: last.a + token
+              };
+              return updated;
+            });
+          }
         },
-        onToken: (token) => {
-          setChatHistory((prev) => {
-            if (prev.length === 0) return prev;
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            updated[updated.length - 1] = {
-              ...last,
-              a: last.a + token
-            };
-            return updated;
-          });
-        }
-      });
+        controller.signal
+      );
 
       // Mark finished
       setChatHistory((prev) => {
@@ -147,6 +209,9 @@ export default function NewsDetailModal({
         return updated;
       });
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        return;
+      }
       setChatHistory((prev) => {
         if (prev.length === 0) return prev;
         const updated = [...prev];
@@ -186,7 +251,14 @@ export default function NewsDetailModal({
   const bullets = item.tldr_bullets && item.tldr_bullets.length > 0 ? item.tldr_bullets : [item.summary];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xs">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xs"
+    >
       <div className="bg-[#161b22] border border-[#30363d] rounded-xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl relative text-[#c9d1d9] overflow-hidden">
         {/* Top Header Bar */}
         <div className="p-4 border-b border-[#30363d] bg-[#161b22] shrink-0 space-y-2.5">
@@ -224,9 +296,9 @@ export default function NewsDetailModal({
                 <Star className={`w-4 h-4 ${isBookmarked ? 'fill-amber-400' : ''}`} />
               </button>
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="p-1.5 rounded-md text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#21262d] transition-colors cursor-pointer"
-                title="닫기"
+                title="닫기 (Esc)"
               >
                 <X className="w-4 h-4" />
               </button>
