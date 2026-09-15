@@ -84,15 +84,14 @@ async function runTest() {
       console.log('Input not found!');
     }
 
-    console.log('7. Waiting for live Gemini AI response (until loader disappears)...');
+    console.log('7. Waiting for live Gemini AI response (.markdown-viewer)...');
     try {
-      await page.waitForFunction(() => {
-        return document.querySelectorAll('button:has-text("복사"), button:has-text("대화 초기화")').length > 0 || document.querySelector('.animate-spin') === null;
-      }, { timeout: 25000 });
+      await page.waitForSelector('.markdown-viewer', { timeout: 25000 });
+      console.log('Found .markdown-viewer!');
     } catch (e) {
-      console.log('Timed out waiting for response');
+      console.log('Timed out waiting for .markdown-viewer');
     }
-    await sleep(2000);
+    await sleep(5000);
 
     console.log('8. Capturing AI Response in modal...');
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'ask_ai_03_qa_answered.png') });

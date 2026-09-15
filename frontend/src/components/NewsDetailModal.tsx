@@ -20,7 +20,8 @@ import {
   Layers
 } from 'lucide-react';
 import { NewsItem } from '@/types/news';
-import { askQuestionAboutNews } from '@/lib/api';
+import { askQuestionAboutNews, askQuestionAboutNewsStream } from '@/lib/api';
+import MarkdownViewer from './MarkdownViewer';
 
 interface NewsDetailModalProps {
   item: NewsItem | null;
@@ -35,6 +36,7 @@ interface ChatMessage {
   a: string;
   model?: string;
   time: string;
+  isStreaming?: boolean;
 }
 
 const QUICK_PROMPTS = [
@@ -59,86 +61,6 @@ const QUICK_PROMPTS = [
     query: '자율 에이전트 도입 시 보안 격리나 샌드박스 관점에서 검토해야 할 점은?'
   }
 ];
-
-function renderFormattedInline(text: string): React.ReactNode {
-  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
-      return (
-        <code key={i} className="px-1.5 py-0.5 rounded font-mono text-[11px] bg-[#21262d] text-[#79c0ff] border border-[#30363d]">
-          {part.slice(1, -1)}
-        </code>
-      );
-    }
-    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
-      return (
-        <strong key={i} className="font-semibold text-[#f0f6fc]">
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
-    return part;
-  });
-}
-
-function renderMarkdownAnswer(content: string) {
-  const lines = content.split('\n');
-  return (
-    <div className="space-y-2 text-xs sm:text-sm text-[#c9d1d9] leading-relaxed">
-      {lines.map((line, idx) => {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          return <div key={idx} className="h-1.5" />;
-        }
-        if (trimmed.startsWith('### ')) {
-          return (
-            <h4 key={idx} className="text-sm font-semibold text-[#f0f6fc] mt-3 mb-1 flex items-center gap-1.5 border-b border-[#30363d]/60 pb-1">
-              {trimmed.replace('### ', '')}
-            </h4>
-          );
-        }
-        if (trimmed.startsWith('## ')) {
-          return (
-            <h3 key={idx} className="text-base font-bold text-[#f0f6fc] mt-3.5 mb-1.5">
-              {trimmed.replace('## ', '')}
-            </h3>
-          );
-        }
-        if (trimmed.startsWith('> ')) {
-          return (
-            <div key={idx} className="p-2.5 rounded bg-[#0d1117] border-l-2 border-[#58a6ff] text-[#8b949e] my-1.5 italic">
-              {renderFormattedInline(trimmed.replace('> ', ''))}
-            </div>
-          );
-        }
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          return (
-            <div key={idx} className="flex items-start gap-2 ml-1 my-0.5">
-              <span className="text-[#58a6ff] select-none mt-0.5 shrink-0">•</span>
-              <div className="flex-1">{renderFormattedInline(trimmed.substring(2))}</div>
-            </div>
-          );
-        }
-        if (/^\d+\.\s/.test(trimmed)) {
-          const match = trimmed.match(/^(\d+)\.\s(.*)/);
-          return (
-            <div key={idx} className="flex items-start gap-2 ml-1 my-0.5">
-              <span className="text-[11px] font-mono text-[#58a6ff] font-semibold mt-0.5 shrink-0">
-                {match ? `${match[1]}.` : '•'}
-              </span>
-              <div className="flex-1">{renderFormattedInline(match ? match[2] : trimmed)}</div>
-            </div>
-          );
-        }
-        return (
-          <p key={idx} className="m-0 leading-relaxed">
-            {renderFormattedInline(trimmed)}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function NewsDetailModal({
   item,
@@ -175,27 +97,75 @@ export default function NewsDetailModal({
 
     const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 
+    // Append streaming entry immediately
+    setChatHistory((prev) => [
+      ...prev,
+      {
+        q,
+        a: '',
+        model: 'Gemini 실시간 스트리밍...',
+        time: now,
+        isStreaming: true
+      }
+    ]);
+
     try {
-      const res = await askQuestionAboutNews(item.id, q);
-      setChatHistory((prev) => [
-        ...prev,
-        {
-          q,
-          a: res.answer,
-          model: res.model_used || 'Gemini 3.5 Flash',
-          time: now
+      await askQuestionAboutNewsStream(item.id, q, {
+        onMeta: (modelName) => {
+          setChatHistory((prev) => {
+            if (prev.length === 0) return prev;
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              model: modelName
+            };
+            return updated;
+          });
+        },
+        onToken: (token) => {
+          setChatHistory((prev) => {
+            if (prev.length === 0) return prev;
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            updated[updated.length - 1] = {
+              ...last,
+              a: last.a + token
+            };
+            return updated;
+          });
         }
-      ]);
+      });
+
+      // Mark finished
+      setChatHistory((prev) => {
+        if (prev.length === 0) return prev;
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          isStreaming: false
+        };
+        return updated;
+      });
     } catch (err: any) {
-      setChatHistory((prev) => [
-        ...prev,
-        {
-          q,
-          a: `⚠️ AI 응답을 생성하지 못했습니다: ${err.message || '네트워크 상태를 확인해주세요.'}\n\n잠시 후 다시 시도하시거나 상단의 추천 질문을 클릭해보세요.`,
-          model: 'Error',
-          time: now
+      setChatHistory((prev) => {
+        if (prev.length === 0) return prev;
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (!last.a) {
+          updated[updated.length - 1] = {
+            ...last,
+            a: `⚠️ AI 응답을 생성하지 못했습니다: ${err.message || '네트워크 상태를 확인해주세요.'}\n\n잠시 후 다시 시도하시거나 상단의 추천 질문을 클릭해보세요.`,
+            model: 'Error',
+            isStreaming: false
+          };
+        } else {
+          updated[updated.length - 1] = {
+            ...last,
+            isStreaming: false
+          };
         }
-      ]);
+        return updated;
+      });
     } finally {
       setAsking(false);
     }
@@ -487,7 +457,8 @@ export default function NewsDetailModal({
                             </div>
                             <button
                               onClick={() => handleCopy(c.a, i)}
-                              className="flex items-center gap-1 text-[#8b949e] hover:text-[#f0f6fc] px-1.5 py-0.5 rounded hover:bg-[#21262d] transition-colors cursor-pointer"
+                              disabled={c.isStreaming || !c.a}
+                              className="flex items-center gap-1 text-[#8b949e] hover:text-[#f0f6fc] disabled:opacity-40 px-1.5 py-0.5 rounded hover:bg-[#21262d] transition-colors cursor-pointer"
                               title="답변 복사"
                             >
                               {copiedIndex === i ? (
@@ -503,24 +474,23 @@ export default function NewsDetailModal({
                               )}
                             </button>
                           </div>
-                          {renderMarkdownAnswer(c.a)}
+                          {c.isStreaming && !c.a ? (
+                            <div className="py-2 text-xs text-[#8b949e] flex items-center gap-2">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#58a6ff]" />
+                              <span>AI가 실시간 스트리밍 답변을 생성하는 중입니다...</span>
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <MarkdownViewer content={c.a} />
+                              {c.isStreaming && (
+                                <span className="inline-block w-2 h-4 ml-1 bg-[#58a6ff] animate-pulse align-middle" />
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
-
-              {/* Typing / Loading Indicator */}
-              {asking && (
-                <div className="flex items-start gap-2.5 animate-pulse">
-                  <div className="w-7 h-7 rounded-full bg-[#1f6feb]/20 border border-[#58a6ff]/40 flex items-center justify-center shrink-0 text-[#58a6ff]">
-                    <Bot className="w-4 h-4 animate-bounce" />
-                  </div>
-                  <div className="p-3 bg-[#0d1117] border border-[#30363d] rounded-lg rounded-tl-xs text-xs text-[#8b949e] flex items-center gap-2">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#58a6ff]" />
-                    <span>AI가 기사 전문과 기술 맥락을 분석하여 전문적인 답변을 작성 중입니다...</span>
-                  </div>
                 </div>
               )}
               <div ref={chatEndRef} />

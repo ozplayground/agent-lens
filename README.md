@@ -4,7 +4,7 @@
 
 **AI 및 에이전트(Agent) 기술 소식을 주기적으로 모아보고 관리하는 웹 애플리케이션**
 
-[![Version](https://img.shields.io/badge/Version-v1.4.0-green?style=flat-square)](https://github.com/ozplayground/agent-lens/releases)
+[![Version](https://img.shields.io/badge/Version-v1.4.1-green?style=flat-square)](https://github.com/ozplayground/agent-lens/releases)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Docker Compose](https://img.shields.io/badge/Docker_Compose-Supported-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)

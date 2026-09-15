@@ -2,7 +2,8 @@ import os
 import re
 import json
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+import asyncio
+from typing import Dict, Any, List, Optional, Tuple, AsyncGenerator
 from datetime import datetime, timezone
 import httpx
 from app.config import settings, load_json_config
@@ -325,6 +326,16 @@ class LLMProcessor:
             self._qa_cache[cache_key] = (live_ans, model_name)
             return live_ans, model_name
 
+        return self._generate_heuristic_answer(item_title, item_summary, category, tech_stack, question)
+
+    def _generate_heuristic_answer(
+        self,
+        item_title: str,
+        item_summary: str,
+        category: str,
+        tech_stack: List[str],
+        question: str
+    ) -> Tuple[str, str]:
         q_lower = question.lower()
         tech_display = ', '.join(tech_stack) if tech_stack else 'AI 에이전트 인프라'
         category_insight = CATEGORY_INSIGHTS.get(category, '최신 AI 기술 생태계의 표준화와 워크플로우를 개선합니다.')
@@ -377,6 +388,158 @@ class LLMProcessor:
             )
 
         return answer, "AgentLens Heuristic Engine"
+
+    async def stream_question_answer(
+        self,
+        item_title: str,
+        item_summary: str,
+        category: str,
+        tech_stack: List[str],
+        question: str
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Real-time streaming answer generator yielding SSE event payloads."""
+        cache_key = f"{item_title.strip()}:{question.strip().lower()}"
+        if cache_key in self._qa_cache:
+            ans, model = self._qa_cache[cache_key]
+            yield {"event": "meta", "model": f"{model} (캐시됨)"}
+            words = ans.split(" ")
+            chunk_size = 4
+            for i in range(0, len(words), chunk_size):
+                chunk = " ".join(words[i:i+chunk_size])
+                if i + chunk_size < len(words):
+                    chunk += " "
+                yield {"event": "token", "text": chunk}
+                await asyncio.sleep(0.01)
+            yield {"event": "done", "total_text": ans}
+            return
+
+        prompt = (
+            f"당신은 최신 AI 기술, 자율 에이전트(Autonomous Agents), 하네스(Harness) 벤치마크 및 MCP(Model Context Protocol) 생태계 전문 수석 아키텍트입니다.\n"
+            f"제공된 기술 기사 정보를 바탕으로 사용자의 질문에 대해 실무 아키텍처 및 엔지니어링 관점에서 구체적이고 깊이 있는 기술 답변을 한국어 마크다운(Markdown)으로 작성해주세요.\n\n"
+            f"[분석 대상 소식]\n"
+            f"- 제목: {item_title}\n"
+            f"- 내용 및 맥락: {item_summary}\n"
+            f"- 기술 분류: {category}\n"
+            f"- 연관 기술 스택: {', '.join(tech_stack) if tech_stack else 'AI / Agent Framework'}\n\n"
+            f"[사용자 질문]\n"
+            f"{question}\n\n"
+            f"[작성 가이드라인]\n"
+            f"1. 기사 제목이나 요약을 단순 나열하거나 앵무새처럼 복사하지 마세요.\n"
+            f"2. 질문자의 의도를 정확히 파악하여 기술적 메커니즘, 실제 프로젝트에 도입/연동하는 구체적 방법, 실무 아키텍처 관점의 장단점 및 트레이드오프를 체계적으로 설명하세요.\n"
+            f"3. 가독성을 위해 마크다운 헤딩(###), 불릿 포인트(-), 볼드체, 인라인 코드(`...`), 코드 블록(```)을 적극 활용하세요.\n"
+            f"4. 실무 개발팀이 바로 실행해볼 수 있는 구체적인 액션 아이템이나 주의점(Caution)을 1~2개 제시해주세요."
+        )
+
+        json_cfg = load_json_config()
+        gemini_key = (
+            getattr(settings, "GEMINI_API_KEY", "")
+            or json_cfg.get("llm", {}).get("gemini_api_key", "")
+            or os.environ.get("GEMINI_API_KEY", "")
+            or self.gemini_key
+        )
+        configured_gemini_model = (
+            getattr(settings, "GEMINI_MODEL", "")
+            or json_cfg.get("llm", {}).get("gemini_model", "")
+            or "gemini-3.5-flash-lite"
+        )
+        gemini_candidates = []
+        if configured_gemini_model and configured_gemini_model not in ["gemini-2.0-flash", "gemini-flash-latest"]:
+            gemini_candidates.append(configured_gemini_model)
+        for m in ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash"]:
+            if m not in gemini_candidates:
+                gemini_candidates.append(m)
+
+        stream_succeeded = False
+        full_text = ""
+        model_used = ""
+
+        # 1. Try Google GenAI Official SDK streaming
+        if gemini_key:
+            try:
+                from google import genai
+                from google.genai import types
+                client = genai.Client(api_key=gemini_key)
+                for g_model in gemini_candidates:
+                    try:
+                        chat = client.aio.chats.create(
+                            model=g_model,
+                            config=types.GenerateContentConfig(
+                                temperature=0.3,
+                                max_output_tokens=2048
+                            )
+                        )
+                        stream = await chat.send_message_stream(prompt)
+                        yield {"event": "meta", "model": f"Google {g_model}"}
+                        model_used = f"Google {g_model}"
+                        async for chunk in stream:
+                            if chunk.text:
+                                full_text += chunk.text
+                                yield {"event": "token", "text": chunk.text}
+                        if full_text.strip():
+                            stream_succeeded = True
+                            break
+                    except Exception as e:
+                        logger.warning(f"Google GenAI SDK stream failed for {g_model}: {e}")
+                        continue
+            except Exception as e:
+                logger.warning(f"Google GenAI SDK client creation failed: {e}")
+
+        # 2. Try OpenAI Official SDK streaming if Gemini wasn't used or failed
+        if not stream_succeeded:
+            openai_key = (
+                getattr(settings, "OPENAI_API_KEY", "")
+                or json_cfg.get("llm", {}).get("openai_api_key", "")
+                or os.environ.get("OPENAI_API_KEY", "")
+                or self.openai_key
+            )
+            if openai_key:
+                try:
+                    import openai
+                    openai_client = openai.AsyncOpenAI(api_key=openai_key)
+                    o_model = getattr(settings, "OPENAI_MODEL", "") or json_cfg.get("llm", {}).get("openai_model", "") or "gpt-4o-mini"
+                    stream = await openai_client.chat.completions.create(
+                        model=o_model,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.3,
+                        max_tokens=2048,
+                        stream=True
+                    )
+                    yield {"event": "meta", "model": f"OpenAI {o_model}"}
+                    model_used = f"OpenAI {o_model}"
+                    async for chunk in stream:
+                        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                            txt = chunk.choices[0].delta.content
+                            full_text += txt
+                            yield {"event": "token", "text": txt}
+                    if full_text.strip():
+                        stream_succeeded = True
+                except Exception as e:
+                    logger.warning(f"OpenAI SDK stream failed: {e}")
+
+        # 3. Fallback Heuristic Engine with smooth chunk streaming
+        if not stream_succeeded or not full_text.strip():
+            fallback_ans, fallback_model = self._generate_heuristic_answer(
+                item_title=item_title,
+                item_summary=item_summary,
+                category=category,
+                tech_stack=tech_stack,
+                question=question
+            )
+            yield {"event": "meta", "model": fallback_model}
+            model_used = fallback_model
+            full_text = fallback_ans
+            words = fallback_ans.split(" ")
+            chunk_size = 4
+            for i in range(0, len(words), chunk_size):
+                chunk = " ".join(words[i:i+chunk_size])
+                if i + chunk_size < len(words):
+                    chunk += " "
+                yield {"event": "token", "text": chunk}
+                await asyncio.sleep(0.015)
+
+        if full_text:
+            self._qa_cache[cache_key] = (full_text, model_used)
+            yield {"event": "done", "total_text": full_text}
 
     async def answer_question(self, item_title: str, item_summary: str, category: str, tech_stack: List[str], question: str) -> str:
         """Backwards-compatible wrapper returning only answer string."""

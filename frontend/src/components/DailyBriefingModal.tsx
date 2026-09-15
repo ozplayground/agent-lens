@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { DailyBriefing } from '@/types/news';
 import { exportBriefingToNotion, sendBriefingByEmail } from '@/lib/api';
+import MarkdownViewer from './MarkdownViewer';
 
 interface DailyBriefingModalProps {
   briefing: DailyBriefing | null;
@@ -435,46 +436,8 @@ export default function DailyBriefingModal({
             </div>
           ) : (
             /* Tab 2: Raw Markdown View */
-            <div className="prose prose-invert max-w-none space-y-2.5 font-sans">
-              {briefing.markdown_report.split('\n').map((line, idx) => {
-                if (line.startsWith('# ')) {
-                  return (
-                    <h1 key={idx} className="text-base sm:text-lg font-bold text-[#f0f6fc] pb-1 border-b border-[#30363d]">
-                      {line.replace('# ', '')}
-                    </h1>
-                  );
-                }
-                if (line.startsWith('## ')) {
-                  return (
-                    <h2 key={idx} className="text-xs sm:text-sm font-bold text-[#58a6ff] pt-2 font-mono">
-                      {line.replace('## ', '')}
-                    </h2>
-                  );
-                }
-                if (line.startsWith('- ')) {
-                  return (
-                    <div key={idx} className="flex items-start gap-2 pl-2">
-                      <span className="text-[#58a6ff] mt-0.5">•</span>
-                      <p className="text-[#c9d1d9] m-0 text-xs">{line.replace('- ', '')}</p>
-                    </div>
-                  );
-                }
-                if (line.startsWith('> ')) {
-                  return (
-                    <div key={idx} className="p-2.5 rounded-md bg-[#0d1117] border-l-2 border-[#58a6ff] text-[#c9d1d9] text-xs">
-                      {line.replace('> ', '')}
-                    </div>
-                  );
-                }
-                if (line.trim().startsWith('1.') || line.trim().startsWith('2.') || line.trim().startsWith('3.')) {
-                  return (
-                    <div key={idx} className="p-2 rounded-md bg-[#0d1117] border border-[#30363d] text-[#f0f6fc] text-xs">
-                      {line}
-                    </div>
-                  );
-                }
-                return <p key={idx} className="text-[#8b949e] m-0 text-xs">{line}</p>;
-              })}
+            <div className="p-1">
+              <MarkdownViewer content={briefing.markdown_report} />
             </div>
           )}
         </div>

@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, Depends, Query, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, or_, delete
 from typing import Optional
@@ -132,6 +132,38 @@ async def ask_about_news_item(
         question=body.question,
         answer=answer,
         model_used=model_used
+    )
+
+@router.post("/{news_id}/ask/stream")
+async def ask_about_news_item_stream(
+    news_id: int,
+    body: AskQuestionRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    it = (await db.execute(select(NewsItem).where(NewsItem.id == news_id))).scalar_one_or_none()
+    if not it:
+        raise HTTPException(status_code=404, detail="News item not found")
+
+    tech_stack = [t.strip() for t in it.tech_stack.split(",") if t.strip()] if it.tech_stack else []
+
+    async def event_generator():
+        async for evt in llm_processor.stream_question_answer(
+            item_title=it.title,
+            item_summary=it.summary or "",
+            category=it.category,
+            tech_stack=tech_stack,
+            question=body.question
+        ):
+            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
     )
 
 @router.get("/feed/rss.xml")

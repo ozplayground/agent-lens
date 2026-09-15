@@ -63,3 +63,18 @@ async def test_ask_ai_endpoint():
             ask_res = await ac.post(f"/api/news/{item_id}/ask", json={"question": "핵심 기술이 뭐야?"})
             assert ask_res.status_code == 200
             assert "answer" in ask_res.json()
+
+@pytest.mark.asyncio
+async def test_ask_ai_stream_endpoint():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        news_res = await ac.get("/api/news?size=1")
+        items = news_res.json()["items"]
+        if items:
+            item_id = items[0]["id"]
+            stream_res = await ac.post(
+                f"/api/news/{item_id}/ask/stream",
+                json={"question": "핵심 기술 도입 방법이 뭐야?"}
+            )
+            assert stream_res.status_code == 200
+            assert "text/event-stream" in stream_res.headers["content-type"]
+            assert "data: " in stream_res.text
