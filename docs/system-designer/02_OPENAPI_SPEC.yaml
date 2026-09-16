@@ -1,0 +1,1373 @@
+openapi: 3.1.0
+info:
+  title: AgentLens API
+  version: 2.1.0
+  description: Global AI Agent, Harness & MCP News Curation Intelligence Platform RESTful API Specification
+servers:
+  - url: http://localhost:8000
+    description: Local Backend Server
+
+paths:
+  /api/news:
+    get:
+      summary: 뉴스 피드 목록 다차원 필터링 및 페이징 조회
+      tags: [News]
+      parameters:
+        - name: category
+          in: query
+          required: false
+          description: 카테고리 필터 (all, harness, mcp_plugins_skills, agent_tech, ai_news)
+          schema:
+            type: string
+            default: all
+        - name: source
+          in: query
+          required: false
+          description: 소스 코드 필터 (all, rss, rss_kr, github, arxiv, reddit, hackernews, huggingface)
+          schema:
+            type: string
+            default: all
+        - name: search
+          in: query
+          required: false
+          description: 키워드 검색어 (제목, 요약, 태그, 기술스택, 시사점 통합 검색)
+          schema:
+            type: string
+        - name: sort
+          in: query
+          required: false
+          description: 정렬 기준 (hot, latest, top, quality)
+          schema:
+            type: string
+            default: hot
+        - name: high_signal_only
+          in: query
+          required: false
+          description: ⭐️ Must-Read (High Signal) 아티클만 필터링 여부
+          schema:
+            type: boolean
+            default: false
+        - name: page
+          in: query
+          required: false
+          description: 페이지 번호 (1부터 시작)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: size
+          in: query
+          required: false
+          description: 페이지 당 아이템 수
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: 뉴스 목록 페이징 결과 반환 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsListResponse'
+
+  /api/news/all:
+    delete:
+      summary: 데이터베이스 내 모든 뉴스 아이템 영구 삭제
+      tags: [News]
+      responses:
+        '200':
+          description: 삭제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+
+  /api/news/{news_id}:
+    get:
+      summary: 특정 뉴스 아이템 단건 상세 조회
+      tags: [News]
+      parameters:
+        - name: news_id
+          in: path
+          required: true
+          description: 아티클 고유 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 아티클 상세 정보 반환
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsItemResponse'
+        '404':
+          description: 해당 ID의 아티클을 찾을 수 없음
+
+  /api/news/{news_id}/ask:
+    post:
+      summary: 특정 뉴스 아이템 대상 대화형 AI 질의응답 (Ask AI)
+      tags: [News]
+      parameters:
+        - name: news_id
+          in: path
+          required: true
+          description: 질문 대상 아티클 고유 ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskQuestionRequest'
+      responses:
+        '200':
+          description: AI 답변 반환 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskQuestionResponse'
+        '404':
+          description: 아티클을 찾을 수 없음
+
+  /api/news/{news_id}/ask/stream:
+    post:
+      summary: Ask AI 실시간 스트리밍 질의응답 (Server-Sent Events)
+      tags: [News]
+      parameters:
+        - name: news_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskQuestionRequest'
+      responses:
+        '200':
+          description: SSE 이벤트 스트림 (chunk, done, error)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          description: 아티클을 찾을 수 없음
+
+  /api/news/feed/rss.xml:
+    get:
+      summary: RSS 2.0 XML 피드 발행
+      tags: [News]
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: RSS 2.0 XML 문서 반환
+          content:
+            application/xml:
+              schema:
+                type: string
+
+  /api/briefing/today:
+    get:
+      summary: 오늘의 AI 인텔리전스 브리핑 리포트 조회 (미존재 시 자동 생성)
+      tags: [Daily Briefing]
+      responses:
+        '200':
+          description: 브리핑 데이터 반환 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyBriefingResponse'
+
+  /api/briefing/generate:
+    post:
+      summary: 오늘의 AI 인텔리전스 브리핑 리포트 강제 재생성
+      tags: [Daily Briefing]
+      responses:
+        '200':
+          description: 신규 브리핑 재생성 완료
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyBriefingResponse'
+
+  /api/briefing/export/notion:
+    post:
+      summary: 오늘의 일일 브리핑을 Notion 워크스페이스 페이지로 발행
+      tags: [Daily Briefing]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotionExportRequest'
+      responses:
+        '200':
+          description: Notion 페이지 발행 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotionExportResponse'
+        '400':
+          description: API 키 누락 또는 페이지 생성 실패
+
+  /api/briefing/send/email:
+    post:
+      summary: 오늘의 일일 브리핑을 이메일(HTML 뉴스레터)로 전송
+      tags: [Daily Briefing]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailSendRequest'
+      responses:
+        '200':
+          description: 이메일 전송 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailSendResponse'
+        '400':
+          description: SMTP 설정 누락 또는 전송 오류
+
+  /api/briefing/test/notion:
+    post:
+      summary: Notion API 키 및 페이지 연동 상태 테스트
+      tags: [Daily Briefing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestNotionRequest'
+      responses:
+        '200':
+          description: 연동 테스트 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '400':
+          description: 연동 실패
+
+  /api/briefing/test/email:
+    post:
+      summary: SMTP 이메일 발송 연결 테스트
+      tags: [Daily Briefing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestEmailRequest'
+      responses:
+        '200':
+          description: SMTP 연결 테스트 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '400':
+          description: SMTP 연결 실패
+
+  /api/briefing/settings:
+    get:
+      summary: 브리핑 연동 설정(Notion, SMTP, Webhook) 조회 (비밀번호 마스킹)
+      tags: [Daily Briefing]
+      responses:
+        '200':
+          description: 마스킹된 설정 데이터
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BriefingSettingsResponse'
+    post:
+      summary: 브리핑 연동 설정 갱신 및 config.json 영속화
+      tags: [Daily Briefing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BriefingSettingsUpdate'
+      responses:
+        '200':
+          description: 설정 저장 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '500':
+          description: config.json 파일 쓰기 오류
+
+  /api/sources:
+    get:
+      summary: sources.json에 등록된 수집 대상 전체 목록 및 통계 반환
+      tags: [Sources]
+      responses:
+        '200':
+          description: 소스 목록 및 활성 통계
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcesResponse'
+
+  /api/sources/rss:
+    post:
+      summary: 신규 RSS/Atom 피드를 sources.json에 등록
+      tags: [Sources]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddRssRequest'
+      responses:
+        '200':
+          description: RSS 피드 등록 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '400':
+          description: 필수 필드 누락
+
+  /api/sources/github:
+    post:
+      summary: 신규 GitHub 모니터링 저장소를 sources.json에 등록
+      tags: [Sources]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddGitHubRepoRequest'
+      responses:
+        '200':
+          description: GitHub 저장소 등록 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '400':
+          description: 레포지토리 형식 오류
+
+  /api/sources/{source_type}/{item_id}/toggle:
+    patch:
+      summary: 특정 소스 활성화/비활성화 토글
+      tags: [Sources]
+      parameters:
+        - name: source_type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 토글 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '404':
+          description: 대상 소스를 찾을 수 없음
+
+  /api/sources/{source_type}/{item_id}:
+    delete:
+      summary: 등록된 소스를 sources.json에서 영구 삭제
+      tags: [Sources]
+      parameters:
+        - name: source_type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 소스 삭제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '404':
+          description: 대상을 찾을 수 없음
+
+  /api/research/inspect-url:
+    post:
+      summary: 임의 웹사이트 URL에서 RSS 피드 자동 감지 및 최신 글 프리뷰 분석
+      tags: [Research]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectUrlRequest'
+      responses:
+        '200':
+          description: 피드 감지 및 프리뷰 결과 반환
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectUrlResponse'
+        '400':
+          description: URL 누락 또는 유효하지 않은 도메인
+
+  /api/research/discover:
+    post:
+      summary: 키워드 또는 카테고리 기반 신규 고품질 소스 후보군 자율 발굴 및 추천
+      tags: [Research]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoverRequest'
+      responses:
+        '200':
+          description: 발굴된 후보 목록 반환
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverResponse'
+
+  /api/research/register-candidate:
+    post:
+      summary: 리서치된 추천 후보 소스를 sources.json에 정규화하여 원클릭 등록
+      tags: [Research]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterCandidateRequest'
+      responses:
+        '200':
+          description: 후보 등록 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '400':
+          description: 등록 실패
+
+  /api/research/status:
+    get:
+      summary: 백엔드 자율 딥 리서치 엔진 현재 실행 상태 및 통계 조회
+      tags: [Research]
+      responses:
+        '200':
+          description: 딥 리서처 가동 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResearchStatusResponse'
+
+  /api/research/audit-logs:
+    get:
+      summary: 자율 딥 리서치 소스 심층 평가 및 판정 감사 일지 목록 조회
+      tags: [Research]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: 평가 판정 감사 로그 목록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResearchAuditLogsResponse'
+
+  /api/research/run-deep:
+    post:
+      summary: 백엔드 자율 딥 리서치 파이프라인 즉시 실행 트리거
+      tags: [Research]
+      parameters:
+        - name: max_candidates
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 6
+      responses:
+        '200':
+          description: 백그라운드 딥 리서치 사이클 가동 응답
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeepResearchTriggerResponse'
+
+  /api/schedule/status:
+    get:
+      summary: 정기 수집 스케줄러(APScheduler) 현황 및 최근 수집 감사 로그 조회
+      tags: [Schedule]
+      responses:
+        '200':
+          description: 스케줄러 현황 정보
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleStatusResponse'
+
+  /api/schedule/progress:
+    get:
+      summary: 실시간 점진적 스트림 수집 진행률 및 소스별 저장 건수 조회
+      tags: [Schedule]
+      responses:
+        '200':
+          description: 실시간 진행도 데이터
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrawlProgressResponse'
+
+  /api/schedule/trigger:
+    post:
+      summary: 비동기 백그라운드 실시간 점진적 수집 즉시 기동
+      tags: [Schedule]
+      responses:
+        '200':
+          description: 수집 시작 응답
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleTriggerResponse'
+
+  /api/schedule/reset-and-collect:
+    post:
+      summary: 데이터베이스 내 모든 아티클 및 크롤 로그 일괄 삭제 후 클린 재수집 기동
+      tags: [Schedule]
+      responses:
+        '200':
+          description: 초기화 및 재수집 시작 응답
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetAndCollectResponse'
+
+  /api/trends/radar:
+    get:
+      summary: Tech Radar 에이전트 기술 스택 빈도 분석 및 급상승(Velocity) 데이터 반환
+      tags: [Trends]
+      responses:
+        '200':
+          description: 트렌드 레이더 데이터
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechRadarResponse'
+
+  /api/webhook/test:
+    post:
+      summary: Slack 또는 Discord 웹훅 엔드포인트 연동 테스트 메시지 발송
+      tags: [Webhook]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookTestRequest'
+      responses:
+        '200':
+          description: 테스트 메시지 전송 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '400':
+          description: 웹훅 URL 오류 또는 전송 실패
+
+  /api/webhook/send-briefing:
+    post:
+      summary: 오늘의 일일 AI 브리핑을 서식화하여 지정된 Slack/Discord 웹훅으로 발송
+      tags: [Webhook]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookBriefingRequest'
+      responses:
+        '200':
+          description: 브리핑 웹훅 디스패치 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '400':
+          description: 전송 실패
+
+  /api/stats:
+    get:
+      summary: 시스템 전체 소식 수량, 카테고리별/출처별 누적 통계 반환
+      tags: [Stats]
+      responses:
+        '200':
+          description: 통계 데이터 반환
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+
+  /api/mcp/info:
+    get:
+      summary: FastMCP 서버 정보, 제공 도구 목록 및 Claude Desktop 설정 스니펫
+      tags: [MCP]
+      responses:
+        '200':
+          description: MCP 서버 정보
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpInfoResponse'
+
+  /:
+    get:
+      summary: 루트 엔드포인트 (API 서비스 정보 및 Swagger 문서 링크)
+      tags: [System]
+      responses:
+        '200':
+          description: 서비스 기본 정보
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RootResponse'
+
+  /health:
+    get:
+      summary: 서버 헬스체크 및 크롤러 실행 상태 반환
+      tags: [System]
+      responses:
+        '200':
+          description: 서버 상태 정상
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+components:
+  schemas:
+    GenericSuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: 작업이 성공적으로 완료되었습니다.
+        deleted_count:
+          type: integer
+          example: 216
+        source:
+          type: object
+        repo:
+          type: object
+      required: [status]
+
+    NewsItemResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: Anthropic Claude 3.7 Sonnet & Hybrid Reasoning Model Released
+        url:
+          type: string
+          example: https://www.anthropic.com/news/claude-3-7-sonnet
+        source:
+          type: string
+          example: rss
+        category:
+          type: string
+          example: ai_news
+        summary:
+          type: string
+          example: Anthropic announces Claude 3.7 Sonnet featuring hybrid reasoning capabilities.
+        author:
+          type: string
+          nullable: true
+          example: Anthropic Research
+        tags:
+          type: array
+          items:
+            type: string
+          example: [claude, reasoning, hybrid]
+        tldr_bullets:
+          type: array
+          items:
+            type: string
+          example:
+            - 하이브리드 추론 아키텍처 도입
+            - 코딩 에이전트 성능 SWE-bench 70.3% 달성
+            - 개발자가 사고 시간(Thinking Budget) 미세 조정 가능
+        why_it_matters:
+          type: string
+          example: 실시간 상호작용과 심층 추론을 단일 모델에서 결합하여 에이전트 런타임 비용을 대폭 절감합니다.
+        tech_stack:
+          type: array
+          items:
+            type: string
+          example: [Claude 3.7, SWE-bench, Python]
+        quality_score:
+          type: number
+          format: float
+          example: 9.4
+        is_high_signal:
+          type: boolean
+          example: true
+        raw_score:
+          type: integer
+          example: 1250
+        comments_count:
+          type: integer
+          example: 340
+        hotness_score:
+          type: number
+          format: float
+          example: 8.9
+        published_at:
+          type: string
+          format: date-time
+          example: '2026-09-15T09:00:00Z'
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-09-15T09:05:00Z'
+        dedup_hash:
+          type: string
+          example: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      required: [id, title, url, source, category, quality_score, published_at, dedup_hash]
+
+    NewsListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewsItemResponse'
+        total:
+          type: integer
+          example: 216
+        page:
+          type: integer
+          example: 1
+        size:
+          type: integer
+          example: 20
+        total_pages:
+          type: integer
+          example: 11
+      required: [items, total, page, size, total_pages]
+
+    AskQuestionRequest:
+      type: object
+      properties:
+        question:
+          type: string
+          example: 이 논문/도구가 SWE-bench 평가 파이프라인에 어떻게 활용될 수 있나요?
+      required: [question]
+
+    AskQuestionResponse:
+      type: object
+      properties:
+        news_id:
+          type: integer
+          example: 1
+        question:
+          type: string
+          example: 이 도구의 활용 방안은 무엇인가요?
+        answer:
+          type: string
+          example: 본 도구는 Docker 샌드박스 격리 환경에서 SWE-bench 인스턴스를 병렬 실행하도록 지원합니다.
+        model_used:
+          type: string
+          nullable: true
+          example: gemini-2.0-flash
+      required: [news_id, question, answer]
+
+    BriefingCategoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          nullable: true
+          example: 1
+        title:
+          type: string
+          example: SWE-bench Verified Test Harness
+        url:
+          type: string
+          example: https://github.com/princeton-nlp/SWE-bench
+        source:
+          type: string
+          example: github
+        why_it_matters:
+          type: string
+          example: 에이전트 자율 버그 수정 벤치마크 표준
+        summary:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        category:
+          type: string
+        category_name:
+          type: string
+        hotness_score:
+          type: number
+      required: [title, url]
+
+    BriefingCategorySection:
+      type: object
+      properties:
+        id:
+          type: string
+          example: harness
+        name:
+          type: string
+          example: 하네스 & 벤치마크 동향
+        icon:
+          type: string
+          example: 🎯
+        summary:
+          type: string
+          example: 에이전트 평가 및 회귀 테스트 프레임워크 최신 릴리즈
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BriefingCategoryItem'
+      required: [id, name, icon, summary, items]
+
+    DailyBriefingResponse:
+      type: object
+      properties:
+        title:
+          type: string
+          example: 오늘의 AI 브리핑
+        date:
+          type: string
+          example: 2026년 09월 16일 (수)
+        headline:
+          type: string
+          example: 프론티어 코딩 에이전트 벤치마크 및 MCP 프로토콜 표준화 가속
+        overview:
+          type: string
+          example: 지난 24시간 동안 수집된 200여 건의 아티클 중 핵심 10건 종합 분석
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/BriefingCategorySection'
+        action_items:
+          type: array
+          items:
+            type: string
+          example:
+            - 팀 내 평가 파이프라인에 SWE-bench 하네스 테스트베드 추가
+            - 내부 microservice API용 FastMCP 서버 명세 도입
+        markdown_report:
+          type: string
+          example: '# 오늘의 AI 브리핑 리포트...'
+        featured_items_count:
+          type: integer
+          example: 10
+        generated_at:
+          type: string
+          example: '2026-09-16T09:00:00Z'
+      required: [date, headline, markdown_report, featured_items_count, generated_at]
+
+    NotionExportRequest:
+      type: object
+      properties:
+        api_key:
+          type: string
+          nullable: true
+          example: secret_notion_api_token
+        page_id:
+          type: string
+          nullable: true
+          example: 1234567890abcdef1234567890abcdef
+
+    NotionExportResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Notion에 브리핑 페이지가 성공적으로 생성되었습니다.
+        url:
+          type: string
+          nullable: true
+          example: https://notion.so/AgentLens-Briefing-1234567890abcdef
+      required: [success, message]
+
+    EmailSendRequest:
+      type: object
+      properties:
+        to_email:
+          type: string
+          nullable: true
+          example: engineer@company.com
+        subject:
+          type: string
+          nullable: true
+          example: '[AgentLens] 2026-09-16 일일 AI 브리핑'
+
+    EmailSendResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: 브리핑 이메일이 성공적으로 발송되었습니다.
+      required: [success, message]
+
+    TestNotionRequest:
+      type: object
+      properties:
+        api_key:
+          type: string
+          example: secret_notion_token
+        page_id:
+          type: string
+          example: 1234567890abcdef
+      required: [api_key, page_id]
+
+    TestEmailRequest:
+      type: object
+      properties:
+        smtp_host:
+          type: string
+          example: smtp.gmail.com
+        smtp_port:
+          type: integer
+          default: 587
+        smtp_user:
+          type: string
+          example: alert@company.com
+        smtp_password:
+          type: string
+          example: app-password
+        use_tls:
+          type: boolean
+          default: true
+        to_email:
+          type: string
+          example: test@company.com
+      required: [smtp_host, smtp_user, smtp_password]
+
+    BriefingSettingsResponse:
+      type: object
+      properties:
+        title:
+          type: string
+        auto_dispatch_hour:
+          type: integer
+        notion:
+          type: object
+          properties:
+            enabled: { type: boolean }
+            has_api_key: { type: boolean }
+            masked_api_key: { type: string }
+            page_id: { type: string }
+            auto_export: { type: boolean }
+        email:
+          type: object
+          properties:
+            enabled: { type: boolean }
+            smtp_host: { type: string }
+            smtp_port: { type: integer }
+            smtp_user: { type: string }
+            has_password: { type: boolean }
+            smtp_from: { type: string }
+            smtp_to: { type: string }
+            use_tls: { type: boolean }
+            auto_send: { type: boolean }
+        webhooks:
+          type: object
+          properties:
+            slack_webhook_url: { type: string }
+            discord_webhook_url: { type: string }
+            auto_dispatch_daily_briefing: { type: boolean }
+            auto_alert_high_signal: { type: boolean }
+
+    BriefingSettingsUpdate:
+      type: object
+      properties:
+        notion_api_key:
+          type: string
+          nullable: true
+        notion_page_id:
+          type: string
+          nullable: true
+        notion_auto_export:
+          type: boolean
+          nullable: true
+        smtp_host:
+          type: string
+          nullable: true
+        smtp_port:
+          type: integer
+          nullable: true
+        smtp_user:
+          type: string
+          nullable: true
+        smtp_password:
+          type: string
+          nullable: true
+        smtp_from:
+          type: string
+          nullable: true
+        smtp_to:
+          type: string
+          nullable: true
+        smtp_use_tls:
+          type: boolean
+          nullable: true
+        email_auto_send:
+          type: boolean
+          nullable: true
+        slack_webhook_url:
+          type: string
+          nullable: true
+        discord_webhook_url:
+          type: string
+          nullable: true
+
+    SourcesResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        sources_file:
+          type: string
+        updated_at:
+          type: string
+        stats:
+          type: object
+        data:
+          type: object
+
+    AddRssRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Simon Willison's Weblog
+        url:
+          type: string
+          example: https://simonwillison.net/atom/everything/
+        site_url:
+          type: string
+          example: https://simonwillison.net/
+        category_hint:
+          type: string
+          default: ai_news
+        country:
+          type: string
+          default: GLOBAL
+        description:
+          type: string
+      required: [name, url]
+
+    AddGitHubRepoRequest:
+      type: object
+      properties:
+        repo:
+          type: string
+          example: modelcontextprotocol/servers
+        category:
+          type: string
+          default: mcp_plugins_skills
+        description:
+          type: string
+        stars_hint:
+          type: integer
+          default: 0
+      required: [repo]
+
+    InspectUrlRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          example: https://github.com/langchain-ai/langgraph
+      required: [url]
+
+    InspectUrlResponse:
+      type: object
+      properties:
+        status: { type: string }
+        input_url: { type: string }
+        site_url: { type: string }
+        feed_url: { type: string }
+        title: { type: string }
+        category: { type: string }
+        relevance_score: { type: number }
+        preview_items: { type: array, items: { type: object } }
+
+    DiscoverRequest:
+      type: object
+      properties:
+        query:
+          type: string
+          example: harness
+        category:
+          type: string
+          example: harness
+        limit:
+          type: integer
+          default: 8
+
+    DiscoverResponse:
+      type: object
+      properties:
+        status: { type: string }
+        query: { type: string }
+        count: { type: integer }
+        candidates:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              site_url: { type: string }
+              feed_url: { type: string }
+              category: { type: string }
+              relevance_score: { type: number }
+              reason: { type: string }
+
+    RegisterCandidateRequest:
+      type: object
+      properties:
+        name: { type: string }
+        feed_url: { type: string }
+        site_url: { type: string }
+        category_hint: { type: string, default: ai_news }
+        country: { type: string, default: GLOBAL }
+        description: { type: string }
+      required: [name, feed_url]
+
+    ResearchStatusResponse:
+      type: object
+      properties:
+        is_running: { type: boolean }
+        step_message: { type: string }
+        analyzed_count: { type: integer }
+        adopted_count: { type: integer }
+        last_run_time: { type: string, nullable: true }
+        next_scheduled_run: { type: string, nullable: true }
+
+    ResearchAuditLogItem:
+      type: object
+      properties:
+        id: { type: integer }
+        source_name: { type: string }
+        site_url: { type: string }
+        feed_url: { type: string }
+        category: { type: string }
+        relevance_score: { type: number }
+        verdict:
+          type: string
+          enum: [AUTO_ADOPTED, WATCHLIST, REJECTED]
+        verdict_reason: { type: string }
+        analyzed_articles_count: { type: integer }
+        created_at: { type: string }
+
+    ResearchAuditLogsResponse:
+      type: object
+      properties:
+        status: { type: string }
+        total: { type: integer }
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResearchAuditLogItem'
+
+    DeepResearchTriggerResponse:
+      type: object
+      properties:
+        status: { type: string }
+        message: { type: string }
+        max_candidates: { type: integer }
+
+    ScheduleStatusResponse:
+      type: object
+      properties:
+        current_time: { type: string }
+        schedule_hours:
+          type: array
+          items: { type: integer }
+        timezone: { type: string }
+        next_run: { type: string }
+        minutes_until_next_run: { type: number }
+        is_running: { type: boolean }
+        last_crawl_time: { type: string, nullable: true }
+        last_crawl_status: { type: string }
+        recent_logs:
+          type: array
+          items: { type: object }
+      required: [current_time, schedule_hours, timezone, next_run, is_running]
+
+    CrawlProgressResponse:
+      type: object
+      properties:
+        is_running: { type: boolean }
+        current_source: { type: string }
+        step_message: { type: string }
+        items_collected: { type: integer }
+        items_saved: { type: integer }
+        items_filtered: { type: integer }
+        total_sources: { type: integer }
+        completed_sources: { type: integer }
+      required: [is_running, current_source, step_message]
+
+    ScheduleTriggerResponse:
+      type: object
+      properties:
+        status: { type: string }
+        message: { type: string }
+        total_collected: { type: integer }
+        total_saved: { type: integer }
+        source_results: { type: object }
+      required: [status, message]
+
+    ResetAndCollectResponse:
+      type: object
+      properties:
+        status: { type: string }
+        message: { type: string }
+        deleted_count: { type: integer }
+      required: [status, message, deleted_count]
+
+    TechRadarSurgingTag:
+      type: object
+      properties:
+        name: { type: string }
+        count: { type: integer }
+        category: { type: string }
+        velocity: { type: string }
+
+    TechRadarCategory:
+      type: object
+      properties:
+        name: { type: string }
+        count: { type: integer }
+        percentage: { type: number }
+
+    TechRadarTag:
+      type: object
+      properties:
+        name: { type: string }
+        count: { type: integer }
+        category: { type: string }
+
+    TechRadarResponse:
+      type: object
+      properties:
+        updated_at: { type: string }
+        total_analyzed: { type: integer }
+        surging_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechRadarSurgingTag'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechRadarCategory'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechRadarTag'
+
+    WebhookTestRequest:
+      type: object
+      properties:
+        webhook_url:
+          type: string
+          example: https://hooks.slack.com/services/T00/B00/XXXX
+        provider:
+          type: string
+          default: auto
+      required: [webhook_url]
+
+    WebhookBriefingRequest:
+      type: object
+      properties:
+        webhook_url:
+          type: string
+          example: https://discord.com/api/webhooks/123/XYZ
+        provider:
+          type: string
+          default: auto
+      required: [webhook_url]
+
+    StatsResponse:
+      type: object
+      properties:
+        total_news: { type: integer }
+        category_counts:
+          type: object
+          additionalProperties: { type: integer }
+        source_counts:
+          type: object
+          additionalProperties: { type: integer }
+        last_updated: { type: string, nullable: true }
+      required: [total_news, category_counts, source_counts]
+
+    McpInfoResponse:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        tools:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              description: { type: string }
+        claude_desktop_config: { type: object }
+
+    RootResponse:
+      type: object
+      properties:
+        service: { type: string }
+        version: { type: string }
+        docs: { type: string }
+
+    HealthResponse:
+      type: object
+      properties:
+        status: { type: string }
+        running: { type: boolean }

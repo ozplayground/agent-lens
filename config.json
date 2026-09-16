@@ -1,0 +1,65 @@
+{
+  "app": {
+    "project_name": "AgentLens",
+    "version": "0.1.0",
+    "host": "0.0.0.0",
+    "port": 8000,
+    "frontend_port": 3001,
+    "database_url": "sqlite+aiosqlite:///./agentlens.db"
+  },
+  "llm": {
+    "provider": "auto",
+    "gemini_api_key": "",
+    "gemini_model": "gemini-3.5-flash-lite",
+    "openai_api_key": "",
+    "openai_model": "gpt-4o-mini",
+    "ollama_base_url": "http://localhost:11434",
+    "ollama_model": "llama3.2:latest",
+    "quality_cutoff_score": 5.0,
+    "high_signal_threshold": 7.0
+  },
+  "scheduler": {
+    "enabled": true,
+    "crawl_hours": [
+      0,
+      6,
+      12,
+      18
+    ],
+    "timezone": "UTC",
+    "auto_briefing_hour": 0
+  },
+  "briefing": {
+    "title": "오늘의 AI 브리핑",
+    "auto_dispatch_hour": 0,
+    "notion": {
+      "enabled": false,
+      "api_key": "",
+      "page_id": "test_notion_parent_page",
+      "auto_export": false
+    },
+    "email": {
+      "enabled": false,
+      "smtp_host": "smtp.gmail.com",
+      "smtp_port": 587,
+      "smtp_user": "",
+      "smtp_password": "",
+      "smtp_from": "",
+      "smtp_to": "team@example.com",
+      "use_tls": true,
+      "auto_send": false
+    }
+  },
+  "webhooks": {
+    "slack_webhook_url": "",
+    "discord_webhook_url": "",
+    "auto_dispatch_daily_briefing": true,
+    "auto_alert_high_signal": true
+  },
+  "crawler": {
+    "user_agent": "AgentLens-Collector/1.0",
+    "request_timeout_seconds": 12,
+    "max_concurrent_requests": 5,
+    "items_per_source_limit": 20
+  }
+}

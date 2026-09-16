@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  color-scheme: light;
+}
+
+body {
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ==========================================================================
+   Light Mode Theme Styles & Mappings
+   ========================================================================== */
+
+/* Background surfaces */
+.bg-\[\#0d1117\] {
+  background-color: #f8fafc !important;
+}
+
+.bg-\[\#161b22\] {
+  background-color: #ffffff !important;
+}
+
+.bg-\[\#21262d\] {
+  background-color: #f1f5f9 !important;
+}
+
+.bg-\[\#30363d\] {
+  background-color: #e2e8f0 !important;
+}
+
+/* Borders */
+.border-\[\#30363d\],
+.border-\[\#30363d\]\/60 {
+  border-color: #e2e8f0 !important;
+}
+
+.border-\[\#21262d\] {
+  border-color: #cbd5e1 !important;
+}
+
+/* Text colors */
+.text-\[\#f0f6fc\] {
+  color: #0f172a !important;
+}
+
+.text-\[\#c9d1d9\] {
+  color: #334155 !important;
+}
+
+.text-\[\#8b949e\],
+.text-\[\#8b949e\]\/70,
+.text-\[\#8b949e\]\/80 {
+  color: #64748b !important;
+}
+
+/* Hover effects */
+.hover\:bg-\[\#21262d\]:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.hover\:bg-\[\#30363d\]:hover {
+  background-color: #e2e8f0 !important;
+}
+
+.hover\:bg-\[\#161b22\]:hover {
+  background-color: #f8fafc !important;
+}
+
+.hover\:text-\[\#f0f6fc\]:hover {
+  color: #0f172a !important;
+}
+
+.hover\:text-\[\#c9d1d9\]:hover {
+  color: #1e293b !important;
+}
+
+.hover\:border-\[\#8b949e\]:hover,
+.hover\:border-\[\#8b949e\]\/60:hover {
+  border-color: #94a3b8 !important;
+}
+
+/* Accent blue */
+.text-\[\#58a6ff\] {
+  color: #2563eb !important;
+}
+
+.hover\:text-\[\#58a6ff\]:hover {
+  color: #1d4ed8 !important;
+}
+
+.group:hover .group-hover\:text-\[\#58a6ff\] {
+  color: #2563eb !important;
+}
+
+.border-\[\#58a6ff\],
+.border-\[\#58a6ff\]\/30,
+.border-\[\#58a6ff\]\/40,
+.border-\[\#58a6ff\]\/50 {
+  border-color: #93c5fd !important;
+}
+
+.focus\:border-\[\#58a6ff\]:focus {
+  border-color: #2563eb !important;
+}
+
+.bg-\[\#58a6ff\]\/10,
+.bg-\[\#1f6feb\]\/10,
+.bg-\[\#1f6feb\]\/20,
+.bg-\[\#1f6feb\]\/30,
+.bg-\[\#388bfd\]\/15 {
+  background-color: #eff6ff !important;
+}
+
+/* Form inputs & Controls */
+input,
+textarea,
+select {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Modal shadows & backdrop */
+.shadow-2xl {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.bg-black\/75,
+.bg-black\/60,
+.bg-black\/70 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* Pre / Code blocks */
+pre,
+code {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #f8fafc;
+}

@@ -1,0 +1,22 @@
+{
+  "name": "fullstack-toolkit",
+  "version": "1.0.0",
+  "description": "Fullstack Engineering Harness Toolkit for Next.js, FastAPI, TDD, and QA automation.",
+  "skills": [
+    "market-reference-benchmark",
+    "requirements-definition",
+    "functional-specification",
+    "architecture-decision",
+    "contract-specification",
+    "backend-tdd-workflow",
+    "frontend-tdd-workflow",
+    "fullstack-code-review",
+    "fullstack-qa-testing"
+  ],
+  "rules": [
+    "fullstack-team-workflow.md",
+    "subagent-output-standards.md",
+    "planning-boundaries.md",
+    "environment-standards.md"
+  ]
+}
