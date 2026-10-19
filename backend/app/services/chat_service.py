@@ -235,6 +235,8 @@ class ChatService:
         prompt_parts = [
             "당신은 15년 이상의 분산 시스템 및 AI 엔지니어링 실무 경험을 보유한 Senior Staff Architect입니다.",
             "기술적 깊이와 구현 세부사항을 중시하며, 단순한 개요나 2줄 요약 앵무새 답변을 절대 하지 않습니다.",
+            "\n[응답 분량 및 완결성 필수 규칙]",
+            "- 반드시 할당된 응답 토큰 한도(최대 1,500~2,000 토큰 / 공백 포함 1,500~2,500자 이내) 안에서 답변 전체를 완벽하게 끝맺음(완결된 결론 문장 및 닫힌 코드 블록)하세요. 절대 문장이나 코드 블록이 중간에 잘리지 않도록 핵심 위주로 밀도 있게 작성하고, 코드 예시는 15줄 이내의 핵심 스니펫으로 간결하게 작성하세요.",
             "\n[인라인 인용 규칙]",
             "- 원본 소스 기사 내용은 [1] 뱃지로 인라인 인용하세요.",
             "- 자율 보충 웹 검색 문서 내용은 [S1], [S2] 등으로 명확히 구분하여 인라인 인용하세요.",
@@ -244,7 +246,7 @@ class ChatService:
         if scope == "scoped":
             prompt_parts.extend([
                 "\n[4단 구조화 엔지니어링 리포트 필수 작성 규칙]",
-                "반드시 아래 4개의 마크다운 헤딩(##)을 포함하여 구조화된 엔지니어링 분석을 제공하세요:",
+                "반드시 아래 4개의 마크다운 헤딩(##)을 포함하여 구조화된 엔지니어링 분석을 제공하되, 각 섹션을 핵심 불릿 2~3개와 15줄 이내 스니펫으로 압축하여 전체 답변이 토큰 한도 내에서 100% 완결되게 작성하세요:",
                 "## 1. 핵심 아키텍처 및 동작 원리",
                 "## 2. 주요 기능 및 코드 구현 예시",
                 "## 3. 기존 기술 대비 차별점 및 벤치마크",
@@ -276,8 +278,19 @@ class ChatService:
                 prompt_parts.append("\n[검색된 코퍼스 지식 출처 목록]")
                 for s in sources:
                     prompt_parts.append(f"[{s.index}] #{s.id} {s.title} ({s.category}): {s.snippet}")
+                prompt_parts.append(
+                    "\n[출처 선택 및 인용 지침]\n"
+                    "- 위 목록 중 질문에 답하는 데 실제로 사용한 출처만 [1], [2] 형태로 인라인 인용하세요.\n"
+                    "- 질문과 관련이 없는 출처는 무시하고 인용 번호를 붙이지 마세요.\n"
+                    "- 단순 인사나 짧은 질문에는 불필요한 장문 리포트 없이 질문에 맞는 간결하고 완결된 답변을 하세요."
+                )
             else:
-                prompt_parts.append("\n[알림: 관련 기사를 직접 찾지 못해 범용 AI 에이전트 엔지니어링 지식을 토대로 답변합니다.]")
+                prompt_parts = [
+                    "당신은 AI 및 소프트웨어 엔지니어링 어시스턴트입니다.",
+                    "사용자의 일상 대화나 인사에는 불필요한 장문 리포트 없이 자연스럽고 친절하게 간결하고 완결된 대화형으로 응답하고, 기술 질문에는 명확하고 정확하게 답변하세요.",
+                    "반드시 할당된 응답 토큰 한도(최대 1,500~2,000 토큰 / 공백 포함 1,500~2,500자 이내) 안에서 답변 전체를 완벽하게 끝맺음(완결된 결론 문장 및 닫힌 코드 블록)하세요. 절대 문장이나 코드 블록이 중간에 잘리지 않도록 핵심 위주로 밀도 있게 작성하고, 코드 예시는 15줄 이내의 핵심 스니펫으로 간결하게 작성하세요.",
+                    "제공된 외부 기사 출처가 없으므로 [1] 등의 가짜 인용 번호를 절대 붙이지 마세요.",
+                ]
 
         if history:
             prompt_parts.append("\n[이전 대화 이력]")
@@ -289,30 +302,176 @@ class ChatService:
         prompt_parts.append(f"\n[사용자 질문]\n{question}")
         return "\n".join(prompt_parts)
 
-    def _plan_react_action(self, question: str, scope: str) -> Dict[str, Any]:
+    async def _plan_react_action(
+        self,
+        question: str,
+        scope: str,
+        history: Optional[List[Any]] = None,
+        model: Optional[str] = None,
+        model_tier: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """ReAct Planner: Decides whether to invoke search_news_corpus tool or answer directly."""
         if scope == "scoped":
-            return {"action": "none", "search_query": ""}
+            return {"action": "none", "search_query": "", "thought": "단일 기사 컨텍스트 고정"}
 
+        import re
         from app.services.retriever import SqliteFtsRetriever
+        from app.services.llm_processor import KNOWN_TECH_STACK
 
         casual_greetings = {
             "안녕", "안녕하세요", "반가워", "반갑습니다", "고마워", "고맙습니다",
             "감사", "감사합니다", "ㅎㅎ", "ㅋㅋ", "테스트", "하이", "헬로",
-            "hello", "hi", "hey", "thanks", "thank you", "누구야", "너는 누구야", "뭐해"
+            "hello", "hi", "hey", "thanks", "thank you", "누구야", "너는 누구야", "뭐해",
+            "질문", "응", "네", "그래", "알겠어", "오케이", "ok", "okay",
         }
         q_clean = question.strip().lower().rstrip("?!.~")
-        if q_clean in casual_greetings:
-            return {"action": "none", "search_query": ""}
+        if not q_clean or q_clean in casual_greetings:
+            return {
+                "action": "none",
+                "search_query": "",
+                "thought": "일반 대화이므로 뉴스 DB 검색 도구를 호출하지 않음",
+            }
+
+        # Meta-questions / complaints about the chat or search behavior itself
+        meta_complaint_patterns = [
+            "인사했는데", "왜 뉴스", "왜 기사", "검색하지 마", "검색하지마",
+            "찾지 마", "찾지마", "왜 자꾸", "왜 무조건", "오늘 날씨", "점심 메뉴", "저녁 메뉴",
+            "스트리밍 도중 끊김",
+        ]
+        if any(p in q_clean for p in meta_complaint_patterns):
+            return {
+                "action": "none",
+                "search_query": "",
+                "thought": "일반 대화이므로 뉴스 DB 검색 도구를 호출하지 않음",
+            }
+
+        # Check whether the query contains any AI/Agent/Tech stack or explicit tech news/trend signal
+        tech_and_news_signals = set(KNOWN_TECH_STACK.keys()) | {
+            "claude", "gpt", "openai", "anthropic", "deepseek", "gemini", "llama", "mistral", "qwen",
+            "mcp", "fastmcp", "langgraph", "crewai", "autogen", "langchain", "llamaindex",
+            "swe-bench", "gaia", "webarena", "agentbench", "vllm", "ollama", "docker", "fastapi",
+            "python", "typescript", "stategraph", "windbg", "sonnet", "haiku", "opus",
+            "agent", "agents", "llm", "rag", "benchmark", "harness", "archived", "deep dive",
+            "에이전트", "멀티에이전트", "워크플로우", "아키텍처", "벤치마크", "하네스", "프롬프트",
+            "강화학습", "추론", "프로토콜", "릴리즈", "오픈소스", "논문", "뉴스", "기사", "소식",
+            "동향", "트렌드", "변경점", "업데이트", "프레임워크",
+        }
+        has_domain_signal = any(sig in q_clean for sig in tech_and_news_signals)
+        if not has_domain_signal:
+            return {
+                "action": "none",
+                "search_query": "",
+                "thought": "일반 대화이므로 뉴스 DB 검색 도구를 호출하지 않음",
+            }
 
         keywords = [
             kw for kw in SqliteFtsRetriever.extract_keywords(question)
             if kw.lower() not in casual_greetings
         ]
         if not keywords:
-            return {"action": "none", "search_query": ""}
+            return {
+                "action": "none",
+                "search_query": "",
+                "thought": "일반 대화이므로 뉴스 DB 검색 도구를 호출하지 않음",
+            }
 
-        return {"action": "search_news_corpus", "search_query": " ".join(keywords)}
+        default_query = " ".join(keywords)
+
+        # When live LLM is available in non-test runtime, let the LLM decide ReAct Thought/Action
+        if not llm_processor.is_test_environment() and llm_processor.has_live_provider():
+            planner_prompt = (
+                "당신은 AI 기술 뉴스 에이전트(AgentLens)의 ReAct Planner입니다.\n"
+                "사용자 질문을 분석하여 뉴스/기술 코퍼스 DB 검색 도구(`search_news_corpus`)를 호출할지, 도구 없이 직접 답변(`none`)할지 결정하세요.\n\n"
+                "[판단 기준]\n"
+                "1. 인사, 일상 대화, 감탄, 불만, 메타 질문, 일반 상식, 단순 코딩 문법 질문 등 뉴스 기사 검색이 불필요한 경우 `ACTION: NONE` (또는 JSON `\"action\": \"none\"`)을 선택하세요.\n"
+                "2. 특정 AI/에이전트 기술(LangGraph, FastMCP, MCP, Claude, DeepSeek, SWE-bench 등), 최신 AI 트렌드/릴리즈/소식, 수집된 기술 기사 기반 비교·분석이 필요한 경우에만 `ACTION: SEARCH <핵심키워드>` (또는 JSON `\"action\": \"search_news_corpus\"`)를 선택하세요.\n"
+                "3. 검색 선택 시 조사와 어미를 제거한 핵심 검색 키워드(1~4개 단어)만 추출하세요.\n\n"
+                f"[사용자 질문]\n{question}\n\n"
+                "반드시 아래 JSON 형식으로 응답하세요:\n"
+                '{"thought": "판단 근거 한 줄", "action": "search_news_corpus" | "none", "search_query": "핵심 키워드"}'
+            )
+            try:
+                try:
+                    raw_ans, _ = await llm_processor.generate_live_answer(
+                        planner_prompt, model="claude-haiku-5-5", model_tier="haiku"
+                    )
+                except TypeError:
+                    raw_ans, _ = await llm_processor.generate_live_answer(planner_prompt)
+
+                if raw_ans:
+                    cleaned = re.sub(r"^```(?:json)?\s*", "", raw_ans.strip(), flags=re.IGNORECASE)
+                    cleaned = re.sub(r"\s*```$", "", cleaned.strip())
+                    m = re.search(r"\{.*\}", cleaned, re.DOTALL)
+                    if m:
+                        data = json.loads(m.group(0))
+                        act = str(data.get("action", "")).strip().lower()
+                        thought = str(data.get("thought") or "").strip()
+                        sq = str(data.get("search_query") or "").strip()
+                        if act == "none":
+                            return {
+                                "action": "none",
+                                "search_query": "",
+                                "thought": thought or "일반 질문이므로 검색 도구를 호출하지 않음",
+                            }
+                        if act == "search_news_corpus":
+                            return {
+                                "action": "search_news_corpus",
+                                "search_query": sq or default_query,
+                                "thought": thought or "기술 코퍼스 검색 필요",
+                            }
+                    if "ACTION: NONE" in cleaned.upper():
+                        return {
+                            "action": "none",
+                            "search_query": "",
+                            "thought": "일반 질문이므로 검색 도구를 호출하지 않음",
+                        }
+                    m_act = re.search(r"ACTION:\s*SEARCH\s+(.+)", cleaned, re.IGNORECASE)
+                    if m_act:
+                        sq = m_act.group(1).strip()
+                        return {
+                            "action": "search_news_corpus",
+                            "search_query": sq or default_query,
+                            "thought": "기술 코퍼스 검색 필요",
+                        }
+            except Exception as e:
+                logger.warning(f"ReAct LLM planner fallback to heuristic keywords: {e}")
+
+        return {
+            "action": "search_news_corpus",
+            "search_query": default_query,
+            "thought": "기술 키워드 기반 코퍼스 검색 수행",
+        }
+
+    def _filter_cited_sources(
+        self,
+        answer: str,
+        candidate_sources: List[ChatSourceItem],
+        question: str = "",
+    ) -> List[ChatSourceItem]:
+        """Return only the sources actually cited ([1], [2], ...) or used in the generated answer."""
+        if not candidate_sources:
+            return []
+
+        import re
+        cited_nums = {int(n) for n in re.findall(r"\[(\d+)\]", answer or "")}
+        if cited_nums:
+            cited_items = [s for s in candidate_sources if s.index in cited_nums]
+            if cited_items:
+                return cited_items
+
+        # If no explicit [N] brackets were emitted in answer, retain candidates whose core title tokens appear in answer
+        ans_lower = (answer or "").lower()
+        matched_by_mention: List[ChatSourceItem] = []
+        for s in candidate_sources:
+            title_tokens = [
+                t.lower() for t in re.findall(r"[A-Za-z0-9_\-\.]{3,}|[가-힣]{2,}", s.title or "")
+            ]
+            if any(tok in ans_lower for tok in title_tokens[:4]):
+                matched_by_mention.append(s)
+        if matched_by_mention:
+            return matched_by_mention
+
+        return candidate_sources[:1]
 
     async def query_chat(self, req: ChatQueryRequest) -> ChatQueryResponse:
         """Synchronous query-response handler with live LLM (Anthropic -> OpenAI -> Ollama). No fake fallback."""
@@ -360,7 +519,9 @@ class ChatService:
             is_relaxed = False
             applied_filters = req.filters or ChatFocusFilter()
         else:
-            plan = self._plan_react_action(req.question, req.scope)
+            plan = await self._plan_react_action(
+                req.question, req.scope, req.history, req.model, req.model_tier
+            )
             if plan["action"] == "search_news_corpus":
                 sources, is_relaxed, applied_filters = await self._resolve_sources(
                     scope=req.scope,
@@ -386,6 +547,10 @@ class ChatService:
         except TypeError:
             answer, model_name = await llm_processor.generate_live_answer(prompt)
 
+        if req.scope != "scoped" and sources:
+            sources = self._filter_cited_sources(answer, sources, req.question)
+            primary_count = len(sources)
+
         latency_ms = int((time.time() - start_time) * 1000)
         _, resolved_tier = resolve_model_and_tier(req.model or req.model_tier or model_name)
         usage_dict = getattr(llm_processor, "last_usage", None)
@@ -410,24 +575,28 @@ class ChatService:
         """
         SSE Generator yielding multi-event stream:
         - In Scoped mode:
-          1. event: status (extracting_source, 20%)
-          2. event: status (evaluating_sufficiency, 45%)
-          3. event: status (agentic_searching, 65%) [if missing aspects detected]
-          4. event: status (synthesizing, 85%)
-          5. event: sources (dual sources: primary [1] + supplementary [S1], primary_count & supplementary_count)
-          6. event: token (streamed 4-section structured markdown tokens)
-          7. event: done (done: true, primary_count, supplementary_count, stats)
+          1. event: status (extracting_source, 30%)
+          2. event: status (synthesizing, 85%)
+          3. event: sources (single primary [1])
+          4. event: token (streamed 4-section structured markdown tokens)
+          5. event: done (done: true, primary_count, supplementary_count, stats)
         - In Global mode:
-          1. event: status (synthesizing, 85%)
-          2. event: sources (corpus chunks, primary_count, is_relaxed)
+          1. event: status (thinking, 25%)
+          2. [If search_news_corpus] event: status (tool_calling, 50%) -> event: status (synthesizing, 80%)
+             [If none] event: status (synthesizing, 75%)
           3. event: token (live tokens)
-          4. event: done
+          4. [If search_news_corpus and cited sources exist] event: sources (only cited/used sources finalized post-stream)
+          5. event: done
         On mid-stream failure:
           event: error (StreamErrorPayload)
         """
         self._validate_request(req.question, req.scope)
         start_time = time.time()
         session_id = req.session_id or str(uuid.uuid4())
+        plan: Dict[str, Any] = {"action": "none", "search_query": ""}
+        candidate_sources: List[ChatSourceItem] = []
+        is_relaxed = False
+        applied_filters: Optional[ChatFocusFilter] = req.filters or ChatFocusFilter()
 
         if req.scope == "scoped":
             if not req.source_id:
@@ -500,69 +669,74 @@ class ChatService:
             prompt = self._build_grounding_prompt(req.question, sources, req.scope, req.history, full_content=full_content)
 
         else:
-            # Global Mode: ReAct (Thought -> Action -> Observation -> Final Answer)
+            # Global Mode: ReAct (Thought -> Action -> Synthesizing -> Token Stream -> Final Cited Sources)
             now_iso = datetime.now(timezone.utc).isoformat()
             think_status = json.dumps({
                 "step": "thinking",
-                "label": "🧠 ReAct 추론: 질문 의도 및 검색 도구 필요성 판단 중...",
+                "label": "🧠 ReAct 추론: 질문 의도 및 도구 필요성 분석 중...",
                 "progress": 25,
                 "timestamp": now_iso,
             }, ensure_ascii=False)
             yield f"event: status\ndata: {think_status}\n\n"
             await asyncio.sleep(0.01)
 
-            plan = self._plan_react_action(req.question, req.scope)
+            plan = await self._plan_react_action(
+                req.question, req.scope, req.history, req.model, req.model_tier
+            )
             if plan["action"] == "search_news_corpus":
                 search_q = plan["search_query"]
                 now_iso = datetime.now(timezone.utc).isoformat()
                 tool_status = json.dumps({
                     "step": "tool_calling",
-                    "label": f"🛠️ Action: search_news_corpus('{search_q}') 도구 실행 중...",
-                    "progress": 55,
+                    "label": f"🛠️ Action: search_news_corpus('{search_q}') 실행 중...",
+                    "progress": 50,
                     "timestamp": now_iso,
                     "query": search_q,
                 }, ensure_ascii=False)
                 yield f"event: status\ndata: {tool_status}\n\n"
                 await asyncio.sleep(0.01)
 
-                sources, is_relaxed, applied_filters = await self._resolve_sources(
+                candidate_sources, is_relaxed, applied_filters = await self._resolve_sources(
                     scope=req.scope,
                     source_id=req.source_id,
                     query=search_q,
                     top_k=req.top_k,
                     filters=req.filters,
                 )
+                sources = candidate_sources
                 primary_count = len(sources)
                 supplementary_count = 0
 
                 now_iso = datetime.now(timezone.utc).isoformat()
-                obs_status = json.dumps({
-                    "step": "observing",
-                    "label": f"👀 Observation: 관련 뉴스 {primary_count}건 관찰 완료",
+                synth_status = json.dumps({
+                    "step": "synthesizing",
+                    "label": "✍️ 검증된 컨텍스트를 바탕으로 답변 생성 중...",
                     "progress": 80,
                     "timestamp": now_iso,
-                    "sources_found": primary_count,
                 }, ensure_ascii=False)
-                yield f"event: status\ndata: {obs_status}\n\n"
+                yield f"event: status\ndata: {synth_status}\n\n"
                 await asyncio.sleep(0.01)
 
-                sources_payload = json.dumps({
-                    "sources": [s.model_dump() for s in sources],
-                    "applied_filters": applied_filters.model_dump() if applied_filters else None,
-                    "is_relaxed": is_relaxed,
-                    "primary_count": primary_count,
-                    "supplementary_count": supplementary_count,
-                }, ensure_ascii=False)
-                yield f"event: sources\ndata: {sources_payload}\n\n"
-                await asyncio.sleep(0.01)
+                prompt = self._build_grounding_prompt(req.question, candidate_sources, req.scope, req.history)
             else:
+                candidate_sources = []
                 sources = []
                 primary_count = 0
                 supplementary_count = 0
                 is_relaxed = False
                 applied_filters = req.filters or ChatFocusFilter()
 
-            prompt = self._build_grounding_prompt(req.question, sources, req.scope, req.history)
+                now_iso = datetime.now(timezone.utc).isoformat()
+                synth_status = json.dumps({
+                    "step": "synthesizing",
+                    "label": "✍️ 도구 호출 없이 직접 답변 생성 중...",
+                    "progress": 75,
+                    "timestamp": now_iso,
+                }, ensure_ascii=False)
+                yield f"event: status\ndata: {synth_status}\n\n"
+                await asyncio.sleep(0.01)
+
+                prompt = self._build_grounding_prompt(req.question, [], req.scope, req.history)
 
         # Stage: Generate and stream live tokens from llm_processor
         model_name = "LLM Stream"
@@ -592,6 +766,23 @@ class ChatService:
             yield f"event: error\ndata: {err_payload}\n\n"
             return
 
+        full_answer = "".join(full_tokens)
+
+        # In Global mode with search_news_corpus, emit only actually cited/used sources AFTER streaming completes
+        if req.scope != "scoped" and plan.get("action") == "search_news_corpus":
+            sources = self._filter_cited_sources(full_answer, candidate_sources, req.question)
+            primary_count = len(sources)
+            supplementary_count = 0
+            sources_payload = json.dumps({
+                "sources": [s.model_dump() for s in sources],
+                "applied_filters": applied_filters.model_dump() if applied_filters else None,
+                "is_relaxed": is_relaxed,
+                "primary_count": primary_count,
+                "supplementary_count": supplementary_count,
+            }, ensure_ascii=False)
+            yield f"event: sources\ndata: {sources_payload}\n\n"
+            await asyncio.sleep(0.01)
+
         # Stage: Send done event
         latency_ms = int((time.time() - start_time) * 1000)
         _, resolved_tier = resolve_model_and_tier(req.model or req.model_tier or model_name)
@@ -612,7 +803,6 @@ class ChatService:
 
         # Auto-persist turn (user question + assistant response) to DB
         try:
-            full_answer = "".join(full_tokens)
             await self.session_service.persist_turn(
                 session_id=session_id,
                 user_content=req.question,

@@ -198,10 +198,10 @@ class LLMProcessor:
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3,
-            "max_tokens": 1500
+            "max_tokens": 4096
         }
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 res = await client.post(url, headers=headers, json=payload)
                 if res.status_code == 200:
                     data = res.json()
@@ -216,9 +216,9 @@ class LLMProcessor:
             return None, None
         model = getattr(settings, "OLLAMA_MODEL", "llama3.2:latest")
         url = f"{base_url.rstrip('/')}/api/generate"
-        payload = {"model": model, "prompt": prompt, "stream": False}
+        payload = {"model": model, "prompt": prompt, "stream": False, "options": {"num_predict": 4096}}
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with httpx.AsyncClient(timeout=90.0) as client:
                 res = await client.post(url, json=payload)
                 if res.status_code == 200:
                     data = res.json()
@@ -416,7 +416,7 @@ class LLMProcessor:
                     model=o_model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.3,
-                    max_tokens=2048,
+                    max_tokens=4096,
                     stream=True
                 )
                 async for chunk in stream:
@@ -439,8 +439,8 @@ class LLMProcessor:
         if ollama_url:
             ol_m = getattr(settings, "OLLAMA_MODEL", "") or json_cfg.get("llm", {}).get("ollama_model", "") or "qwen2.5:latest"
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    async with client.stream("POST", f"{ollama_url}/api/generate", json={"model": ol_m, "prompt": prompt, "stream": True}) as resp:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    async with client.stream("POST", f"{ollama_url}/api/generate", json={"model": ol_m, "prompt": prompt, "stream": True, "options": {"num_predict": 4096}}) as resp:
                         if resp.status_code == 200:
                             async for line in resp.aiter_lines():
                                 if line:

@@ -4,7 +4,7 @@
 
 **AI Agent · Harness · MCP 기술 소식 수집, 요약 및 전용 AI 챗 워크스페이스**
 
-[![Version](https://img.shields.io/badge/Version-v0.3.0-blue?style=flat-square)](https://github.com/ozplayground/agent-lens/releases)
+[![Version](https://img.shields.io/badge/Version-v0.3.1-blue?style=flat-square)](https://github.com/ozplayground/agent-lens/releases)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
@@ -17,17 +17,18 @@
 
 **AgentLens**는 AI 에이전트(Autonomous Agents), 하네스(Harness) 및 벤치마크, MCP(Model Context Protocol) 관련 기술 소식을 주기적으로 수집하고, LLM을 통해 노이즈를 걸러내어 3줄 요약과 실무 시사점을 제공하는 개발자용 풀스택 기술 인텔리전스 플랫폼입니다.
 
-- **백엔드**: Python FastAPI 0.141+ + SQLite (WAL 모드, 비동기 크롤러, ReAct 자율 에이전틱 챗 루프, Claude 5.5 & Gemini LLM 프로세서, ArticleScraperService, FastMCP 서버)
+- **백엔드**: Python FastAPI 0.141+ + SQLite (WAL 모드, 비동기 크롤러, 비동기 LLM ReAct 자율 에이전틱 챗 플래너, Claude 5.5 & Gemini LLM 프로세서, ArticleScraperService, FastMCP 서버)
 - **프론트엔드**: Next.js 16 (App Router) + Tailwind CSS (라이트/다크 테마 지원, `/chat` 전용 AI 워크스페이스, 글로벌 단축키 & Command Palette `Cmd+K`)
 
 ---
 
 ## 🛠️ 주요 기능
 
-- **전용 AI 챗 워크스페이스 (`/chat` — v0.3.0 ReAct 아키텍처 & 단일 기사 고정 모드)**:
-  - **Global 모드 ReAct 에이전틱 챗 루프 (`thinking` ➔ `tool_calling` ➔ `observing`)**:
-    - 질문 의도를 먼저 추론(`thinking`)하여 일상 인사말이나 일반 대화일 경우 불필요한 DB 검색 도구 호출을 자율 생략하고(`event: sources` 미방출, `primary_count=0`), 기술 질의일 때만 `search_news_corpus` 도구를 호출(`tool_calling` ➔ `observing`)하여 연관 소스를 정밀 인출합니다.
-    - 어시스턴트 답변의 첫 스트리밍 토큰이 도착한 이후에만 실제 인출된 소스 개수에 맞춰 `원문 N건` 뱃지를 노출하여 UI 정직성을 보장합니다.
+- **전용 AI 챗 워크스페이스 (`/chat` — v0.3.1 비동기 LLM ReAct 플래너, 사후 인용 출처 필터링 & 단일 기사 고정 모드)**:
+  - **Global 모드 비동기 LLM ReAct 플래너 (`thinking` ➔ `tool_calling` ➔ `synthesizing` ➔ 사후 인용 출처 확정)**:
+    - 비동기 LLM 플래너(`_plan_react_action`)가 질문 의도를 먼저 추론(`thinking`)하여 일상 인사말, 안부, 시스템 동작에 대한 메타 질문일 경우 DB 검색 도구 호출을 자율 생략하고(`event: sources` 미방출, `primary_count=0`), 실제 기술 질의일 때만 `search_news_corpus` 도구를 호출(`tool_calling`)합니다.
+    - 스트리밍 시작 전에 후보 기사를 미리 방출하지 않으며, 어시스턴트 답변 스트리밍이 완료된 후 실제 본문에서 인용(`[1]`, `[2]` 등)된 출처만 사후 필터링(`_filter_cited_sources`)하여 확정 방출하고, 프론트엔드 역시 스트리밍 완료(`status === 'completed'`) 시점에만 실제 인용된 개수에 맞춰 `원문 N건` 뱃지를 노출합니다.
+    - 출력 토큰 예산 상향(`max_tokens: 4096`, `timeout: 120.0`)과 완결성 지침, 프론트엔드 SSE 잔여 버퍼 플러시를 통해 긴 기술 리포트도 중도 절단 없이 끝까지 완결됩니다.
   - **Scoped 모드 단일 기사 고정 그라운딩 (Fixed Single-Article Scoped Mode)**:
     - 특정 뉴스를 포커스하여 질문할 때 불필요한 충분성 평가(`evaluating_sufficiency`)나 외부 보충 검색(`agentic_searching`)으로 다른 기사가 섞이는 현상을 원천 배제하고, 지정된 단일 기사(`primary_count=1, supplementary_count=0`)의 원문(`full_content`)과 메타데이터에만 100% 집중하여 심층 기술 분석을 수행합니다.
   - **공식 Claude 5.5 3-Tier & Google Gemini 멀티 모델 선택**:

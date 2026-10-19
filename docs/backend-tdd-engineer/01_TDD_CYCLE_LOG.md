@@ -2,7 +2,7 @@
 
 - **작성일자**: 2026-10-19
 - **작성자**: 백엔드 TDD 엔지니어 (`backend-tdd-engineer`)
-- **문서 버전**: v0.2.4 (Global 모드 ReAct [Thought -> Action -> Observation] 툴 콜링 분리 및 Scoped 모드 단일 기사 고정 컨텍스트/외부 검색 배제 TDD 완비)
+- **문서 버전**: v0.2.5 (응답 토큰 한도(`max_tokens`/`num_predict`) 4096 상향 및 프롬프트 완결성 규칙 강화를 통한 문장 중간 잘림 방지 완비)
 - **상태**: Approved (전체 백엔드 테스트 스위트 100% 통과 완료)
 - **선행 산출물 및 계약**:
   - 시스템 설계서: [`01_SYSTEM_DESIGN.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/system-designer/01_SYSTEM_DESIGN.md) (v0.2.0)
@@ -16,6 +16,10 @@
 ## 1. TDD 개발 대상 단위 기능 및 엔드포인트
 
 - **대응 기능 ID**:
+  - `REQ-CHAT-016` / `FUNC-CHAT-016` (NEW v0.2.5): **응답 토큰 한도(`max_tokens`) 초과로 인한 문장 중간 잘림(Truncation) 근본 해결**:
+    - `chat_service.py` (`_build_grounding_prompt`): `[응답 분량 및 완결성 필수 규칙]`을 신설하여 최대 1,500~2,000 토큰(공백 포함 1,500~2,500자 이내) 안에서 완결된 결론 문장 및 닫힌 코드 블록(15줄 이내 핵심 스니펫)으로 끝맺도록 지시. Scoped 모드에서는 4단 헤딩을 유지하되 각 섹션을 핵심 불릿 2~3개와 15줄 이내 스니펫으로 압축 지시. Global 모드에서는 단순 인사/짧은 질문에 장문 리포트 없이 간결하고 완결된 답변 지시.
+    - `llm_processor.py`: `_call_openai` (`max_tokens=4096`, `timeout=60.0`), `_call_ollama` (`num_predict=4096`, `timeout=90.0`), `stream_tokens` OpenAI (`max_tokens=4096`), `stream_tokens` Ollama (`num_predict=4096`, `timeout=120.0`) 상향.
+    - `anthropic_provider.py`: `stream_chat`의 `httpx.AsyncClient(timeout=120.0)`으로 스트리밍 타임아웃 상향.
   - `REQ-CHAT-015` / `FUNC-CHAT-015` (NEW v0.2.4): **AI 챗 Global 모드 ReAct (Reason + Act) 기반 뉴스 코퍼스 검색 도구(`search_news_corpus`) 자율 호출 및 Scoped 모드 단일 기사 컨텍스트 고정**:
     - **Global 모드 (`scope == "global"`)**: 무조건 RAG를 태우지 않고 `_plan_react_action(question, scope)`를 통해 **Thought (`thinking`) ➔ Action (`tool_calling`: `search_news_corpus(query)`) ➔ Observation (`observing`) ➔ Final Answer** 흐름으로 동작. 일상 인사/잡담(`"안녕하세요"`, `"고마워"` 등)은 도구 호출(`search_news_corpus`)을 생략하고 `sources = []`로 즉시 응답.
     - **Scoped 모드 (`scope == "scoped"`)**: 특정 단일 뉴스 기사 1개로 컨텍스트가 이미 확정되어 있으므로 불필요한 `evaluating_sufficiency` 및 `agentic_searching` 웹 보충 검색을 전면 제거하고, DB의 `item.full_content`(없을 시에만 스크래퍼 폴백)와 단일 `primary_source` (`primary_count = 1, supplementary_count = 0`)만 사용하여 즉각 답변 생성.
@@ -57,20 +61,46 @@
 
 - **대상 파일**:
   - `backend/app/schemas/chat.py`: `ChatStatusStep` Literal에 ReAct 상태 단계(`"thinking"`, `"tool_calling"`, `"observing"`) 추가
-  - `backend/app/services/chat_service.py`: `_plan_react_action()` 신설, Global 모드 ReAct (`thinking` ➔ `tool_calling` ➔ `observing`) 분기 적용, Scoped 모드 외부 보충 검색 제거 및 단일 기사 고정 컨텍스트 직결
-  - `backend/app/services/llm_processor.py`: `sanitize_model_identifier` 신설, `_call_gemini` 영구 퇴역(Decommissioned), `has_live_provider` 내 `gemini_key` 영구 배제, `generate_live_answer` 및 `stream_tokens` 내 Gemini 분기 소거, `stream_question_answer` 내 Claude 1순위 스트리밍 주입 및 모델명 살균
-  - `backend/app/services/llm_providers/anthropic_provider.py`: `resolve_model_and_tier` 내 Gemini 비인가 모델 인입 방어 가드 및 Sonnet 기본값 정규화, 3-Tier 모델 매핑 (`haiku`, `sonnet`, `opus`)
+  - `backend/app/services/chat_service.py`: `_build_grounding_prompt()` 응답 분량 및 완결성 필수 규칙 추가, `_plan_react_action()` 신설, Global 모드 ReAct (`thinking` ➔ `tool_calling` ➔ `observing`) 분기 적용, Scoped 모드 외부 보충 검색 제거 및 단일 기사 고정 컨텍스트 직결
+  - `backend/app/services/llm_processor.py`: OpenAI/Ollama `max_tokens`/`num_predict` 4096 및 타임아웃 상향, `sanitize_model_identifier` 신설, `_call_gemini` 영구 퇴역(Decommissioned)
+  - `backend/app/services/llm_providers/anthropic_provider.py`: `stream_chat` 타임아웃 `120.0` 상향, `resolve_model_and_tier` 내 Gemini 비인가 모델 인입 방어 가드 및 Sonnet 기본값 정규화, 3-Tier 모델 매핑 (`haiku`, `sonnet`, `opus`)
   - `backend/app/config.py`: 버전 `0.2.0` 동기화
   - `config.json`: 앱 버전 `0.2.0` 동기화
 
 - **테스트 파일**:
-  - `backend/tests/test_agentic_workflow.py`: Scoped 모드 단일 기사 컨텍스트 검증 업데이트 및 Global 모드 ReAct (`test_chat_global_react_search_tool_lifecycle`, `test_chat_global_react_casual_greeting_skips_search_tool`) 신설 (총 15건 통과)
+  - `backend/tests/test_agentic_workflow.py`: Scoped 모드 단일 기사 컨텍스트 검증 업데이트 및 Global 모드 ReAct (`test_chat_global_react_search_tool_lifecycle`, `test_chat_global_react_casual_greeting_skips_search_tool`) 신설 (총 16건 통과)
   - `backend/tests/test_chat.py`: Global SSE `event: sources` 파서 업데이트 (총 34건 통과)
   - `backend/tests/test_anthropic_provider.py`: Anti-Gemini 격리 검증, 라이브 프로바이더 판정 검증, 모델 식별자 살균 검증 (총 16건 통과)
 
 ---
 
 ## 2. Red-Green-Refactor 사이클 실행 기록
+
+### [Cycle 14] 응답 토큰 한도(`max_tokens`/`num_predict`) 상향 및 프롬프트 완결성 제약을 통한 답변 중간 잘림 해결 (`REQ-CHAT-016`)
+
+#### 1. 원인 분석 및 수정 내역
+- **문제점**:
+  1. `_build_grounding_prompt`가 지나치게 방대한 분량을 유도하는 반면 LLM 호출부의 `max_tokens`(`1500`~`2048`) 또는 기본 `num_predict`가 낮고 타임아웃이 짧아 답변이나 코드 블록이 중간에서 끊기는 현상 발생.
+- **해결 방안 (GREEN & REFACTOR)**:
+  1. `backend/app/services/chat_service.py` (`_build_grounding_prompt`):
+     - `[응답 분량 및 완결성 필수 규칙]`을 명시하여 할당된 토큰 한도(최대 1,500~2,000 토큰 / 공백 포함 1,500~2,500자 이내) 안에서 완결된 결론 문장과 닫힌 코드 블록(15줄 이내 핵심 스니펫)으로 완벽히 끝맺도록 강제.
+     - Scoped 모드에서도 4단 마크다운 헤딩(`## 1.` ~ `## 4.`)을 유지하되 각 섹션을 핵심 불릿 2~3개와 15줄 이내 스니펫으로 압축하여 100% 완결되게 작성하도록 지시.
+     - Global 모드에서 단순 인사/짧은 질문에는 장문 리포트 없이 간결하고 완결된 답변을 하도록 지시.
+  2. `backend/app/services/llm_processor.py`:
+     - `_call_openai`: `max_tokens` `1500` ➔ `4096`, `timeout` `15.0` ➔ `60.0` 상향.
+     - `_call_ollama`: `"options": {"num_predict": 4096}` 추가, `timeout` `20.0` ➔ `90.0` 상향.
+     - `stream_tokens` (OpenAI): `max_tokens` `2048` ➔ `4096` 상향.
+     - `stream_tokens` (Ollama): `"options": {"num_predict": 4096}` 추가, `timeout` `30.0` ➔ `120.0` 상향.
+  3. `backend/app/services/llm_providers/anthropic_provider.py`:
+     - `stream_chat`: `httpx.AsyncClient(timeout=120.0)`으로 상향.
+- **테스트 검증 결과**:
+```text
+backend/tests/test_agentic_workflow.py ................                  [ 32%]
+backend/tests/test_chat.py ..................................            [100%]
+============================== 50 passed in 2.13s ==============================
+```
+
+---
 
 ### [Cycle 13] Global 모드 ReAct (Thought-Action-Observation) 도구 호출 및 Scoped 모드 단일 기사 고정 컨텍스트 (`REQ-CHAT-015`)
 
@@ -557,5 +587,34 @@ backend/tests/test_anthropic_provider.py ..........                       [100%]
    - 총 16개 테스트 모듈, **157개 전원 통과 (100% GREEN, 0 failed)**.
 4. **실전 4,355건 코퍼스 실증 검증 완료**:
    - 단건 일치 쿼리 1건, 무관 질의 0건, 복수 일치 질의 상위 5건 반환 실증 완료.
+
+---
+
+## 9. [v0.3.0 Hotfix] 비동기 LLM ReAct 플래너 및 스트리밍 후 실제 인용 출처 필터링 (`backend/app/services/chat_service.py`)
+
+### 1. RED Phase (실패하는 테스트 작성 및 근본 원인 재현)
+- **근본 원인 진단**:
+  1. 기존 `_plan_react_action`이 동기 함수로 구현되어 실제 LLM을 호출하지 않고 `SqliteFtsRetriever.extract_keywords`만 수행하여, 18개 단답 인사말 외의 모든 일반 문장("오늘 날씨 어때?", "왜 인사했는데도 뉴스 5개를 찾아?" 등)을 0.001초 만에 무조건 `action = "search_news_corpus"`로 오판함.
+  2. `stream_chat` Global 모드에서 LLM 호출 전(0.02초 만)에 `"👀 Observation: 관련 뉴스 5건 관찰 완료"` 상태와 `event: sources`(5건)를 미리 방출하여, 사용자가 채팅을 입력하자마자 0.02초 만에 원문 5건이 노출되는 현상 발생.
+- **추가 및 갱신된 테스트 (`backend/tests/test_agentic_workflow.py`, `backend/tests/test_chat.py`)**:
+  - `test_chat_global_react_search_tool_lifecycle`: `"observing"`(`"관련 뉴스 5건 관찰 완료"`) 미방출 검증 및 `event: token` 스트리밍 완료 후 `event: sources` 방출 순서 검증.
+  - `test_chat_global_react_casual_greeting_skips_search_tool`: 단답 인사뿐 아니라 `"오늘 날씨 어때?"`, `"왜 인사했는데도 뉴스 5개를 찾아?"`, `"점심 메뉴 추천해줘"` 등 일반/메타 대화에서 도구 호출(`tool_calling`) 및 `event: sources`가 완전히 생략되고 `"✍️ 도구 호출 없이 직접 답변 생성 중..."`으로 직행하는지 검증.
+  - `test_chat_global_react_llm_planner_and_citation_filtering`: 비동기 `_plan_react_action`의 라이브 LLM(`claude-haiku-5-5`) 판단 분기 및 `_filter_cited_sources`의 실제 인용 번호(`[2]`) 기반 출처 필터링 검증.
+- **RED 실행 결과**: `python3 .agents/skills/backend-tdd-workflow/scripts/run_backend_tdd.py --phase red` ➔ 의도된 AssertionError 및 TypeError 발생 확인 (`[PHASE RED ASSERTION PASSED]`).
+
+### 2. GREEN Phase (구현 및 검증)
+- **수정 내역 (`backend/app/services/chat_service.py`)**:
+  1. `async def _plan_react_action`:
+     - `scope == "scoped"` 시 즉시 `{"action": "none", "search_query": "", "thought": "단일 기사 컨텍스트 고정"}` 반환.
+     - 일상 대화/인사/메타 불만 패턴 및 AI·에이전트·기술/뉴스 도메인 시그널 부재 시 즉시 `{"action": "none", ...}` 반환.
+     - 라이브 LLM 가용 환경에서 `llm_processor.generate_live_answer(..., model="claude-haiku-5-5", model_tier="haiku")`를 호출하여 JSON 또는 `ACTION: SEARCH` / `ACTION: NONE` 응답으로 도구 실행 여부를 직접 판단.
+  2. `stream_chat` Global 분기 및 `_filter_cited_sources`:
+     - `"👀 Observation: 관련 뉴스 5건 관찰 완료"` 및 사전 `event: sources` 방출 완전 제거.
+     - `search_news_corpus` 시 `thinking`(25%) ➔ `tool_calling`(50%) ➔ `synthesizing`(80%) ➔ `event: token` 스트리밍 완료 후, 실제 답변(`full_answer`)에 인용된 출처만 `_filter_cited_sources`로 필터링하여 `event: sources` 확정 방출.
+     - `none` 시 `_resolve_sources` 미호출, `synthesizing`(`"✍️ 도구 호출 없이 직접 답변 생성 중..."`, 75%) 후 즉시 토큰 스트리밍(`event: sources` 미방출).
+  3. `query_chat`: `await self._plan_react_action(...)` 및 답변 생성 후 `_filter_cited_sources` 동기화.
+- **GREEN 실행 결과**:
+  - `.venv/bin/pytest backend/tests/test_agentic_workflow.py backend/tests/test_chat.py -v` ➔ **50 passed in 1.13s (100% GREEN)**.
+
 
 

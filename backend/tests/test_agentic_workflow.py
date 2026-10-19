@@ -516,7 +516,8 @@ async def test_agentic_search_web_candidates_and_relevance():
 async def test_chat_global_react_search_tool_lifecycle(db_session: AsyncSession, sample_article_scoped: NewsItem):
     """
     Verify Global Mode ReAct flow when user asks a technical question:
-    Emits thinking -> tool_calling (search_news_corpus) -> observing -> sources -> token -> done.
+    Emits thinking -> tool_calling (search_news_corpus) -> synthesizing -> token -> sources (only cited) -> done.
+    Must NEVER emit 'observing' ('관련 뉴스 5건 관찰 완료') or pre-stream sources.
     """
     chat_service = ChatService(db_session)
     req = ChatStreamRequest(
@@ -537,39 +538,97 @@ async def test_chat_global_react_search_tool_lifecycle(db_session: AsyncSession,
         assert '"step": "thinking"' in full_stream
         assert '"step": "tool_calling"' in full_stream
         assert "search_news_corpus" in full_stream
-        assert '"step": "observing"' in full_stream
-        assert "event: sources" in full_stream
+        assert '"step": "observing"' not in full_stream
+        assert "관찰 완료" not in full_stream
+        assert '"step": "synthesizing"' in full_stream
         assert "event: token" in full_stream
+        assert "event: sources" in full_stream
+        assert full_stream.find("event: token") < full_stream.find("event: sources")
         assert "event: done" in full_stream
 
 
 @pytest.mark.asyncio
 async def test_chat_global_react_casual_greeting_skips_search_tool(db_session: AsyncSession):
     """
-    Verify Global Mode ReAct flow when user sends a casual greeting ('안녕하세요'):
-    Emits thinking -> token -> done, skipping tool_calling, observing, and sources!
+    Verify Global Mode ReAct flow when user sends casual greetings, chitchat, or meta complaints:
+    Emits thinking -> synthesizing ('✍️ 직접 답변 생성 중...') -> token -> done,
+    skipping tool_calling, observing, and sources!
     """
     chat_service = ChatService(db_session)
-    req = ChatStreamRequest(
-        question="안녕하세요!",
-        scope="global",
-        top_k=5,
-    )
 
     async def fake_tokens(prompt: str, **kwargs):
         yield "안녕하세요! 무엇을 도와드릴까요?", "claude-3-5-sonnet-20241022"
 
-    with patch("app.services.llm_processor.llm_processor.stream_tokens", side_effect=fake_tokens):
-        events = []
-        async for chunk in chat_service.stream_chat(req):
-            events.append(chunk)
+    for casual_q in [
+        "안녕하세요!",
+        "오늘 날씨 어때?",
+        "왜 인사했는데도 뉴스 5개를 찾아?",
+        "점심 메뉴 추천해줘",
+    ]:
+        req = ChatStreamRequest(
+            question=casual_q,
+            scope="global",
+            top_k=5,
+        )
+        with patch("app.services.llm_processor.llm_processor.stream_tokens", side_effect=fake_tokens):
+            events = []
+            async for chunk in chat_service.stream_chat(req):
+                events.append(chunk)
 
-        full_stream = "".join(events)
-        assert '"step": "thinking"' in full_stream
-        assert '"step": "tool_calling"' not in full_stream
-        assert '"step": "observing"' not in full_stream
-        assert "event: sources" not in full_stream
-        assert '"sources_count": 0' in full_stream
-        assert '"primary_count": 0' in full_stream
+            full_stream = "".join(events)
+            assert '"step": "thinking"' in full_stream
+            assert '"step": "synthesizing"' in full_stream
+            assert "직접 답변 생성 중" in full_stream
+            assert '"step": "tool_calling"' not in full_stream
+            assert '"step": "observing"' not in full_stream
+            assert "event: sources" not in full_stream
+            assert '"sources_count": 0' in full_stream
+            assert '"primary_count": 0' in full_stream
+
+
+@pytest.mark.asyncio
+async def test_chat_global_react_llm_planner_and_citation_filtering(db_session: AsyncSession):
+    """
+    Verify async _plan_react_action invokes live LLM when available and _filter_cited_sources
+    retains only the sources actually cited in the LLM response.
+    """
+    chat_service = ChatService(db_session)
+
+    # 1. Scoped mode immediately returns action='none'
+    scoped_plan = await chat_service._plan_react_action("LangGraph 분석해줘", "scoped")
+    assert scoped_plan["action"] == "none"
+    assert scoped_plan["thought"] == "단일 기사 컨텍스트 고정"
+
+    # 2. Live LLM planner decides 'none' even when a tech keyword is mentioned casually
+    with patch("app.services.llm_processor.llm_processor.is_test_environment", return_value=False), \
+         patch("app.services.llm_processor.llm_processor.has_live_provider", return_value=True), \
+         patch("app.services.llm_processor.llm_processor.generate_live_answer", new_callable=AsyncMock) as mock_gen:
+        mock_gen.return_value = (
+            '{"thought": "단순 파이썬 문법 질문이므로 뉴스 검색 불필요", "action": "none", "search_query": ""}',
+            "claude-sonnet-5-5"
+        )
+        plan_none = await chat_service._plan_react_action("Python 리스트 정렬 문법 알려줘", "global")
+        assert plan_none["action"] == "none"
+        assert mock_gen.call_count == 1
+
+        # Live LLM planner decides 'search_news_corpus' for tech trend query
+        mock_gen.return_value = (
+            '{"thought": "LangGraph 최신 릴리즈 뉴스 검색 필요", "action": "search_news_corpus", "search_query": "LangGraph 0.3"}',
+            "claude-sonnet-5-5"
+        )
+        plan_search = await chat_service._plan_react_action("LangGraph 최신 릴리즈 뉴스 알려줘", "global")
+        assert plan_search["action"] == "search_news_corpus"
+        assert plan_search["search_query"] == "LangGraph 0.3"
+
+    # 3. Citation filtering retains only cited source [2] out of multiple candidates
+    candidates = [
+        ChatSourceItem(index=1, id=101, title="Article One", url="https://ex.com/1", source="github"),
+        ChatSourceItem(index=2, id=102, title="Article Two", url="https://ex.com/2", source="github"),
+        ChatSourceItem(index=3, id=103, title="Article Three", url="https://ex.com/3", source="github"),
+    ]
+    filtered = chat_service._filter_cited_sources("이 기능은 두 번째 기사[2]에서 자세히 다룹니다.", candidates, "질문")
+    assert len(filtered) == 1
+    assert filtered[0].id == 102
+
 
 

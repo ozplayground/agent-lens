@@ -255,13 +255,13 @@ async def test_generate_live_answer_honestly_routes_to_gemini_when_requested():
 
 
 def test_version_0_2_2_consistency():
-    """Verify version 0.2.2 is synchronized across configuration sources."""
-    assert settings.VERSION == "0.2.2"
+    """Verify version 0.3.0 is synchronized across configuration sources."""
+    assert settings.VERSION == "0.3.0"
     cfg_path = find_config_json()
     assert cfg_path is not None
     with open(cfg_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    assert data.get("app", {}).get("version") == "0.2.2"
+    assert data.get("app", {}).get("version") == "0.3.0"
 
 
 @pytest.mark.asyncio

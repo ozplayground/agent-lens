@@ -354,4 +354,55 @@ describe('ChatMessageItem Component', () => {
     expect(screen.getByText('원문 3건')).toBeInTheDocument();
     expect(screen.queryByText(/5건/)).not.toBeInTheDocument();
   });
+
+  it('hides source count badges while streaming (even with non-empty content and sources) and shows them only when status === "completed"', () => {
+    const streamingMsgWithSources: ChatMessage = {
+      ...assistantMessage,
+      id: 'msg-streaming-sources-1',
+      status: 'streaming',
+      content: '스트리밍 도중 생성되고 있는 부분 답변입니다...',
+      primary_count: 5,
+      supplementary_count: 2,
+      sources: [
+        ...assistantMessage.sources!,
+        {
+          index: 'S1',
+          type: 'supplementary',
+          title: 'Supplementary Doc',
+          url: 'https://example.com/supp',
+          source: 'web_search',
+        },
+      ],
+    };
+
+    const { rerender } = render(
+      <ChatMessageItem message={streamingMsgWithSources} isStreaming={true} />
+    );
+
+    // Must NOT show source badges during streaming
+    expect(screen.queryByText(/원문.*건/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/보충.*건/)).not.toBeInTheDocument();
+
+    // Once completed, badges should be rendered if primaryCount > 0 || supplementaryCount > 0
+    const completedMsgWithSources: ChatMessage = {
+      ...streamingMsgWithSources,
+      status: 'completed',
+      primary_count: 2,
+      supplementary_count: 1,
+    };
+
+    rerender(<ChatMessageItem message={completedMsgWithSources} isStreaming={false} />);
+    expect(screen.getByText('원문 2건')).toBeInTheDocument();
+    expect(screen.getByText('보충 1건')).toBeInTheDocument();
+
+    // When completed with 0 counts, badges must not render
+    const completedZeroSourcesMsg: ChatMessage = {
+      ...completedMsgWithSources,
+      primary_count: 0,
+      supplementary_count: 0,
+    };
+    rerender(<ChatMessageItem message={completedZeroSourcesMsg} isStreaming={false} />);
+    expect(screen.queryByText(/원문.*건/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/보충.*건/)).not.toBeInTheDocument();
+  });
 });

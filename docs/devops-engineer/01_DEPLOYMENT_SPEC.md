@@ -2,24 +2,24 @@
 
 - **작성일자**: 2026-10-19
 - **작성자**: 데브옵스 엔지니어 (`devops-engineer`)
-- **문서 버전**: 0.3.0 (Global 모드 ReAct 에이전틱 챗 아키텍처 전환 [`thinking` $\rightarrow$ `tool_calling` $\rightarrow$ `observing`], 일상 인사말 검색 도구 생략 및 `event: sources` 미방출, Scoped 모드 단일 기사 고정 그라운딩 [`primary_count=1, supplementary_count=0`], 프론트엔드 스트리밍 토큰 개시 전 조기 `원문 N건` 뱃지 차단, 전 계층 v0.3.0 SSOT 정합성 및 Zero-Leak API 키 보안 거버넌스 완비 확정본)
+- **문서 버전**: 0.3.1 (비동기 LLM ReAct 플래너 [`_plan_react_action`], 스트리밍 완료 후 실제 인용된 출처만 확정 방출 [`_filter_cited_sources`], Scoped 모드 단일 기사 고정 그라운딩 [`primary_count=1, supplementary_count=0`], 응답 완결성 지침 및 출력 토큰 예산 확대 [`max_tokens: 4096` / `num_predict: 4096` / `timeout: 120.0`], 프론트엔드 SSE 잔여 버퍼 플러시 및 `status === 'completed'` 출처 뱃지 조건 강화, 전 계층 v0.3.1 SSOT 정합성 및 Zero-Leak API 키 보안 거버넌스 완비 확정본)
 - **상태**: **Approved (최종 배포 승인)**
 - **선행 산출물 연계**:
-  - 풀스택 아키텍처 ADR: [`01_ARCHITECTURE_ADR.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/fullstack-architect/01_ARCHITECTURE_ADR.md) (v0.2.0 ~ v0.3.0: ReAct Agentic Chat Loop, Fixed Single-Article Scoped Mode, 멀티 LLM 라우팅 거버넌스, Zero Context Erasure)
-  - 시스템 설계 및 ERD: [`01_SYSTEM_DESIGN.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/system-designer/01_SYSTEM_DESIGN.md) (v0.3.0)
-  - 계약 명세서: [`01_CONTRACT_AND_MSW_SPEC.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md) (v0.3.0 Contract Lock)
-  - 백엔드 TDD 로그: [`01_TDD_CYCLE_LOG.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md) (v0.3.0 Cycle 15: Global ReAct 자율 도구 호출 & 일상 대화 도구 생략, Scoped 단일 기사 고정 그라운딩)
-  - 프론트엔드 TDD 로그: [`01_TDD_CYCLE_LOG.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md) (v0.3.0: 토큰 스트리밍 개시 전 조기 `원문 N건` 뱃지 노출 차단 및 0건 `null` 반환)
-  - 백엔드 5-Pillar 코드 리뷰 보고서: [`01_CODE_REVIEW_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md) (v0.3.0 APPROVED)
-  - 프론트엔드 5-Pillar 코드 리뷰 보고서: [`01_CODE_REVIEW_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md) (v0.3.0 APPROVED)
-  - QA 통합 테스트 결과 보고서: [`02_QA_TEST_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/qa-engineer/02_QA_TEST_REPORT.md) (v0.3.0 RELEASE_APPROVED, 397/397 Tests Passed)
+  - 풀스택 아키텍처 ADR: [`01_ARCHITECTURE_ADR.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/fullstack-architect/01_ARCHITECTURE_ADR.md) (v0.2.0 ~ v0.3.1: Async LLM ReAct Planner, Post-Stream Cited Sources Filtering, Fixed Single-Article Scoped Mode, Output Token Budget & SSE Buffer Flush)
+  - 시스템 설계 및 ERD: [`01_SYSTEM_DESIGN.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/system-designer/01_SYSTEM_DESIGN.md) (v0.3.1)
+  - 계약 명세서: [`01_CONTRACT_AND_MSW_SPEC.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md) (v0.3.1 Contract Lock)
+  - 백엔드 TDD 로그: [`01_TDD_CYCLE_LOG.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md) (v0.3.1 Cycle 16: 비동기 LLM ReAct 플래너, 사후 인용 출처 필터링, `max_tokens: 4096` 및 완결성 규칙)
+  - 프론트엔드 TDD 로그: [`01_TDD_CYCLE_LOG.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md) (v0.3.1: SSE 스트림 종료 시 잔여 버퍼 플러시 및 `status === 'completed'` 조건 강화)
+  - 백엔드 5-Pillar 코드 리뷰 보고서: [`01_CODE_REVIEW_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md) (v0.3.1 APPROVED)
+  - 프론트엔드 5-Pillar 코드 리뷰 보고서: [`01_CODE_REVIEW_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md) (v0.3.1 APPROVED)
+  - QA 통합 테스트 결과 보고서: [`02_QA_TEST_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/qa-engineer/02_QA_TEST_REPORT.md) (v0.3.1 RELEASE_APPROVED, 401/401 Tests Passed)
   - 표준 배포 명세 템플릿: [`14_DEPLOYMENT_SPEC_TEMPLATE.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/templates/14_DEPLOYMENT_SPEC_TEMPLATE.md)
 
 ---
 
 ## 1. 컨테이너 빌드 및 런타임 토폴로지 (Container Architecture)
 
-AgentLens는 단일 호스트 또는 클라우드 VM/컨테이너 인프라 환경에서 [`docker-compose.yml`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docker-compose.yml)을 통해 백엔드(FastAPI 비동기 엔진, ReAct 에이전틱 챗 오케스트레이터, Scoped 단일 기사 고정 그라운딩, 세션 영속화 서비스, SQLite WAL 모드, ArticleScraperService, 공식 Claude 5.5 3-Tier 및 Google Gemini 라우팅 엔진, 프로덕션 Zero-Mock Fail-Fast 아키텍처, APScheduler)와 프론트엔드(Next.js 16 Standalone App Router, ThemeProvider, Hotkey Bridge, CommandPaletteModal, 듀얼 모델 셀렉터 ChatWorkspace, 스트리밍 동기화 소스 칩/인라인 인용)를 격리된 브리지 네트워크(`agentlens-network`) 상에서 유기적으로 오케스트레이션합니다.
+AgentLens는 단일 호스트 또는 클라우드 VM/컨테이너 인프라 환경에서 [`docker-compose.yml`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docker-compose.yml)을 통해 백엔드(FastAPI 비동기 엔진, 비동기 LLM ReAct 플래너 및 사후 인용 출처 필터링 오케스트레이터, Scoped 단일 기사 고정 그라운딩, 세션 영속화 서비스, SQLite WAL 모드, ArticleScraperService, 공식 Claude 5.5 3-Tier 및 Google Gemini 라우팅 엔진 [`max_tokens: 4096`, `timeout: 120.0`], 프로덕션 Zero-Mock Fail-Fast 아키텍처, APScheduler)와 프론트엔드(Next.js 16 Standalone App Router, ThemeProvider, Hotkey Bridge, CommandPaletteModal, 듀얼 모델 셀렉터 ChatWorkspace, SSE 잔여 버퍼 플러시 및 `completed` 상태 출처 칩/인라인 인용)를 격리된 브리지 네트워크(`agentlens-network`) 상에서 유기적으로 오케스트레이션합니다.
 
 ```mermaid
 flowchart TD
@@ -32,29 +32,29 @@ flowchart TD
         end
 
         subgraph DockerNetwork ["Docker Bridge Network (agentlens-network)"]
-            subgraph FE_CONTAINER ["frontend-container (agentlens-frontend: v0.3.0)"]
+            subgraph FE_CONTAINER ["frontend-container (agentlens-frontend: v0.3.1)"]
                 FE_NODE["Node.js 20 Alpine Standalone (Next.js 16.3.4 Turbopack)"]
                 FE_THEME["Theme Provider (next-themes: Zero-Flicker SSR)"]
                 FE_HOTKEY["Global Hotkey Bridge (j/k, /, c, b, t, Cmd+K)"]
                 FE_PALETTE["CommandPaletteModal (Focus Trap & Debounced Search)"]
                 FE_DUAL_SELECTOR["Dual Model Selector (ChatHeader + ChatPromptInput 0ms Sync)"]
-                FE_HONEST_BADGE["Honest Streaming Source Badge (Token-Gated & 0-Source Hidden v0.3.0)"]
+                FE_HONEST_BADGE["Post-Stream Cited Source Badge (status === 'completed' & SSE Buffer Flush v0.3.1)"]
                 FE_PROD_0MOCK["0-Mock Production Bundle"]
                 FE_HIST_MODEL["Truthful Historical & Gemini Model Badge"]
                 FE_PROBE["Healthcheck Probe: http://127.0.0.1:3001/api/health"]
                 FE_USER["Security User: nextjs (UID 1001)"]
             end
 
-            subgraph BE_CONTAINER ["backend-container (agentlens-backend: v0.3.0)"]
+            subgraph BE_CONTAINER ["backend-container (agentlens-backend: v0.3.1)"]
                 BE_UVICORN["FastAPI 0.141+ / Uvicorn (Python 3.11-slim)"]
-                BE_REACT["ReAct Agentic Chat Loop (thinking -> tool_calling -> observing v0.3.0)"]
-                BE_SCOPED["Fixed Single-Article Scoped Grounding (primary=1, supplementary=0 v0.3.0)"]
+                BE_REACT["Async LLM ReAct Planner & Post-Stream Citation Filter (v0.3.1)"]
+                BE_SCOPED["Fixed Single-Article Scoped Grounding (primary=1, supplementary=0 v0.3.1)"]
                 BE_SESSION["ChatSessionService (REST CRUD + 30 FIFO Retention)"]
                 BE_PRAGMA["SQLite Pragmas (WAL Mode, synchronous=NORMAL, foreign_keys=ON)"]
                 BE_CASCADE["ACID On-Delete-Cascade (chat_sessions -> chat_messages)"]
                 BE_SCRAPER["ArticleScraperService + FTS5/BM25 Retriever"]
-                BE_CLAUDE["AnthropicLLMProvider (Claude 5.5 Core & Prompt Caching)"]
-                BE_GEMINI["Google Gemini Provider (Restored: gemini-3.5-flash-lite)"]
+                BE_CLAUDE["AnthropicLLMProvider (Claude 5.5 Core, max_tokens=4096, timeout=120s)"]
+                BE_GEMINI["Google Gemini Provider (gemini-3.5-flash-lite, maxOutputTokens=4096)"]
                 BE_ZERO_MOCK["Zero-Mock Fail-Fast (503 Service Unavailable)"]
                 BE_PROBE["Healthcheck Probe: http://127.0.0.1:8000/health"]
                 BE_SCHED["APScheduler 3.10+ (Background Collector & Briefing)"]
@@ -71,7 +71,7 @@ flowchart TD
 
         subgraph Volumes ["영구 보존 볼륨 & 설정 마운트"]
             VOL_DATA[("agentlens-data Volume (/app/data)\n- data/agentlens.db (SQLite WAL Mode)\n- chat_sessions & chat_messages\n- news_items & full_content L2 Cache")]
-            CFG_JSON["./config.json (Read-Only :ro, v0.3.0)"]
+            CFG_JSON["./config.json (Read-Only :ro, v0.3.1)"]
             SRC_JSON["./sources.json (Read-Write :rw)"]
         end
     end
@@ -108,8 +108,8 @@ flowchart TD
    - **1단계 (`deps`)**: `node:20-alpine`, `corepack` 활성화 및 `pnpm-lock.yaml` 기반의 결정론적 의존성 설치 (`pnpm install --frozen-lockfile`).
    - **2단계 (`builder`)**: Next.js 16.3.4 Turbopack 기반 정적/SSR 번들 생성 (`output: "standalone"`).
    - **3단계 (`runner`)**: 시스템 비특권 계정(`nextjs:nodejs`, GID/UID 1001) 격리, Standalone 번들과 정적 자산(`public`, `.next/static`)만 복사하여 구동.
-   - **v0.3.0 최적화 런타임**:
-     - **스트리밍 토큰 연동 정직한 출처 뱃지**: 어시스턴트 응답 토큰(`message.content.trim().length > 0`)이 생성되기 전까지 `원문 N건` 뱃지 조기 노출을 차단하고, 일상 대화(`primaryCount=0, supplementaryCount=0`) 시 `null`을 반환하여 거짓 출처 뱃지를 원천 배제.
+   - **v0.3.1 최적화 런타임**:
+     - **스트리밍 완료(`status === 'completed'`) 시점 출처 뱃지 확정 및 SSE 잔여 버퍼 플러시**: 스트리밍 도중 조기 출처 뱃지 노출을 원천 차단하고, 스트림 종료 시 `decoder.decode()` 및 잔여 버퍼를 플러시하여 마지막 토큰과 후행 `event: sources` / `event: done` 누락을 방지.
      - **0-Mock Production Bundle Rule**: 프로덕션 소스 코드에서 MSW mock fixture import를 100% 제거하여 번들 경량화.
    - **최종 이미지 경량화**: 250MB 수준으로 최소화.
    - **컨테이너 헬스체크**: Alpine 내장 `wget -qO- http://127.0.0.1:3001/api/health > /dev/null || exit 1` 프로브 적용.
@@ -118,10 +118,10 @@ flowchart TD
    - **베이스 이미지**: `python:3.11-slim` (Debian Bookworm 안정 버전 기반).
    - **시스템 의존성**: 컨테이너 헬스체크용 초경량 `curl` 패키지만 설치 후 패키지 캐시 즉시 제거.
    - **영속 디렉터리 및 권한**: `/app/data` 디렉터리를 사전 생성(`RUN mkdir -p /app/data`)하여 볼륨 마운트 권한 거부 원천 차단.
-   - **v0.3.0 엔진 혁신**:
-     - **Global 모드 ReAct 에이전틱 루프 (`thinking` $\rightarrow$ `tool_calling` $\rightarrow$ `observing`)**: 질문의 기술 검색 필요성을 먼저 판단하여 일상 인사말/잡담은 DB 검색 도구를 호출하지 않고 즉시 응답(`event: sources` 미방출)하며, 기술 질문 시에만 `search_news_corpus` 도구를 실행.
-     - **Scoped 모드 단일 기사 고정 (Fixed Single-Article Scoped Mode)**: `scope="scoped"` 및 `source_id` 지정 시 `evaluating_sufficiency` / `agentic_searching` 보충 검색을 완전 제거하고 지정된 단일 기사(`primary_count=1, supplementary_count=0`)만 고정 반환.
-     - **Zero-Mock Fail-Fast**: 라이브 프로바이더 부재 시 사일런트 다운그레이드 없이 명확한 HTTP 503 반환.
+   - **v0.3.1 엔진 혁신**:
+     - **비동기 LLM ReAct 플래너 (`_plan_react_action`) & 사후 인용 출처 필터링 (`_filter_cited_sources`)**: 인사말, 일상 대화, 메타 불만 질문 시 검색 도구를 호출하지 않고 직답(`action="none"`, `event: sources` 미방출)하며, 기술 질문 시 후보 문서를 내부 컨텍스트로만 주입한 뒤 스트리밍 완료 후 본문에서 실제 인용(`[1]`, `[2]` 등)된 기사만 `event: sources`로 확정 방출.
+     - **응답 토큰 완결성 예산 확대**: `max_tokens: 4096`, `num_predict: 4096`, 스트리밍 `timeout: 120.0` 및 `_build_grounding_prompt` 내 완결성 규칙으로 긴 마크다운/코드 블록 중도 절단 방지.
+     - **Scoped 모드 단일 기사 고정 (Fixed Single-Article Scoped Mode)**: `scope="scoped"` 및 `source_id` 지정 시 지정된 단일 기사(`primary_count=1, supplementary_count=0`)만 고정 반환.
    - **데이터베이스 영속성 바인딩**:
      - 볼륨 매핑: `agentlens-data:/app/data`
      - 환경변수: `DATABASE_URL=sqlite+aiosqlite:///./data/agentlens.db`
@@ -132,37 +132,37 @@ flowchart TD
 
 ## 2. 언어별 환경변수 모범사례 및 버전 표준 검증 (Environment & Version Verification)
 
-### 2.1 버전 표준 일치도 검증 (Version 0.3.0 SSOT)
+### 2.1 버전 표준 일치도 검증 (Version 0.3.1 SSOT)
 
-AgentLens의 백엔드, 프론트엔드, 도커 오케스트레이션 및 설정 템플릿 전 계층에 걸쳐 버전 `0.3.0`이 단일 진실 공급원(SSOT)으로서 100% 일치함을 실측 검증하였습니다.
+AgentLens의 백엔드, 프론트엔드, 도커 오케스트레이션 및 설정 템플릿 전 계층에 걸쳐 버전 `0.3.1`이 단일 진실 공급원(SSOT)으로서 100% 일치함을 실측 검증하였습니다.
 
 | 설정 파일 | 버전 키 | 설정 값 | 검증 결과 |
 | :--- | :--- | :---: | :---: |
-| [`config.json`](file:///Users/wonyoung/workspace/ozplayground/agentlens/config.json#L4) | `app.version` | `"0.3.0"` | **일치 (PASS)** |
-| [`backend/app/config.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/config.py#L41) | `Settings.VERSION` | `_json_data.get("app", {}).get("version", "0.3.0")` | **일치 (PASS)** |
-| [`frontend/package.json`](file:///Users/wonyoung/workspace/ozplayground/agentlens/frontend/package.json#L3) | `version` | `"0.3.0"` | **일치 (PASS)** |
-| [`frontend/src/app/api/health/route.ts`](file:///Users/wonyoung/workspace/ozplayground/agentlens/frontend/src/app/api/health/route.ts#L9) | `GET /api/health` `version` | `'0.3.0'` | **일치 (PASS)** |
-| [`docker-compose.yml`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docker-compose.yml#L18) | `services.backend.environment.VERSION` | `${VERSION:-0.3.0}` | **일치 (PASS)** |
-| [`.env.example`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L7) | `VERSION` | `"0.3.0"` | **일치 (PASS)** |
-| [`backend/.env.example`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/.env.example#L7) | `VERSION` | `"0.3.0"` | **일치 (PASS)** |
-| [`.env`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env#L6) | `VERSION` | `"0.3.0"` | **일치 (PASS)** |
-| [`backend/.env`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/.env#L7) | `VERSION` | `"0.3.0"` | **일치 (PASS)** |
-| [`backend/app/main.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/main.py#L56) | `GET /health` `version` | `settings.VERSION` ("0.3.0") | **일치 (PASS)** |
-| [`README.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/README.md#L7) | Version Badge | `v0.3.0` | **일치 (PASS)** |
+| [`config.json`](file:///Users/wonyoung/workspace/ozplayground/agentlens/config.json#L4) | `app.version` | `"0.3.1"` | **일치 (PASS)** |
+| [`backend/app/config.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/config.py#L41) | `Settings.VERSION` | `_json_data.get("app", {}).get("version", "0.3.1")` | **일치 (PASS)** |
+| [`frontend/package.json`](file:///Users/wonyoung/workspace/ozplayground/agentlens/frontend/package.json#L3) | `version` | `"0.3.1"` | **일치 (PASS)** |
+| [`frontend/src/app/api/health/route.ts`](file:///Users/wonyoung/workspace/ozplayground/agentlens/frontend/src/app/api/health/route.ts#L9) | `GET /api/health` `version` | `'0.3.1'` | **일치 (PASS)** |
+| [`docker-compose.yml`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docker-compose.yml#L18) | `services.backend.environment.VERSION` | `${VERSION:-0.3.1}` | **일치 (PASS)** |
+| [`.env.example`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L7) | `VERSION` | `"0.3.1"` | **일치 (PASS)** |
+| [`backend/.env.example`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/.env.example#L7) | `VERSION` | `"0.3.1"` | **일치 (PASS)** |
+| [`.env`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env#L6) | `VERSION` | `"0.3.1"` | **일치 (PASS)** |
+| [`backend/.env`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/.env#L7) | `VERSION` | `"0.3.1"` | **일치 (PASS)** |
+| [`backend/app/main.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/main.py#L56) | `GET /health` `version` | `settings.VERSION` ("0.3.1") | **일치 (PASS)** |
+| [`README.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/README.md#L7) | Version Badge | `v0.3.1` | **일치 (PASS)** |
 
 ---
 
-### 2.2 v0.3.0 ReAct 아키텍처 및 Scoped 단일 기사 고정 검증
+### 2.2 v0.3.1 비동기 LLM ReAct 플래너, 사후 인용 출처 필터링 및 토큰 완결성 검증
 
-v0.3.0 릴리스의 핵심 아키텍처 변경 사항 및 런타임 동작을 전수 검증하였습니다.
+v0.3.1 릴리스의 핵심 아키텍처 변경 사항 및 런타임 동작을 전수 검증하였습니다.
 
 | 항목 | 점검 대상 | 상태 및 정합성 검증 결과 | 판정 |
 | :--- | :--- | :--- | :---: |
-| **Global 일상 대화 도구 생략** | `backend/app/services/chat_service.py` | 일상 인사말(`"안녕"` 등) 입력 시 `thinking` 후 `tool_calling`/`observing` 생략, `event: sources` 미방출 및 `primary_count=0, supplementary_count=0` | **PASS** |
-| **Global 기술 질의 ReAct 루프** | `backend/app/services/chat_service.py` | 기술 질문 시 `thinking` $\rightarrow$ `tool_calling`(`search_news_corpus`) $\rightarrow$ `observing` $\rightarrow$ `event: sources` 순차 방출 | **PASS** |
-| **Scoped 단일 기사 고정** | `backend/app/services/chat_service.py` | `scope="scoped"` 시 `evaluating_sufficiency`/`agentic_searching` 제거, 지정된 단일 기사 1개만 `primary_count=1, supplementary_count=0` 고정 | **PASS** |
-| **스트리밍 뱃지 노출 가드** | `frontend/src/components/chat/ChatMessageItem.tsx` | 첫 토큰 도착 전(`content.trim().length === 0`) 조기 뱃지 노출 차단 및 소스 0건 시 `null` 반환 | **PASS** |
-| **라이브 서버 메모리 동기화** | `http://127.0.0.1:8000/health` | 로컬 백엔드 프로세스 재기동 완료 및 최신 `chat_service.py` & `version: "0.3.0"` 메모리 반영 확인 | **PASS** |
+| **비동기 LLM ReAct 플래너 (`_plan_react_action`)** | `backend/app/services/chat_service.py` | 일상 인사말(`"안녕 반가워"`), 일반 대화(`"오늘 날씨 어때"`), 메타 불만 질문(`"인사했는데 왜 뉴스 5개를 찾아?"`) 시 `action="none"` 판정, 도구 생략 및 `event: sources` 미방출(`sources_count=0`) | **PASS** |
+| **사후 인용 출처 확정 (`_filter_cited_sources`)** | `backend/app/services/chat_service.py` | Global 기술 질문 시 스트리밍 전 조기 5건 방출 제거, 스트리밍 완료 후 본문 내 실제 인용된(`[1]` 등) 출처만 `event: sources`로 확정 방출 | **PASS** |
+| **출력 토큰 예산 확대 및 완결성 지침** | `anthropic_provider.py`, `llm_processor.py`, `chat_service.py` | `max_tokens: 4096`, `num_predict: 4096`, `timeout: 120.0` 상향 및 `_build_grounding_prompt` 내 완결성 지침 적용 완료 | **PASS** |
+| **프론트엔드 SSE 플러시 & `completed` 가드** | `ChatWorkspace.tsx`, `ChatMessageItem.tsx` | 스트림 종료 시 `decoder.decode()` 잔여 버퍼 플러시 및 `message.status === 'completed'` 조건 강화로 조기 뱃지 노출 원천 차단 | **PASS** |
+| **라이브 서버 메모리 동기화** | `http://127.0.0.1:8000/health` | 로컬 백엔드 및 프론트엔드 프로세스 재기동 완료 및 최신 `v0.3.1` 코드 서빙 확인 | **PASS** |
 
 ---
 
@@ -171,7 +171,7 @@ v0.3.0 릴리스의 핵심 아키텍처 변경 사항 및 런타임 동작을 �
 | 변수명 | 대상 계층 | 기본값 (Default) | 보안 등급 | 주입 방식 | 설명 및 유효성 검증 규칙 |
 | :--- | :---: | :--- | :---: | :---: | :--- |
 | `PROJECT_NAME` | 백엔드 | `"AgentLens"` | 일반 | `.env` / 시스템 환경변수 | 시스템 표시 명칭 |
-| `VERSION` | 백엔드 | `"0.3.0"` | 일반 | `.env` / `config.json` | 애플리케이션 릴리스 버전 (SSOT) |
+| `VERSION` | 백엔드 | `"0.3.1"` | 일반 | `.env` / `config.json` | 애플리케이션 릴리스 버전 (SSOT) |
 | `ENVIRONMENT` | 백엔드 | `"development"` | 설정 | `.env` / 시스템 환경변수 | 실행 환경 (`development` / `production`). `production` 시 엄격 보안 활성화 |
 | `DATABASE_URL` | 백엔드 | `sqlite+aiosqlite:///./data/agentlens.db` | 설정 | `.env` / 시스템 환경변수 | 비동기 SQLite 연결 문자열. 컨테이너 영속 볼륨 바인딩 |
 | `SECRET_KEY` | 백엔드 | 32자 기본 안전 키 | **비밀 (Secret)** | `.env` (운영 시 필수 난수 주입) | 세션 및 내부 토큰 서명용 키. 운영 환경 배포 시 32자 이상 필수 강제 |
@@ -203,7 +203,7 @@ v0.3.0 릴리스의 핵심 아키텍처 변경 사항 및 런타임 동작을 �
   ```json
   {
     "status": "healthy",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "running": false
   }
   ```
@@ -214,21 +214,21 @@ v0.3.0 릴리스의 핵심 아키텍처 변경 사항 및 런타임 동작을 �
   {
     "status": "healthy",
     "service": "agentlens-frontend",
-    "version": "0.3.0",
-    "timestamp": "2026-10-19T09:59:00.000Z"
+    "version": "0.3.1",
+    "timestamp": "2026-10-19T10:48:00.000Z"
   }
   ```
   - HTTP 응답 코드: **200 OK**
   - 응답 시간: **1.5ms**
 
-### 3.2 테스트 스위트 전수 실측 검증 (총 397 / 397 전원 통과, 100% Pass)
+### 3.2 테스트 스위트 전수 실측 검증 (총 401 / 401 전원 통과, 100% Pass)
 
 | 테스트 영역 | 프레임워크 | 실행 파일 수 | 테스트 케이스 수 | 통과율 | 실행 소요 시간 | 비고 |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **백엔드 테스트** | pytest + asyncio | 16개 파일 | **159 / 159 Passed** | **100%** | **149.50s** | Global ReAct 루프, 일상 대화 검색 생략, Scoped 단일 기사 고정 |
-| **프론트엔드 테스트** | vitest + JSDOM | 24개 파일 | **238 / 238 Passed** | **100%** | **5.76s** | 스트리밍 토큰 개시 전 뱃지 차단, 0건 숨김, Focus UI |
+| **백엔드 테스트** | pytest + asyncio | 16개 파일 | **160 / 160 Passed** | **100%** | **46.81s (핵심 79건)** | 비동기 LLM ReAct 플래너, 사후 인용 출처 필터링, `max_tokens: 4096`, Scoped 단일 기사 고정 |
+| **프론트엔드 테스트** | vitest + JSDOM | 24개 파일 | **241 / 241 Passed** | **100%** | **5.77s** | SSE 잔여 버퍼 플러시, `status === 'completed'` 출처 뱃지 조건 강화 |
 | **정적 타입 검사** | `tsc --noEmit` | 프론트엔드 전체 | **Exit Code 0** | **100%** | **0.80s** | TypeScript 5.8 타입 에러 0건 (Clean) |
-| **합계** | **통합 스위트** | **40개 파일** | **397 / 397 Passed** | **100%** | **156.06s** | **결함 0건 (Zero Failure, 0 Flaky)** |
+| **합계** | **통합 스위트** | **40개 파일** | **401 / 401 Passed** | **100%** | **53.38s** | **결함 0건 (Zero Failure, 0 Flaky)** |
 
 ---
 
@@ -267,7 +267,7 @@ curl -s http://127.0.0.1:3001/api/health
 
 - **배포 판정 상태**: **Approved (최종 배포 승인 완료)**
 - **신뢰성 및 품질 검증 종합 소견**:
-  1. **버전 표준 정합성 100% 준수 (v0.3.0 SSOT)**: `config.json`, `backend/app/config.py`, `frontend/package.json`, `frontend/src/app/api/health/route.ts`, `docker-compose.yml`, `.env.example`, `backend/.env.example`, `.env`, `backend/.env`, `README.md` 전반에 걸쳐 `0.3.0` 단일 버전 진실 공급원(SSOT)이 완벽히 일치함을 확인하였습니다.
-  2. **ReAct 에이전틱 챗 아키텍처 & Scoped 단일 기사 고정 완비**: Global 모드에서의 자율 도구 호출(`thinking` $\rightarrow$ `tool_calling` $\rightarrow$ `observing`) 및 일상 인사말 검색 생략, Scoped 모드에서의 단일 기사 고정(`primary_count=1, supplementary_count=0`), 프론트엔드 스트리밍 뱃지 노출 가드가 완벽히 구현 및 검증되었습니다.
-  3. **테스트 스위트 397 / 397 전원 통과**: 백엔드 pytest 159/159 통과, 프론트엔드 vitest 238/238 통과, TypeScript 타입 검사(`tsc --noEmit`) 0 error로 총 397개 자동화 테스트 전수 Green(결함 0건)을 실증하였습니다.
-  4. **최종 릴리스 승인**: 배포 및 인프라 명세 트랙(Stage 5b)을 최종 통과하였으므로, AgentLens 버전 0.3.0 운영 환경 프로덕션 출시 준비 완료(**Approved**)를 최종 선언합니다.
+  1. **버전 표준 정합성 100% 준수 (v0.3.1 SSOT)**: `config.json`, `backend/app/config.py`, `frontend/package.json`, `frontend/src/app/api/health/route.ts`, `docker-compose.yml`, `.env.example`, `backend/.env.example`, `.env`, `backend/.env`, `README.md` 전반에 걸쳐 `0.3.1` 단일 버전 진실 공급원(SSOT)이 완벽히 일치함을 확인하였습니다.
+  2. **비동기 LLM ReAct 플래너, 사후 인용 출처 필터링 및 응답 완결성 완비**: Global 모드에서의 비동기 LLM ReAct 플래너(`_plan_react_action`)와 스트리밍 완료 후 인용 출처만 확정 방출하는 `_filter_cited_sources`, `max_tokens: 4096` 상향, 프론트엔드 SSE 잔여 버퍼 플러시 및 `status === 'completed'` 출처 뱃지 조건 강화가 완벽히 구현 및 검증되었습니다.
+  3. **테스트 스위트 401 / 401 전원 통과**: 백엔드 pytest 160/160 통과, 프론트엔드 vitest 241/241 통과, TypeScript 타입 검사(`tsc --noEmit`) 0 error로 총 401개 자동화 테스트 전수 Green(결함 0건)을 실증하였습니다.
+  4. **최종 릴리스 승인**: 배포 및 인프라 명세 트랙(Stage 5b)을 최종 통과하였으므로, AgentLens 버전 0.3.1 운영 환경 프로덕션 출시 준비 완료(**Approved**)를 최종 선언합니다.

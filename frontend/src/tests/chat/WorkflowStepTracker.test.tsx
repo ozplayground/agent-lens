@@ -146,4 +146,63 @@ describe('WorkflowStepTracker Component', () => {
 
     expect(container.firstChild).toBeNull();
   });
+
+  it('renders dedicated lucide-react icons and labels for ReAct steps (thinking, tool_calling, observing)', () => {
+    const thinkingStep: ChatStatusPayload = {
+      step: 'thinking',
+      label: '🧠 질문 의도 분석 및 도구 실행 계획 수립 중...',
+      timestamp: '2026-10-19T10:00:00Z',
+      progress: 25,
+    };
+    const toolCallingStep: ChatStatusPayload = {
+      step: 'tool_calling',
+      label: '🔍 뉴스 코퍼스 검색 도구 호출 중: search_news_corpus("Claude 3.7 Sonnet")',
+      timestamp: '2026-10-19T10:00:01Z',
+      progress: 55,
+      query: 'Claude 3.7 Sonnet',
+    };
+    const observingStep: ChatStatusPayload = {
+      step: 'observing',
+      label: '✅ 검색 결과 1건 관찰 및 답변 생성 준비 완료',
+      timestamp: '2026-10-19T10:00:02Z',
+      progress: 80,
+      sources_found: 1,
+    };
+
+    const { container, rerender } = render(
+      <WorkflowStepTracker
+        currentStatus={thinkingStep}
+        stepHistory={[thinkingStep]}
+        isStreaming={true}
+        isDone={false}
+      />
+    );
+    expect(screen.getByText(/질문 의도 분석 및 도구 실행 계획 수립 중/i)).toBeInTheDocument();
+    const thinkingHeaderRow = container.querySelector('.flex.items-center.gap-2.font-medium');
+    expect(thinkingHeaderRow?.querySelector('svg')).not.toBeNull();
+
+    rerender(
+      <WorkflowStepTracker
+        currentStatus={toolCallingStep}
+        stepHistory={[thinkingStep, toolCallingStep]}
+        isStreaming={true}
+        isDone={false}
+      />
+    );
+    expect(screen.getByText(/뉴스 코퍼스 검색 도구 호출 중/i)).toBeInTheDocument();
+    const toolCallingHeaderRow = container.querySelector('.flex.items-center.gap-2.font-medium');
+    expect(toolCallingHeaderRow?.querySelector('svg')).not.toBeNull();
+
+    rerender(
+      <WorkflowStepTracker
+        currentStatus={observingStep}
+        stepHistory={[thinkingStep, toolCallingStep, observingStep]}
+        isStreaming={true}
+        isDone={false}
+      />
+    );
+    expect(screen.getByText(/검색 결과 1건 관찰 및 답변 생성 준비 완료/i)).toBeInTheDocument();
+    const observingHeaderRow = container.querySelector('.flex.items-center.gap-2.font-medium');
+    expect(observingHeaderRow?.querySelector('svg')).not.toBeNull();
+  });
 });

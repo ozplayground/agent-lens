@@ -418,6 +418,57 @@ describe('ChatWorkspace Container', () => {
     expect(screen.getByText(/원문 1건/i)).toBeInTheDocument();
     expect(screen.queryByText('원문 5건')).not.toBeInTheDocument();
   });
+
+  it('flushes remaining decoder bytes and processes trailing SSE event block in buffer when stream ends without trailing double newline', async () => {
+    const encoder = new TextEncoder();
+    const firstEvent = 'event: token\ndata: {"token":"첫 번째 청크 "}\n\n';
+    // Final SSE block intentionally lacks trailing \n\n to verify buffer.trim() flush on done=true
+    const finalEventWithoutDoubleNewline = 'event: token\ndata: {"token":"마지막 버퍼 청크 완료"}';
+
+    const firstBytes = encoder.encode(firstEvent);
+    const finalBytes = encoder.encode(finalEventWithoutDoubleNewline);
+    // Split multibyte UTF-8 sequence across two chunks
+    const splitIndex = finalBytes.length - 5;
+    const chunk2 = finalBytes.slice(0, splitIndex);
+    const chunk3 = finalBytes.slice(splitIndex);
+
+    const customStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(firstBytes);
+        controller.enqueue(chunk2);
+        controller.enqueue(chunk3);
+        controller.close();
+      },
+    });
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/api/chat/stream')) {
+        return new Response(customStream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    try {
+      render(<ChatWorkspace />);
+
+      const textarea = screen.getByRole('textbox', { name: /질문 입력/i });
+      const sendButton = screen.getByRole('button', { name: /질문 전송/i });
+
+      fireEvent.change(textarea, { target: { value: '버퍼 플러시 테스트' } });
+      fireEvent.click(sendButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/첫 번째 청크 마지막 버퍼 청크 완료/)).toBeInTheDocument();
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
 });
+
 
 

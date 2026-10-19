@@ -224,7 +224,7 @@ class AnthropicLLMProvider(BaseLLMProvider):
             "cache_creation_input_tokens": None,
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
                 "POST", self.BASE_URL, headers=self._get_headers(), json=payload
             ) as response:

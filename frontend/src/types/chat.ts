@@ -315,6 +315,9 @@ export const fromChatFocusFilter = (api?: ChatFocusFilter | null): FocusFilters 
 // ============================================================================
 
 export const ChatStatusStepSchema = z.enum([
+  'thinking',               // 🧠 에이전트 추론 및 계획 수립 (ReAct Thought)
+  'tool_calling',           // 🔍 자율 검색 도구 호출 중 (ReAct Action)
+  'observing',              // ✅ 검색 결과 관찰 및 컨텍스트 병합 (ReAct Observation)
   'extracting_source',      // 🌐 원본 URL 실시간 전문 비동기 스크래핑 (Trafilatura/Readability)
   'evaluating_sufficiency', // 🧠 본문 정보 충실도 자체 평가
   'agentic_searching',      // 🔍 보충 기술 문서 자율 검색 중 (DuckDuckGo / Tavily)

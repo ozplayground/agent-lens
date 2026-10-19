@@ -2,8 +2,8 @@
 
 - **작성일자**: 2026-10-19
 - **작성자**: 프론트엔드 TDD 엔지니어 (`frontend-tdd-engineer`)
-- **문서 버전**: v0.2.3 (Stage 3b: Elimination of Fake Hardcoded 5-Count Logic & Real Backend Sources Reflection, 24개 테스트 파일 238개 테스트 100% PASS)
-- **상태**: Approved (24개 테스트 스위트, 238개 테스트 100% 통과, TypeScript Type Check Exit 0)
+- **문서 버전**: v0.3.0 (Stage 3b: ReAct Step Icons in `WorkflowStepTracker` & Completed-Only Source Badge Guard in `ChatMessageItem`, 24개 테스트 파일 240개 테스트 100% PASS)
+- **상태**: Approved (24개 테스트 스위트, 240개 테스트 100% 통과, TypeScript Type Check Exit 0)
 - **선행 계약 및 설계 문서**:
   - [`01_COMPONENT_SPEC.md`](../ui-system-designer/01_COMPONENT_SPEC.md) (Stage 2c 컴포넌트 인터랙션 및 상태 명세)
   - [`01_CONTRACT_AND_MSW_SPEC.md`](../contract-integrator/01_CONTRACT_AND_MSW_SPEC.md) (Stage 2d Contract Lock v4.0)
@@ -27,6 +27,7 @@
 | **`FUNC-CHAT-014`**<br/>**`BUG-CHAT-001`**<br/>**`POL-PROD-001`** | `src/components/chat/ChatWorkspace.tsx`<br/>`src/types/chat.ts`<br/>`src/components/chat/ChatModelSelector.tsx`<br/>`src/components/chat/ModelChangeDivider.tsx` | `src/tests/chat/ChatWorkspace.test.tsx`<br/>`src/tests/chat/ContractAndMsw.test.ts`<br/>`src/tests/chat/ChatMessageItem.test.tsx`<br/>`src/tests/chat/ChatModelSelector.test.tsx` | 기사 포커스 핸드오버 비동기 레이스 해결 (`scope: 'scoped'`, `source_id: number` 직렬화)<br/>프로덕션 코드 내 MSW Mock 완전 격리 (0-Mock Import Rule)<br/>과거 세션 모델 정직 렌더링 (Gemini/GPT 변조 금지, 신규 질의만 Sonnet 기본)<br/>팝오버 헤더 및 디바이더 문구 제거 (UI 경량화) |
 | **`FUNC-CHAT-015`**<br/>**`REQ-CHAT-015`** | `src/mocks/handlers/chat.ts`<br/>`src/components/chat/ChatWorkspace.tsx` | `src/tests/chat/ChatWorkspace.test.tsx`<br/>`src/tests/chat/ContractAndMsw.test.ts` | 질문 키워드 기반 동적 뉴스 소스 검색/필터링 (`filterChunksByQuestion`)<br/>고정 5개 슬라이스 제거 및 맞춤형 출처 수 반환 (`primary_count`)<br/>실시간 소스 칩("원문 1건") 및 인라인 인용([1]) 매칭 렌더링 검증 |
 | **`FUNC-CHAT-016`**<br/>**`BUG-CHAT-002`** | `src/components/chat/ChatWorkspace.tsx`<br/>`src/components/chat/FocusBottomSheet.tsx`<br/>`src/components/chat/FocusCapsule.tsx`<br/>`src/components/chat/ChatMessageItem.tsx` | `src/tests/chat/ChatWorkspace.test.tsx`<br/>`src/tests/chat/FocusBottomSheet.test.tsx`<br/>`src/tests/chat/FocusCapsule.test.tsx`<br/>`src/tests/chat/ChatMessageItem.test.tsx` | 하드코딩된 5건 예측 가짜 로직 완전 제거 (`count = 5` baseline 배제)<br/>초기 진입 시 가짜 카운트 뱃지 노출 방지 (`targetCount?: number` optional화)<br/>실제 백엔드 API로부터 검색된 결과 소스 개수(`sources.length`)만 정직하게 표출 |
+| **`FUNC-CHAT-017`**<br/>**`BUG-CHAT-003`** | `src/components/chat/WorkflowStepTracker.tsx`<br/>`src/components/chat/ChatMessageItem.tsx`<br/>`src/types/chat.ts` | `src/tests/chat/WorkflowStepTracker.test.tsx`<br/>`src/tests/chat/ChatMessageItem.test.tsx`<br/>`src/tests/chat/ContractAndMsw.test.ts` | ReAct 워크플로우 단계 아이콘(`thinking`: `Sparkles`, `tool_calling`: `Search`, `observing`: `CheckCircle2`) `STEP_ICONS` 매핑 추가<br/>채팅 스트리밍 진행 중 조기 `원문 N건` / `보충 N건` 뱃지 노출 차단 (`message.status === 'completed'` 및 `primaryCount > 0 \|\| supplementaryCount > 0` 완료 게이트 강화) |
 
 ---
 
@@ -691,6 +692,27 @@ FAIL src/tests/chat/ChatWorkspace.test.tsx: TestingLibraryElementError: Unable t
 
 ---
 
+### [Cycle 12] ReAct 워크플로우 단계 아이콘 추가 및 스트리밍 완료 시점 출처 뱃지 게이트 강화 (`WorkflowStepTracker`, `ChatMessageItem`)
+- **목표 기능**:
+  1. `WorkflowStepTracker.tsx`: `STEP_ICONS` 매핑 객체에 ReAct 단계 아이콘(`thinking` ➔ `Sparkles`, `tool_calling` ➔ `Search`, `observing` ➔ `CheckCircle2`)을 추가하고 `ChatStatusStepSchema`에 동기화하여 Global ReAct 루프 진행 시 아이콘 누락 현상 해결.
+  2. `ChatMessageItem.tsx`: 상단 헤더의 `원문 N건` / `보충 N건` 뱃지가 스트리밍 도중(`message.status === 'streaming'`) 먼저 튀어나오지 않고, 스트리밍이 완전히 완료된 상태(`message.status === 'completed'`)이면서 실제 본문과 유효 출처(`primaryCount > 0 || supplementaryCount > 0`)가 존재할 때만 표시되도록 노출 조건을 강화 (`message.status === 'completed' && Boolean(message.content && message.content.trim().length > 0) && message.sources && message.sources.length > 0`).
+- **대응 기능 ID**: `FUNC-CHAT-017` / `BUG-CHAT-003`
+
+#### 1. RED Phase (실패하는 테스트 케이스 작성)
+- `src/tests/chat/WorkflowStepTracker.test.tsx`: `thinking`, `tool_calling`, `observing` 각 ReAct 단계에서 `WorkflowStepTracker` 헤더에 SVG 아이콘이 정상 렌더링됨을 단언하는 테스트 추가 (기존에는 `STEP_ICONS` 키 누락으로 `null` 반환 실패).
+- `src/tests/chat/ChatMessageItem.test.tsx`: `message.status === 'streaming'`일 때 `content`와 `sources`(`primary_count: 5`)가 존재하더라도 `원문 5건` / `보충 2건` 뱃지가 노출되지 않고, `message.status === 'completed'` 전환 시에만 노출되며, `primary_count: 0, supplementary_count: 0`일 때는 `null`을 반환함을 단언하는 테스트 추가.
+
+#### 2. GREEN Phase (최소 컴포넌트 구현)
+- `src/types/chat.ts`: `ChatStatusStepSchema`에 `'thinking'`, `'tool_calling'`, `'observing'` enum 값을 추가하여 백엔드 `ChatStatusStep`과 100% 동기화.
+- `src/components/chat/WorkflowStepTracker.tsx`: `lucide-react`의 `Sparkles`, `Search`, `CheckCircle2` 아이콘을 활용하여 `STEP_ICONS`에 `thinking`, `tool_calling`, `observing` 단계 아이콘 등록.
+- `src/components/chat/ChatMessageItem.tsx`: 헤더 출처 요약 뱃지 조건문에 `message.status === 'completed'` 선행 조건을 추가하여 스트리밍 진행 중 조기 노출 원천 차단.
+
+#### 3. REFACTOR & HARD QUALITY GATE Phase
+- `npx tsc --noEmit` 전체 타입 체크 0 오류 통과 (`Record<ChatStatusStep, React.ReactNode>` 완전성 검증).
+- 전체 24개 테스트 파일, 240개 테스트 100% 통과 (2개 신규 테스트 추가 통과).
+
+---
+
 ## 3. UI 5대 상태 (Loading, Error, Empty, Success, Idle) 검증표
 
 | 컴포넌트 / 모듈 | 상태 케이스 | 모의 네트워크 / 렌더링 조건 | 화면 렌더링 검증 결과 | 통과 여부 |
@@ -728,13 +750,15 @@ FAIL src/tests/chat/ChatWorkspace.test.tsx: TestingLibraryElementError: Unable t
 |                      | **Inline Popover**  | [1] 인라인 출처 뱃지 클릭          | 대상 기사 메타데이터(제목, 스니펫, URL) 팝오버 실시간 정상 노출 | **PASS** |
 | **Truthful Sources** | **Initial Entrance**| AI 챗 워크스페이스 최초 진입       | "약 5건 매칭" 등 가짜 카운트 뱃지 0건 노출 및 깨끗한 필터 UI | **PASS** |
 |                      | **True API Count**  | 실 백엔드 검색 결과 수신 시        | 백엔드 `sources.length`와 정확히 1:1 일치하는 출처 수 표출 | **PASS** |
+| **ReAct & Badge Gate**| **Streaming Guard** | 스트리밍 진행 중 (`status: streaming`) | ReAct 아이콘(`thinking`, `tool_calling`, `observing`) 정상 노출 & 조기 `원문 N건` 뱃지 차단 | **PASS** |
+|                      | **Completed Guard** | 스트리밍 완료 (`status: completed`) | `primaryCount > 0 \|\| supplementaryCount > 0`일 때만 `원문 N건`/`보충 N건` 노출 | **PASS** |
 
 ---
 
 ## 4. 최종 Vitest 테스트 실행 및 하드 퀄리티 게이트 검증 결과
 
 ```bash
-$ npm test
+$ npx vitest run
 
  RUN  v5.0.0 /Users/wonyoung/workspace/ozplayground/agentlens/frontend
 
@@ -744,7 +768,7 @@ $ npm test
  ✓ src/tests/chat/ChatModelSelector.test.tsx (15 tests)
  ✓ src/tests/chat/ChatSidebar.test.tsx (10 tests)
  ✓ src/tests/chat/HandoverIntegration.test.tsx (5 tests)
- ✓ src/tests/chat/ChatMessageItem.test.tsx (14 tests)
+ ✓ src/tests/chat/ChatMessageItem.test.tsx (15 tests)
  ✓ src/tests/chat/ExportToolbar.test.tsx (5 tests)
  ✓ src/tests/chat/ChatSessionWorkflow.test.tsx (5 tests)
  ✓ src/tests/chat/CitationBadge.test.tsx (6 tests)
@@ -753,7 +777,7 @@ $ npm test
  ✓ src/tests/chat/ChatPromptInput.test.tsx (7 tests)
  ✓ src/tests/chat/FocusCapsule.test.tsx (6 tests)
  ✓ src/tests/chat/MobileViewport.test.tsx (5 tests)
- ✓ src/tests/chat/WorkflowStepTracker.test.tsx (5 tests)
+ ✓ src/tests/chat/WorkflowStepTracker.test.tsx (6 tests)
  ✓ src/tests/chat/ChatMessageList.test.tsx (3 tests)
  ✓ src/tests/chat/ActiveSourceChip.test.tsx (4 tests)
  ✓ src/tests/ThemeSystem.test.tsx (5 tests)
@@ -761,16 +785,11 @@ $ npm test
  ✓ src/tests/ResponsiveLayout.test.tsx (4 tests)
  ✓ src/tests/AskAiPanel.test.tsx (3 tests)
  ✓ src/tests/chat/ChatWorkspace.test.tsx (17 tests)
-   ✓ ChatWorkspace Container (17)
-     ✓ dynamically displays question-specific sources chip and inline citations for global mode questions (v0.2.2) 584ms
-     ✓ does not display fake hardcoded 5-count badge upon entering chat, and reflects true backend sources 590ms
  ✓ src/tests/chat/ContractAndMsw.test.ts (72 tests)
-   ✓ Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6) (72)
-     ✓ returns dynamically filtered, keyword-matched sources for global chat stream (v0.2.2) 1072ms
 
  Test Files  24 passed (24)
-      Tests  238 passed (238)
-   Duration  5.71s
+      Tests  240 passed (240)
+   Duration  5.76s
 ```
 
 ```bash
@@ -779,10 +798,6 @@ $ npx tsc --noEmit
 ```
 
 - **테스트 파일 총수**: 24개 스위트
-- **단위/통합 테스트 총수**: 238개 테스트 (+4 신규 테스트 추가)
+- **단위/통합 테스트 총수**: 240개 테스트 (+2 신규 테스트 추가)
 - **성공률**: **100% PASS (0 Failure, 0 Flaky)**
-- **규격 준수**: `AGENTS.md` Stage 3b 프론트엔드 TDD 트랙 완료 및 `01_TDD_CYCLE_LOG.md` SSOT 확정 (v0.2.3)
-
-
-
-
+- **규격 준수**: `AGENTS.md` Stage 3b 프론트엔드 TDD 트랙 완료 및 `01_TDD_CYCLE_LOG.md` SSOT 확정 (v0.3.0)

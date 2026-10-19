@@ -11,6 +11,7 @@ import {
   Search,
   FileText,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import { ChatStatusPayload, ChatStatusStep } from '@/types/chat';
 
@@ -26,6 +27,9 @@ export interface WorkflowStepTrackerProps {
 }
 
 const STEP_ICONS: Record<ChatStatusStep, React.ReactNode> = {
+  thinking: <Sparkles className="w-3.5 h-3.5 text-purple-600 animate-pulse" />,
+  tool_calling: <Search className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />,
+  observing: <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 animate-pulse" />,
   extracting_source: <Globe className="w-3.5 h-3.5 text-blue-600 animate-pulse" />,
   evaluating_sufficiency: <Scale className="w-3.5 h-3.5 text-amber-600 animate-pulse" />,
   agentic_searching: <Search className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />,

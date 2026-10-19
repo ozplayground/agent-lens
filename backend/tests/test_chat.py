@@ -664,10 +664,11 @@ async def test_chat_stream_midstream_failure_yields_sse_error_event():
 
     assert res.status_code == 200
     body = res.text
-    assert "event: sources" in body
+    assert "event: status" in body
     assert "event: token" in body
     assert "event: error" in body
     assert "ERR_LLM_STREAM_FAILED" in body
+    assert "event: sources" not in body
     assert "event: done" not in body
 
 @pytest.mark.asyncio

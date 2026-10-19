@@ -1,12 +1,14 @@
-# [Backend v0.3.0] ReAct 아키텍처 전환(Global 모드 자율 도구 호출) 및 Scoped 단일 기사 고정 5-Pillar 코드 품질 감사 보고서 (Code Review Report)
+# [Backend v0.3.0] ReAct 아키텍처 고도화(비동기 LLM `_plan_react_action`, 사후 인용 출처 확정 `_filter_cited_sources`, 조기 5건 방출 제거, Scoped 단일 기사 고정) 및 응답 완결성·토큰 예산 확대(`max_tokens: 4096`, `timeout: 120.0`) 5-Pillar 코드 품질 감사 보고서 (Code Review Report)
 
 - **검토일자**: 2026-10-19
 - **검토자**: 시니어 백엔드 코드 리뷰어 (`backend-code-reviewer`)
-- **검토 대상 PR / 작업**: `backend-tdd-engineer`의 v0.3.0 ReAct 아키텍처 전환(`thinking` $\rightarrow$ `tool_calling` $\rightarrow$ `observing`) 및 Scoped 모드 단일 기사 고정(`primary_count=1`, `supplementary_count=0`) 리팩토링 (Stage 4a)
+- **검토 대상 PR / 작업**: `backend-tdd-engineer`의 v0.3.0 ReAct 아키텍처 고도화 및 응답 절단(Truncation) 방지 — 비동기 LLM 플래너(`_plan_react_action`), 조기 5건 관찰(`observing` 및 선행 `sources`) 제거, 스트리밍 완료 후 실제 인용된 출처만 확정 방출하는 `_filter_cited_sources`, Scoped 모드 단일 기사 고정(`primary_count=1`, `supplementary_count=0`), `_build_grounding_prompt` 응답 토큰 한도 내 완결성 규칙 추가 및 `llm_processor.py` / `anthropic_provider.py`의 `max_tokens: 4096`, `num_predict: 4096`, `timeout: 120.0` 상향 검증 (Stage 4a)
 - **감사 대상 소스 파일**:
-  1. [`backend/app/schemas/chat.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/schemas/chat.py)
-  2. [`backend/app/services/chat_service.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/chat_service.py)
-  3. [`backend/tests/test_agentic_workflow.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/tests/test_agentic_workflow.py)
+  1. [`backend/app/services/chat_service.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/chat_service.py)
+  2. [`backend/app/services/llm_processor.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_processor.py)
+  3. [`backend/app/services/llm_providers/anthropic_provider.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_providers/anthropic_provider.py)
+  4. [`backend/tests/test_agentic_workflow.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/tests/test_agentic_workflow.py)
+  5. [`backend/tests/test_chat.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/tests/test_chat.py)
 - **최종 판정**: **APPROVED (승인)**
 
 ---
@@ -15,32 +17,56 @@
 
 | 감사 필라 (Pillar) | 세부 검토 기준 | 평가 점수 (1~5) | 검토 소견 및 발견 사항 |
 | :--- | :--- | :---: | :--- |
-| **Pillar 1: 아키텍처 정합성** | ReAct 루프 설계 정합성, Scoped vs Global 모드 책임 분리, SSE 이벤트 프로토콜 일관성 | **5 / 5** | `ChatStatusStep`에 `thinking`, `tool_calling`, `observing` 상태를 추가하고 `ChatStatusPayload`에 `query`, `sources_found` 필드를 확장하여 계약 명세와 100% 일치함. Scoped 모드는 지정된 단일 기사(`extracting_source` $\rightarrow$ `synthesizing`, `primary_count=1`, `supplementary_count=0`)에만 집중하고, Global 모드는 `_plan_react_action()`을 통해 `search_news_corpus` 도구 실행 여부를 자율 판단하는 ReAct 루프로 명확히 분리됨. |
-| **Pillar 2: 클린코드 & SOLID** | 단일 책임 원칙(SRP), KISS/YAGNI, 불필요한 분기 제거, 명확한 네이밍 | **5 / 5** | `_plan_react_action(question, scope)` 메서드가 의도 파악(일상 인사말 필터링 및 도메인 키워드 추출) 책임을 단일화하여 `query_chat()`과 `stream_chat()` 양쪽에서 중복 없이 재사용됨. Scoped 모드에서 불필요했던 웹 검색/충분성 평가 결합을 제거하여 코드 응집도와 가독성이 대폭 향상됨. |
-| **Pillar 3: 보안 & 데이터 무결성**| Pydantic 스키마 검증, 입력값 살균, 예외 안전성(Graceful Degradation) | **5 / 5** | `ChatStreamRequest` 및 `ChatQueryRequest`의 길이/스코프 검증(`_validate_request`)이 철저하며, `SqliteFtsRetriever.extract_keywords`와 연동된 검색어 정제를 통해 FTS/SQL 인젝션을 방어함. 스크래핑 실패(403/Timeout) 시에도 스트림 중단 없이 요약본으로 안전하게 폴백(Graceful Degradation)됨. |
-| **Pillar 4: 성능 & 리소스 최적화**| 일상 대화 시 불필요한 DB/FTS 조회 생략(Zero-Overhead), 비동기 스트리밍 | **5 / 5** | Global 모드에서 일상 인사말(`안녕하세요` 등)이나 검색 키워드가 없는 질의의 경우 `action: "none"`을 반환하여 불필요한 FTS5/DB I/O 및 `sources` 이벤트 전송을 완전히 생략함. Scoped 모드에서도 외부 웹 검색 네트워크 오버헤드를 제거하여 응답 지연(Latency)을 최소화함. |
-| **Pillar 5: 테스트 품질 & 커버리지**| TDD Red-Green-Refactor 준수, Scoped/Global ReAct 엣지 케이스 검증 | **5 / 5** | `test_agentic_workflow.py` 내 15개 테스트 케이스가 전원 통과(15 passed in 0.59s). 특히 Scoped 단일 기사 고정 검증(`test_chat_scoped_sse_agentic_lifecycle`, `test_chat_query_scoped_with_agentic_workflow_success`)과 Global ReAct 도구 호출/생략 검증(`test_chat_global_react_search_tool_lifecycle`, `test_chat_global_react_casual_greeting_skips_search_tool`)이 촘촘하게 작성됨. |
+| **Pillar 1: 아키텍처 정합성** | 비동기 ReAct 플래너 설계, 사후 인용 출처 확정(Post-stream Citation Finalization), Scoped vs Global 책임 분리, 멀티 프로바이더 토큰·타임아웃 정합성 | **5 / 5** | Global 모드에서 조기 `observing`("관련 뉴스 5건 관찰 완료") 및 선행 `sources` 이벤트 방출을 완전히 제거하고, `thinking`(25%) $\rightarrow$ [`tool_calling`(50%) $\rightarrow$ `synthesizing`(80%) \| `synthesizing`(75%)] $\rightarrow$ `token` $\rightarrow$ (스트리밍 완료 후 인용된 출처만) `sources` $\rightarrow$ `done` 파이프라인으로 정립함. Scoped 모드는 단일 기사(`primary_count=1`, `supplementary_count=0`)로 엄격히 고정되며, 프롬프트 완결성 지침과 프로바이더 출력 한도(`4096` 토큰, `120.0s` 타임아웃)가 유기적으로 결합되어 장문 리포트 절단 현상을 근본 해소함. |
+| **Pillar 2: 클린코드 & SOLID** | 단일 책임 원칙(SRP), KISS/YAGNI, 명확한 메서드 분리(`_plan_react_action`, `_filter_cited_sources`, `_build_grounding_prompt`) | **5 / 5** | 비동기 `_plan_react_action()`이 휴리스틱 가드레일과 Live LLM JSON 플래너를 결합하여 검색 여부를 결정하고, `_filter_cited_sources()`가 정규식 `[N]` 매칭 및 핵심 제목 토큰 매칭으로 실제 사용된 출처만 정제함. `_build_grounding_prompt()` 역시 Scoped/Global/무출처 분기별로 일관된 응답 분량·완결성 규칙을 주입하도록 깔끔하게 구성됨. |
+| **Pillar 3: 보안 & 데이터 무결성**| 입력값 검증, JSON 파싱 방어, 가짜 인용 번호 생성 방지, 코드 블록/문장 절단 방지 및 예외 안전성 | **5 / 5** | `_build_grounding_prompt()`에서 할당된 응답 토큰 한도(최대 1,500~2,000 토큰 / 공백 포함 1,500~2,500자 이내) 내 완결된 결론 문장 및 닫힌 코드 블록(15줄 이내 핵심 스니펫) 작성을 강제하여 마크다운 깨짐 및 미완성 응답을 방지함. 도구를 호출하지 않은 일반 대화 시 가짜 `[1]` 인용 생성을 금지하고 `sources=[]` 무결성을 보장함. |
+| **Pillar 4: 성능 & 리소스 최적화**| 불필요한 DB/FTS 조회 원천 차단(Zero-Overhead), 경량 Haiku 플래너 활용, 스트리밍 타임아웃(`120.0s`) 및 토큰 예산(`4096`) 최적화 | **5 / 5** | 일상 대화 및 비도메인 질의는 `action: "none"`으로 조기 단락(Short-circuit)되어 FTS5 DB 조회 비용이 0으로 수렴함. 또한 `anthropic_provider.py`와 `llm_processor.py`의 `max_tokens: 4096`, `num_predict: 4096` 및 스트리밍 `timeout: 120.0` 설정을 통해 한국어 다중 바이트 토큰화 환경에서도 4단 구조화 엔지니어링 리포트가 중도 타임아웃이나 토큰 상한으로 끊기지 않고 안정적으로 스트리밍됨. |
+| **Pillar 5: 테스트 품질 & 커버리지**| TDD Red-Green-Refactor 준수, ReAct 플래너/인용 필터링/스트리밍 순서/프로바이더 연동 검증 | **5 / 5** | `test_agentic_workflow.py`(16개), `test_chat.py`(34개), `test_anthropic_provider.py`(16개), `test_llm_processor.py`(14개) 총 **80개 핵심 테스트가 100% 통과(0 failed)**. 스트리밍 순서, 인용 필터링, 프롬프트 가드레일, 프로바이더 토큰/스트리밍 처리가 빈틈없이 검증됨. |
 
 ---
 
 ## [v0.3.0] 2. 핵심 변경사항 상세 감사 결과
 
-### 2.1 `backend/app/schemas/chat.py` — ReAct 상태 스키마 확장 [PASS]
-- `ChatStatusStep` 리터럴에 `"thinking"`, `"tool_calling"`, `"observing"` 단계가 상단에 명확히 정의되었으며 하위 호환성을 위해 기존 스텝 리터럴도 유지됨.
-- `ChatStatusPayload`에 단일 검색어 표시를 위한 `query: Optional[str] = None` 및 관찰 건수 표기를 위한 `sources_found: Optional[int] = None` 필드가 타입 세이프하게 추가됨.
+### 2.1 `backend/app/services/chat_service.py` — `_build_grounding_prompt` 응답 토큰 한도 내 완결성 규칙 (`L238-L254`, `L288-L293`) [PASS]
+- **공통 응답 분량 및 완결성 필수 규칙 (`L238-L239`)**:
+  - `"[응답 분량 및 완결성 필수 규칙]"` 섹션을 명시하여 할당된 응답 토큰 한도(최대 1,500~2,000 토큰 / 공백 포함 1,500~2,500자 이내) 안에서 답변 전체를 완벽하게 끝맺음(완결된 결론 문장 및 닫힌 코드 블록)하도록 강제함.
+  - 문장이나 코드 블록이 중간에 잘리지 않도록 핵심 위주로 밀도 있게 작성하고, 코드 예시는 15줄 이내의 핵심 스니펫으로 간결하게 작성하도록 지시함.
+- **Scoped 4단 구조화 리포트 압축 완결 규칙 (`L248-L254`)**:
+  - 4개의 필수 마크다운 헤딩(`## 1.` ~ `## 4.`)을 유지하되, 각 섹션을 핵심 불릿 2~3개와 15줄 이내 스니펫으로 압축하여 전체 답변이 토큰 한도 내에서 100% 완결되게 작성하도록 지시함.
+- **Global 무출처 일반 대화/기술 질의 완결 규칙 (`L288-L293`)**:
+  - 외부 기사 출처 없이 답변하는 분기에서도 동일하게 1,500~2,000 토큰(1,500~2,500자) 이내 완결된 결론 문장, 닫힌 코드 블록, 15줄 이내 핵심 스니펫 규칙 및 가짜 `[1]` 인용 금지 규칙을 일관되게 적용함.
 
-### 2.2 `backend/app/services/chat_service.py` — ReAct 플래너 및 Scoped 단일 기사 고정 [PASS]
-- **`_plan_react_action()`**:
-  - `scope == "scoped"`일 때 즉시 `{"action": "none", "search_query": ""}`를 반환하여 추가 검색을 원천 차단.
-  - `scope == "global"`일 때 일상 인사말(`casual_greetings`)을 즉각 식별하고, `SqliteFtsRetriever.extract_keywords()`로 유의미한 기술 키워드가 추출된 경우에만 `{"action": "search_news_corpus", "search_query": ...}`를 반환.
-- **Scoped 모드 (`query_chat` & `stream_chat`)**:
-  - `extracting_source`(30%) $\rightarrow$ `synthesizing`(85%) $\rightarrow$ `sources`(`primary_count: 1, supplementary_count: 0`) $\rightarrow$ `token` $\rightarrow$ `done` 순서로 단일 기사 컨텍스트만 엄격하게 스트리밍함.
-- **Global 모드 (`query_chat` & `stream_chat`)**:
-  - `thinking`(25%) 단계 후 `search_news_corpus` 실행 시 `tool_calling`(55%) $\rightarrow$ `observing`(80%) $\rightarrow$ `sources` $\rightarrow$ `token` $\rightarrow$ `done`을 방출하며, 일상 대화 시에는 도구 호출과 `sources` 이벤트를 건너뛰고 즉각 `token`을 스트리밍함.
+### 2.2 `backend/app/services/llm_processor.py` & `backend/app/services/llm_providers/anthropic_provider.py` — 출력 토큰 한도(`4096`) 및 타임아웃(`120.0s`) 상향 [PASS]
+- **`anthropic_provider.py` (`L161`, `L181`, `L199`, `L227`)**:
+  - `generate_text_with_usage()`의 기본 `max_tokens: int = 4096` 상향 및 `httpx.AsyncClient(timeout=45.0)` 적용.
+  - `stream_chat()`의 기본 `max_tokens: int = 4096` 상향 및 SSE 스트리밍 `httpx.AsyncClient(timeout=120.0)` 적용으로 장문 스트리밍 시 조기 종료 원천 방지.
+- **`llm_processor.py` (`L201`, `L204`, `L219`, `L221`, `L419`, `L442-L443`)**:
+  - `_call_openai()`: `"max_tokens": 4096` 및 `httpx.AsyncClient(timeout=60.0)` 상향 적용.
+  - `_call_ollama()`: `"options": {"num_predict": 4096}` 및 `httpx.AsyncClient(timeout=90.0)` 상향 적용.
+  - `stream_tokens()` 내 OpenAI SDK 스트리밍: `max_tokens=4096` 적용 (`L419`).
+  - `stream_tokens()` 내 Ollama 스트리밍: `httpx.AsyncClient(timeout=120.0)` 및 `"options": {"num_predict": 4096}` 적용 (`L442-L443`).
+  - 프롬프트의 목표 분량(1,500~2,000 토큰) 대비 하드웨어/API 상한을 2배 이상(`4096` 토큰) 여유 있게 확보하여 `max_tokens` 도달로 인한 중도 절단(Truncation)을 완벽히 예방함.
 
-### 2.3 `backend/tests/test_agentic_workflow.py` — TDD 검증 스위트 [PASS]
-- Scoped 모드에서 `evaluating_sufficiency`, `agentic_searching`이 발생하지 않고 `primary_count == 1`, `supplementary_count == 0`임을 단언(Assert)으로 엄격히 검증.
-- Global 모드에서 기술 질문 시 `thinking` $\rightarrow$ `tool_calling` $\rightarrow$ `observing` $\rightarrow$ `sources` 전체 라이프사이클이 실행되고, 일상 인사말(`안녕하세요!`) 시에는 검색 도구 호출 없이 `sources_count: 0`으로 직답하는 시나리오를 완벽히 커버함.
+### 2.3 `backend/app/services/chat_service.py` — 비동기 ReAct 플래너 (`_plan_react_action`) [PASS]
+- **Scoped 모드 고정**: `scope == "scoped"`일 때 즉시 `{"action": "none", "search_query": "", "thought": "단일 기사 컨텍스트 고정"}`을 반환하여 불필요한 추가 검색을 차단함 (`L314-L315`).
+- **다단계 의도 필터링 및 Live LLM ReAct 판단 (`L317-L444`)**:
+  - 1차: 일상 인사말(`casual_greetings`) 및 메타 불만/일상 패턴(`"인사했는데"`, `"왜 뉴스"`, `"오늘 날씨"`, `"점심 메뉴"` 등) 즉시 `action: "none"` 반환.
+  - 2차: AI/에이전트/테크 도메인 시그널(`tech_and_news_signals`) 부재 시 `action: "none"` 반환.
+  - 3차: 비테스트 런타임에서 Live LLM 가용 시 `planner_prompt`를 통해 JSON(`{"thought", "action", "search_query"}`) 또는 `ACTION: NONE` / `ACTION: SEARCH` 응답을 비동기로 파싱하여 정교하게 도구 호출 여부를 결정함.
+
+### 2.4 `backend/app/services/chat_service.py` — 사후 인용 출처 필터링 (`_filter_cited_sources`) 및 조기 5건 방출 제거 [PASS]
+- **`_filter_cited_sources(answer, candidate_sources, question)` (`L446-L475`)**:
+  - 생성 완료된 답변에서 `\[(\d+)\]` 정규식으로 실제 인용된 번호(`cited_nums`)를 추출하여, 후보 출처 중 실제 인용된 출처만 반환함.
+  - 명시적 `[N]` 표기가 없는 경우 답변 본문에 출처 제목 핵심 토큰이 등장한 출처만 선별하며, 무분별한 5건 전체 노출을 방지함.
+- **조기 5건 방출(`observing` 및 선행 `sources`) 제거 (`L673-L785`)**:
+  - Global 모드에서 토큰 생성 전에 무조건 5건의 출처를 방출하던 기존 구문을 제거하고, 토큰 스트리밍(`event: token`)이 완전히 끝난 뒤 `self._filter_cited_sources()`를 거쳐 실제로 인용·활용된 출처만 `event: sources`로 확정 방출함.
+  - 도구 미호출(`action == "none"`) 시에는 `event: sources`를 아예 방출하지 않으며 `done` 이벤트의 `sources_count: 0`, `primary_count: 0`을 보장함.
+
+### 2.5 `backend/tests/` — TDD 검증 스위트 통과 [PASS]
+- `test_chat_global_react_search_tool_lifecycle`: `"step": "observing"` 및 `"관찰 완료"` 미방출 확인, `full_stream.find("event: token") < full_stream.find("event: sources")`로 스트리밍 후 출처 확정 순서 엄격 검증.
+- `test_chat_global_react_casual_greeting_skips_search_tool`: `"안녕하세요!"`, `"오늘 날씨 어때?"`, `"왜 인사했는데도 뉴스 5개를 찾아?"`, `"점심 메뉴 추천해줘"` 질의 시 `tool_calling` 및 `event: sources`가 발생하지 않고 `sources_count: 0`으로 직접 답변함을 검증.
+- `test_chat_global_react_llm_planner_and_citation_filtering`: 비동기 `_plan_react_action`의 Live LLM 연동(`none` vs `search_news_corpus`)과 `_filter_cited_sources`의 `[2]` 단독 인용 필터링 정확도 검증.
+- `test_chat_stream_midstream_failure_yields_sse_error_event` (`test_chat.py`): 스트리밍 도중 에러 발생 시 `event: sources`와 `event: done`이 방출되지 않고 `event: error`(`ERR_LLM_STREAM_FAILED`)만 정확히 방출됨을 검증.
 - **최종 판정**: **APPROVED (승인)**
 
 ---

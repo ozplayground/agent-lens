@@ -109,8 +109,11 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
   });
 
   describe('Agentic Research Steps & Status Contracts (v2.4)', () => {
-    it('validates all 4 agentic workflow step enum values', () => {
+    it('validates all 7 agentic & ReAct workflow step enum values', () => {
       const steps = [
+        'thinking',
+        'tool_calling',
+        'observing',
         'extracting_source',
         'evaluating_sufficiency',
         'agentic_searching',

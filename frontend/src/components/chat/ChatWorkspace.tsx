@@ -328,11 +328,21 @@ export default function ChatWorkspace({
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            buffer += decoder.decode();
+          } else {
+            buffer += decoder.decode(value, { stream: true });
+          }
 
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop() || '';
+          let parts: string[];
+          if (done) {
+            const trimmedBuffer = buffer.trim();
+            parts = trimmedBuffer ? trimmedBuffer.split('\n\n') : [];
+            buffer = '';
+          } else {
+            parts = buffer.split('\n\n');
+            buffer = parts.pop() || '';
+          }
 
           for (const block of parts) {
             const lines = block.split('\n');
@@ -422,6 +432,8 @@ export default function ChatWorkspace({
               if (eventType === 'error') throw err;
             }
           }
+
+          if (done) break;
         }
 
         // Finalize completed status

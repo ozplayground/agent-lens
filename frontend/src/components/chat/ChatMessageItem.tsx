@@ -130,7 +130,7 @@ export default function ChatMessageItem({
                 <Sparkles className="w-3 h-3 text-blue-600" />
                 {displayModelName}
               </span>
-              {Boolean(message.content && message.content.trim().length > 0) && message.sources && message.sources.length > 0 && (() => {
+              {message.status === 'completed' && Boolean(message.content && message.content.trim().length > 0) && message.sources && message.sources.length > 0 && (() => {
                 const primaryCount =
                   message.primary_count !== undefined && message.primary_count !== null
                     ? message.primary_count
