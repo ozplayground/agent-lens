@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, Flame, Clock, Star, Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
 import Header from '@/components/Header';
 import CategoryFilter from '@/components/CategoryFilter';
@@ -14,11 +15,17 @@ import McpModal from '@/components/McpModal';
 import SourcesModal from '@/components/SourcesModal';
 import { TechRadar } from '@/components/TechRadar';
 import { BriefingSettingsModal } from '@/components/BriefingSettingsModal';
+import HotkeyListener from '@/components/HotkeyListener';
+import { useTheme } from '@/context/ThemeContext';
 import { NewsItem } from '@/types/news';
 import { useBookmarks } from '@/hooks/useBookmarks';
 import { useNewsFeed } from '@/hooks/useNewsFeed';
 
 export default function HomePage() {
+  const router = useRouter();
+  const { toggleTheme } = useTheme();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const { bookmarkedIds, bookmarkedItems, toggleBookmark } = useBookmarks();
 
   const {
@@ -65,8 +72,54 @@ export default function HomePage() {
     setDetailModalOpen(true);
   };
 
+  const handleNavigateFeed = (delta: 1 | -1) => {
+    if (!news || news.length === 0) return;
+    setFocusedIndex((prev) => {
+      const next = prev + delta;
+      if (next < 0) return 0;
+      if (next >= news.length) return news.length - 1;
+      return next;
+    });
+  };
+
+  const handleOpenDetailModal = () => {
+    if (focusedIndex >= 0 && news[focusedIndex]) {
+      handleOpenDetail(news[focusedIndex]);
+    }
+  };
+
+  const handleHandoverChat = () => {
+    if (focusedIndex >= 0 && news[focusedIndex]) {
+      router.push(`/chat?sourceId=${news[focusedIndex].id}`);
+    }
+  };
+
+  const handleToggleBookmarkCurrent = () => {
+    if (focusedIndex >= 0 && news[focusedIndex]) {
+      toggleBookmark(news[focusedIndex]);
+    }
+  };
+
+  const handleCloseOverlays = () => {
+    setDetailModalOpen(false);
+    setBriefingModalOpen(false);
+    setSchedOpen(false);
+    setMcpOpen(false);
+    setWebhookModalOpen(false);
+    setSourcesModalOpen(false);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0d1117] text-slate-900 dark:text-[#f0f6fc] flex flex-col font-sans">
+      <HotkeyListener
+        onNavigateFeed={handleNavigateFeed}
+        onOpenDetailModal={handleOpenDetailModal}
+        onHandoverChat={handleHandoverChat}
+        onToggleBookmark={handleToggleBookmarkCurrent}
+        onFocusSearch={() => searchInputRef.current?.focus()}
+        onToggleTheme={toggleTheme}
+        onCloseOverlays={handleCloseOverlays}
+      />
       <Header
         onRefresh={() => {
           loadNews();
@@ -162,6 +215,7 @@ export default function HomePage() {
             >
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                ref={searchInputRef}
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -283,13 +337,14 @@ export default function HomePage() {
         {/* News Grid */}
         {!loading && !error && news.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {news.map((item) => (
+            {news.map((item, idx) => (
               <NewsCard
                 key={item.id}
                 item={item}
                 onSelect={handleOpenDetail}
                 isBookmarked={bookmarkedIds.includes(item.id)}
                 onToggleBookmark={toggleBookmark}
+                isFocused={idx === focusedIndex}
               />
             ))}
           </div>

@@ -8,6 +8,7 @@ from app.api.trends import router as trends_router
 from app.api.webhook import router as webhook_router
 from app.api.sources import router as sources_router
 from app.api.research import router as research_router
+from app.api.chat import router as chat_router
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(news_router)
@@ -19,3 +20,4 @@ api_router.include_router(trends_router)
 api_router.include_router(webhook_router)
 api_router.include_router(sources_router)
 api_router.include_router(research_router)
+api_router.include_router(chat_router)

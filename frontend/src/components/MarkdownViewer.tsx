@@ -32,7 +32,7 @@ export function CodeBlock({ className, children, ...props }: CodeProps) {
   if (!isBlock) {
     return (
       <code
-        className="px-1.5 py-0.5 mx-0.5 rounded font-mono text-[12px] bg-slate-100 text-blue-700 border border-slate-200 font-medium"
+        className="break-all px-1.5 py-0.5 mx-0.5 rounded font-mono text-[12px] bg-slate-100 text-slate-800 border border-slate-200 font-medium"
         {...props}
       >
         {children}
@@ -41,7 +41,7 @@ export function CodeBlock({ className, children, ...props }: CodeProps) {
   }
 
   return (
-    <div className="my-3 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden text-xs shadow-xs">
+    <div className="code-block-wrapper w-full max-w-full min-w-0 my-3 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden text-xs shadow-xs">
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-100 border-b border-slate-200 text-slate-600">
         <div className="flex items-center gap-1.5 font-mono text-[11px]">
           <Terminal className="w-3.5 h-3.5 text-blue-600" />
@@ -65,7 +65,11 @@ export function CodeBlock({ className, children, ...props }: CodeProps) {
           )}
         </button>
       </div>
-      <pre className="p-3 overflow-x-auto font-mono text-[12px] leading-relaxed text-slate-900 bg-slate-50">
+      <pre
+        tabIndex={0}
+        aria-label="가로 스크롤 가능한 코드 블록"
+        className="p-3 overflow-x-auto font-mono text-[12px] leading-relaxed text-slate-900 bg-slate-50 overscroll-x-contain"
+      >
         <code className={className} {...props}>
           {children}
         </code>
@@ -78,33 +82,37 @@ export default function MarkdownViewer({ content, className = '' }: MarkdownView
   if (!content) return null;
 
   return (
-    <div className={`markdown-viewer text-xs sm:text-sm text-slate-700 leading-relaxed ${className}`}>
+    <div className={`markdown-viewer w-full max-w-full min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word] text-xs sm:text-sm text-slate-700 leading-relaxed ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           pre: ({ children }) => <>{children}</>,
           code: CodeBlock,
           h1: ({ children }) => (
-            <h2 className="text-base sm:text-lg font-bold text-slate-900 mt-4 mb-2 pb-1 border-b border-slate-200">
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 mt-4 mb-2 pb-1 border-b border-slate-200 break-words [overflow-wrap:anywhere] [word-break:break-word]">
               {children}
             </h2>
           ),
           h2: ({ children }) => (
-            <h3 className="text-sm sm:text-base font-bold text-slate-900 mt-3.5 mb-2 pb-1 border-b border-slate-200">
+            <h3 className="text-sm sm:text-base font-bold text-slate-900 mt-3.5 mb-2 pb-1 border-b border-slate-200 break-words [overflow-wrap:anywhere] [word-break:break-word]">
               {children}
             </h3>
           ),
           h3: ({ children }) => (
-            <h4 className="text-xs sm:text-sm font-semibold text-slate-900 mt-3 mb-1.5 flex items-center gap-1.5">
+            <h4 className="text-xs sm:text-sm font-semibold text-slate-900 mt-3 mb-1.5 flex items-center gap-1.5 break-words [overflow-wrap:anywhere] [word-break:break-word]">
               {children}
             </h4>
           ),
           h4: ({ children }) => (
-            <h5 className="text-xs font-semibold text-slate-900 mt-2.5 mb-1">
+            <h5 className="text-xs font-semibold text-slate-900 mt-2.5 mb-1 break-words [overflow-wrap:anywhere] [word-break:break-word]">
               {children}
             </h5>
           ),
-          p: ({ children }) => <p className="my-2 leading-relaxed">{children}</p>,
+          p: ({ children }) => (
+            <p className="my-2 leading-relaxed break-words [overflow-wrap:anywhere] [word-break:break-word]">
+              {children}
+            </p>
+          ),
           ul: ({ children }) => (
             <ul className="my-2 ml-4 list-disc space-y-1 text-slate-700 marker:text-blue-600">
               {children}
@@ -115,15 +123,19 @@ export default function MarkdownViewer({ content, className = '' }: MarkdownView
               {children}
             </ol>
           ),
-          li: ({ children }) => <li className="pl-1 leading-relaxed">{children}</li>,
+          li: ({ children }) => (
+            <li className="pl-1 leading-relaxed break-words [overflow-wrap:anywhere] [word-break:break-word]">
+              {children}
+            </li>
+          ),
           blockquote: ({ children }) => (
-            <blockquote className="my-3 pl-3.5 pr-3 py-2 rounded-r-md border-l-4 border-blue-500 bg-blue-50/70 text-slate-700 italic text-xs sm:text-sm">
+            <blockquote className="my-3 pl-3.5 pr-3 py-2 rounded-r-md border-l-4 border-blue-500 bg-blue-50/70 text-slate-700 italic text-xs sm:text-sm break-words [overflow-wrap:anywhere] [word-break:break-word]">
               {children}
             </blockquote>
           ),
           table: ({ children }) => (
-            <div className="my-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="table-wrapper w-full max-w-full min-w-0 my-3 overflow-x-auto rounded-lg border border-slate-200 bg-white overscroll-x-contain">
+              <table className="w-full text-left border-collapse text-xs min-w-[320px]">
                 {children}
               </table>
             </div>

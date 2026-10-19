@@ -108,4 +108,20 @@ describe('NewsCard Component', () => {
     expect(handleSelect).toHaveBeenCalledTimes(1);
     expect(handleSelect).toHaveBeenCalledWith(mockItem);
   });
+
+  it('applies focus ring and data-focused attribute when isFocused is true', () => {
+    render(
+      <NewsCard
+        item={mockItem}
+        onSelect={vi.fn()}
+        isBookmarked={false}
+        onToggleBookmark={vi.fn()}
+        isFocused={true}
+      />
+    );
+
+    const card = screen.getByRole('article');
+    expect(card).toHaveAttribute('data-focused', 'true');
+    expect(card.className).toContain('ring-2');
+  });
 });

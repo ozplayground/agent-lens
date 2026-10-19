@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  productionBrowserSourceMaps: false,
   allowedDevOrigins: [
     "macbookpro.tail304081.ts.net",
     "*.ts.net",

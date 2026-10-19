@@ -14,6 +14,7 @@ import { NewsItem } from '@/types/news';
 import { askQuestionAboutNewsStream } from '@/lib/api';
 import MarkdownViewer from './MarkdownViewer';
 import AskAiPanel, { ChatMessage } from './news-detail/AskAiPanel';
+import HandoverCtaButton from './chat/HandoverCtaButton';
 
 interface NewsDetailModalProps {
   item: NewsItem | null;
@@ -21,6 +22,7 @@ interface NewsDetailModalProps {
   onClose: () => void;
   isBookmarked: boolean;
   onToggleBookmark: (item: NewsItem) => void;
+  onHandoverToChat?: (item: NewsItem, draftQuestion?: string) => void;
 }
 
 export default function NewsDetailModal({
@@ -29,6 +31,7 @@ export default function NewsDetailModal({
   onClose,
   isBookmarked,
   onToggleBookmark,
+  onHandoverToChat,
 }: NewsDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'summary' | 'ask_ai'>('summary');
   const [question, setQuestion] = useState('');
@@ -287,6 +290,17 @@ export default function NewsDetailModal({
                 </div>
               )}
             </div>
+
+            {/* Dedicated AI Chat Handover Banner */}
+            <HandoverCtaButton
+              item={item}
+              variant="modal-banner"
+              draftQuestion={question}
+              onHandoverComplete={() => {
+                if (onHandoverToChat) onHandoverToChat(item, question);
+                handleClose();
+              }}
+            />
 
             {/* 3-Bullet TL;DR */}
             {item.tldr_bullets && item.tldr_bullets.length > 0 && (

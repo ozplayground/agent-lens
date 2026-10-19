@@ -248,3 +248,79 @@ flowchart TD
 | :--- | :--- | :---: | :--- |
 | `ERR_MCP_INVALID_TOOL_ARG` | 유효하지 않거나 누락된 인자 | 400 Bad Request | MCP JSON-RPC 에러 응답 반환 |
 | `ERR_MCP_TOOL_EXECUTION_FAILED` | 도구 질의 처리 실패 | 500 Internal Server Error | MCP JSON-RPC 에러 응답 반환 |
+
+---
+
+### [FUNC-SYS-005] 백엔드 LLM 가용성 사전 검증(Fail-Fast) 및 Mock Provider/Fallback 체인 제어
+
+#### 1. 기본 정보
+- **기능명**: 백엔드 LLM 가용성 사전 검증(Fail-Fast) 및 Mock Provider/Fallback 체인 제어
+- **기능 ID**: `FUNC-SYS-005`
+- **대응 요구사항 ID**: `REQ-LLM-001`
+- **대상 화면 코드**: `SCR-SYS-005` (백엔드 LLM 프로세서 서비스 레이어 및 상태 모니터링)
+- **우선순위**: Must Have
+- **관련 액터 (Actor)**: 백엔드/프론트엔드 TDD 엔지니어, DevOps 엔지니어, CI 자동화 시스템
+
+#### 2. 사전 조건 (Pre-conditions)
+1. FastAPI 애플리케이션이 기동되어 의존성 주입(`app.services.llm_processor`)이 준비된 상태.
+2. 시스템 환경변수 또는 `config.json` 설정이 로드된 상태.
+
+#### 3. 사용자 인터랙션 및 시스템 동작 흐름과 플로우차트 (Step-by-Step Flow & Flowchart)
+1. 클라이언트 또는 테스트 러너가 `/api/chat/stream` 엔드포인트로 질문 요청을 전송한다.
+2. 백엔드 서비스 계층은 LLM 프로세서의 `check_provider_available()` 메서드를 호출한다.
+3. 시스템은 가용성 검증 파이프라인을 다음 순서로 실행한다:
+   - **1단계 (테스트/개발 환경 판별)**: `os.getenv("TESTING") == "True"` 또는 `sys.modules` 내에 `pytest`가 활성화되어 있는지 검사한다.
+   - **2단계 (실제 API 키 유효성 검사)**: 구성된 프로바이더(Google Gemini, OpenAI, Claude 등)의 API 키가 존재하고 유효한지 검증한다.
+   - **3단계 (프로바이더 분기 결정)**:
+     - API 키가 정상인 경우: 실제 프로바이더 스트림 생성기를 초기화한다.
+     - API 키가 부재하거나 테스트 환경인 경우: 시스템 다운(503 에러)을 유발하지 않고 `MockLLMProvider`로 즉각 투명 전환(Fallback)한다.
+4. `MockLLMProvider`는 실제 모델 응답과 100% 동일한 규격의 SSE 스트림(`event: status`, `event: sources`, `event: token`, `event: done`)을 안정적으로 공급한다.
+5. 이를 통해 백엔드 pytest 테스트 스위트 116건이 외부 API 키 유무와 무관하게 100% 통과(Green)하도록 보장한다.
+
+```mermaid
+flowchart TD
+    A[클라이언트 /api/chat/stream 요청 인입] --> B[check_provider_available 호출]
+    B --> C{환경 플래그 검사 (pytest / TESTING)}
+    C -- 테스트 환경 감지됨 --> D[MockLLMProvider 즉각 활성화]
+    C -- 일반 프로덕션 환경 --> E{유효한 LLM API Key 존재 여부}
+    E -- API 키 정상 존재 --> F[실제 LLM Provider (Gemini/OpenAI/Claude) 선택]
+    E -- API 키 부재 / 네트워크 단절 --> G{시스템 Mock Fallback 설정 여부}
+    G -- Fallback 활성화 --> D
+    G -- Fallback 비활성화 (Strict Prod) --> H[503 Service Unavailable 반환]
+
+    D & F --> I[200 OK SSE 스트림 응답 개시]
+    I --> J[status ➔ sources ➔ token ➔ done 이벤트 방출]
+    J --> K[스트림 정상 종료 & 세션 영속화 완료]
+```
+
+#### 4. 화면 표시 및 입력 데이터 항목 명세 (UI Data Elements - 8대 표준 컬럼)
+| 항목명 | 화면 표시/입력 구분 | UI 컴포넌트 | 필수 여부 | 데이터 타입 / 제약 | 기본값 | 유효성 검증 규칙 (Validation) | 노출/수정 조건 |
+| :--- | :---: | :--- | :---: | :--- | :---: | :--- | :--- |
+| `active_provider_name` | 노출 전용 | Provider Badge | 필수 | Enum (`'gemini'`, `'openai'`, `'claude'`, `'ollama'`, `'mock'`) | `'gemini'` | 지원 프로바이더 일치 | 헤더 및 설정 모달 |
+| `is_mock_fallback_active`| 시스템 관리 | Internal Flag | 필수 | Boolean | false | 환경변수/테스트 시 자동 true | 내부 서비스 레이어 |
+| `llm_api_key_status` | 노출 전용 | Status Dot (Green/Yellow) | 필수 | Enum (`'CONFIGURED'`, `'MISSING'`, `'MOCK'`) | `'MOCK'` | 키 존재 여부 바인딩 | 시스템 상태 모달 |
+| `test_environment_flag` | 시스템 제어 | Environment Var | 선택 | String (`TESTING=True`) | - | 부울 문자열 검증 | 테스트 실행 시 |
+| `mock_response_template`| 시스템 관리 | In-memory Mock Text | 필수 | String / Markdown | 4단 리포트 기본값 | GFM 서식 유효성 검증 | Mock 모드 시 사용 |
+
+#### 5. 비즈니스 규칙 (Business Rules)
+- **BR-SYS-005-1 (CI/테스트 환경 503 에러 원천 차단)**:
+  `tests/` 디렉토리 내의 자동화 테스트 러너(pytest)가 구동되는 동안에는 외부 네트워크 장애나 API 키 부재로 인해 503 에러가 발생해서는 안 되며, `MockLLMProvider`가 자동으로 주입되어 테스트 목적의 완결된 스트림을 반환해야 한다.
+- **BR-SYS-005-2 (SSE 프로토콜 스키마 100% 일치성)**:
+  `MockLLMProvider`가 생성하는 모든 이벤트 페이로드는 실제 프로바이더가 방출하는 JSON 스키마(`status` 단계, `sources` 메타데이터, `token` 청크, `done` 통계)와 완전히 동일한 필드 규격을 준수해야 한다.
+- **BR-SYS-005-3 (다중 프로바이더 추상 파사드)**:
+  `app/services/llm_processor.py`는 `BaseLLMProvider` 인터페이스를 상속하는 구조로 캡슐화되어, 향후 신규 LLM(예: 로컬 Ollama, Claude 3.5 Sonnet) 도입 시 호출부 코드 수정 없이 플러그형으로 확장 가능해야 한다.
+
+#### 6. 예외 처리 및 엣지 케이스 (Edge Cases & Exception Handling)
+| 발생 상황 (Edge Case Scenario) | 시스템 처리 방식 | 사용자/클라이언트 안내 메시지 |
+| :--- | :--- | :--- |
+| 프로덕션 환경에서 실제 LLM API 할당량(Quota) 초과 시 (429 Rate Limit) | 429 감지 즉시 Mock이 아닌 사용자 친화적 지연 안내 및 재시도 권고 토스트 반환 | "AI 모델 사용량이 일시적으로 초과되었습니다. 잠시 후 다시 시도해주세요." |
+| 스트리밍 생성 도중 클라이언트 연결이 조기 종료된 경우 (Client Disconnect) | 비동기 제너레이터의 `GeneratorExit` 예외를 격리하고 DB 롤백 없이 현재까지의 토큰만 커밋 | (조용한 연결 정리) |
+| 환경변수 설정 파일(`config.json`) 파싱 구문 오류 발생 시 | 시스템 기본 설정값(Default Fallback Config)으로 안전하게 부트스트랩 | (시스템 로그 경고 기록) |
+
+#### 7. 비즈니스 에러 코드 매핑
+| 비즈니스 에러 코드 | 발생 사유 | HTTP 상태 코드 매핑 | 클라이언트 표시 형태 |
+| :--- | :--- | :---: | :--- |
+| `ERR_LLM_PROVIDER_UNAVAILABLE` | 프로덕션 환경에서 사용 가능한 프로바이더 부재 | 503 Service Unavailable | 상단 서비스 점검 안내 배너 |
+| `ERR_LLM_QUOTA_EXCEEDED` | 서드파티 LLM 크레딧/쿼터 소진 | 429 Too Many Requests | 사용량 초과 경고 토스트 |
+| `ERR_LLM_PAYLOAD_PARSE_FAILED` | LLM 응답 JSON 파싱 실패 | 502 Bad Gateway | 재시도 유도 에러 메시지 |
+

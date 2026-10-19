@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, func
 
 from app.config import settings
-from app.database import engine, Base, AsyncSessionLocal
+from app.database import engine, Base, AsyncSessionLocal, ensure_db_schema
 from app.api.router import api_router
 from app.scheduler import start_scheduler, stop_scheduler
 from app.collectors.manager import collector_manager
@@ -12,8 +12,7 @@ from app.models.news import NewsItem
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await ensure_db_schema()
     start_scheduler()
 
     async with AsyncSessionLocal() as s:
@@ -54,4 +53,5 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "running": collector_manager.is_running}
+    return {"status": "healthy", "version": settings.VERSION, "running": collector_manager.is_running}
+

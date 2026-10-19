@@ -6,14 +6,13 @@ import pytest
 TEST_DB_FILE = Path(__file__).resolve().parent / "test_agentlens.db"
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{TEST_DB_FILE}"
 
-from app.database import engine, Base, AsyncSessionLocal
+from app.database import engine, Base, AsyncSessionLocal, ensure_db_schema
 from app.models import NewsItem
 from datetime import datetime, timezone
 
 @pytest.fixture(autouse=True)
 async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await ensure_db_schema()
 
     # Seed at least one item for endpoints that query or ask AI
     async with AsyncSessionLocal() as session:

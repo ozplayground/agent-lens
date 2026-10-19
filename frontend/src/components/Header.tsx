@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Clock, Terminal, CheckCircle2, Cpu, Rss, Bell, Trash2, AlertTriangle, Globe, Send } from 'lucide-react';
+import Link from 'next/link';
+import { RefreshCw, Clock, Terminal, CheckCircle2, Cpu, Rss, Bell, Trash2, AlertTriangle, Globe, Send, Bot, Command } from 'lucide-react';
 import { ScheduleStatus } from '@/types/news';
 import { fetchScheduleStatus, triggerManualCollect, fetchCrawlProgress, resetAndRecollect } from '@/lib/api';
+import ThemeToggle from '@/components/ThemeToggle';
+import CommandPalette from '@/components/CommandPalette';
 
 interface HeaderProps {
   onRefresh: () => void;
@@ -19,6 +22,18 @@ export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWeb
   const [msg, setMsg] = useState<string | null>(null);
   const [showResetModal, setShowResetModal] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowPalette((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const load = async () => {
     try {
@@ -120,6 +135,14 @@ export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWeb
 
         {/* Actions */}
         <div className="flex items-center flex-wrap gap-2">
+          <Link
+            href="/chat"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-blue-50 hover:bg-blue-100 border border-blue-200 text-xs font-semibold text-blue-700 transition-colors shadow-2xs cursor-pointer"
+            title="AI 에이전트 전용 챗 워크스페이스"
+          >
+            <Bot className="w-3.5 h-3.5 text-blue-600" />
+            <span>AI 챗</span>
+          </Link>
 
           {onOpenSources && (
             <button
@@ -193,6 +216,20 @@ export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWeb
             <RefreshCw className={`w-3.5 h-3.5 ${isCollecting ? 'animate-spin' : ''}`} />
             <span>{isCollecting ? '수집 중...' : '즉시 수집'}</span>
           </button>
+
+          {/* Command Palette button */}
+          <button
+            onClick={() => setShowPalette(true)}
+            type="button"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 transition-colors shadow-xs cursor-pointer"
+            title="명령어 검색 및 단축키 팔레트 (⌘K)"
+          >
+            <Command className="w-3.5 h-3.5 text-slate-500" />
+            <span className="hidden sm:inline font-mono text-[11px] text-slate-500">⌘K</span>
+          </button>
+
+          {/* Theme Toggle */}
+          <ThemeToggle />
         </div>
       </div>
 
@@ -248,6 +285,15 @@ export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWeb
           </div>
         </div>
       )}
+
+      {/* Command Palette Modal */}
+      <CommandPalette
+        isOpen={showPalette}
+        onClose={() => setShowPalette(false)}
+        onOpenSources={onOpenSources}
+        onOpenMcp={onOpenMcp}
+        onTriggerCollect={handleCollect}
+      />
     </header>
   );
 }

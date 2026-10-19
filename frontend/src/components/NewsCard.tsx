@@ -3,12 +3,15 @@
 import React from 'react';
 import { ExternalLink, Star, Clock, Bookmark, MessageSquare, ArrowUpRight } from 'lucide-react';
 import { NewsItem } from '@/types/news';
+import HandoverCtaButton from './chat/HandoverCtaButton';
 
 interface NewsCardProps {
   item: NewsItem;
   onSelect: (item: NewsItem) => void;
   isBookmarked: boolean;
   onToggleBookmark: (item: NewsItem, e: React.MouseEvent) => void;
+  onHandoverToChat?: (item: NewsItem, e: React.MouseEvent) => void;
+  isFocused?: boolean;
 }
 
 const CATEGORY_NAMES: Record<string, string> = {
@@ -28,7 +31,14 @@ const SOURCE_NAMES: Record<string, string> = {
   rss: 'Blog'
 };
 
-export default function NewsCard({ item, onSelect, isBookmarked, onToggleBookmark }: NewsCardProps) {
+export default function NewsCard({
+  item,
+  onSelect,
+  isBookmarked,
+  onToggleBookmark,
+  onHandoverToChat,
+  isFocused = false,
+}: NewsCardProps) {
   const catLabel = CATEGORY_NAMES[item.category] || item.category;
   const sourceName = SOURCE_NAMES[item.source] || item.source;
 
@@ -48,7 +58,10 @@ export default function NewsCard({ item, onSelect, isBookmarked, onToggleBookmar
   return (
     <article
       onClick={() => onSelect(item)}
-      className="group rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md p-4 transition-all duration-150 flex flex-col justify-between cursor-pointer"
+      data-focused={isFocused ? 'true' : undefined}
+      className={`group rounded-lg bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#30363d] hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md p-4 transition-all duration-150 flex flex-col justify-between cursor-pointer ${
+        isFocused ? 'ring-2 ring-blue-500 dark:ring-blue-400 border-blue-500 shadow-md' : ''
+      }`}
     >
       <div>
         {/* Top Metadata & Actions */}
@@ -154,16 +167,23 @@ export default function NewsCard({ item, onSelect, isBookmarked, onToggleBookmar
             </span>
           </div>
 
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="text-[11px] text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors font-medium"
-          >
-            <span>원문</span>
-            <ArrowUpRight className="w-3 h-3" />
-          </a>
+          <div className="flex items-center gap-2">
+            <HandoverCtaButton
+              item={item}
+              variant="card-compact"
+              onHandoverComplete={onHandoverToChat ? () => onHandoverToChat(item, {} as any) : undefined}
+            />
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-[11px] text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors font-medium"
+            >
+              <span>원문</span>
+              <ArrowUpRight className="w-3 h-3" />
+            </a>
+          </div>
         </div>
       </div>
     </article>

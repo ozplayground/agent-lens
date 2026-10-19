@@ -82,5 +82,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
-*.swo
-*~
+# PNPM store
+.pnpm-store/
+frontend/.pnpm-store/

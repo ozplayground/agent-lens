@@ -38,7 +38,7 @@ _json_data = load_json_config()
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = _json_data.get("app", {}).get("project_name", "AgentLens")
-    VERSION: str = _json_data.get("app", {}).get("version", "0.1.0")
+    VERSION: str = _json_data.get("app", {}).get("version", "0.2.0")
     DATABASE_URL: str = _json_data.get("app", {}).get("database_url", "sqlite+aiosqlite:///./agentlens.db")
     CRAWL_SCHEDULE_HOURS: str = ",".join(str(h) for h in _json_data.get("scheduler", {}).get("crawl_hours", [0, 6, 12, 18]))
     CRAWL_TIMEZONE: str = _json_data.get("scheduler", {}).get("timezone", "UTC")
@@ -47,14 +47,26 @@ class Settings(BaseSettings):
 
     # LLM Settings from config.json or environment
     LLM_PROVIDER: str = _json_data.get("llm", {}).get("provider", "auto")
+    ANTHROPIC_API_KEY: str = _json_data.get("llm", {}).get("anthropic_api_key", "")
+    ANTHROPIC_MODEL: str = _json_data.get("llm", {}).get("anthropic_model", "claude-3-5-sonnet-20241022")
     GEMINI_API_KEY: str = _json_data.get("llm", {}).get("gemini_api_key", "")
     GEMINI_MODEL: str = _json_data.get("llm", {}).get("gemini_model", "gemini-3.5-flash-lite")
     OPENAI_API_KEY: str = _json_data.get("llm", {}).get("openai_api_key", "")
     OPENAI_MODEL: str = _json_data.get("llm", {}).get("openai_model", "gpt-4o-mini")
     OLLAMA_BASE_URL: str = _json_data.get("llm", {}).get("ollama_base_url", "http://localhost:11434")
     OLLAMA_MODEL: str = _json_data.get("llm", {}).get("ollama_model", "llama3.2:latest")
+    ALLOW_MOCK_FALLBACK: bool = bool(_json_data.get("llm", {}).get("allow_mock_fallback", True))
+    TESTING: bool = False
     QUALITY_CUTOFF_SCORE: float = float(_json_data.get("llm", {}).get("quality_cutoff_score", 5.0))
     HIGH_SIGNAL_THRESHOLD: float = float(_json_data.get("llm", {}).get("high_signal_threshold", 7.8))
+
+    # Chat & Session Settings
+    CHAT_SESSION_MAX_LIMIT: int = int(_json_data.get("chat", {}).get("max_session_limit", 30))
+    CHAT_HISTORY_MAX_TURNS: int = int(_json_data.get("chat", {}).get("max_history_turns", 10))
+    CHAT_HISTORY_MAX_TOKENS: int = int(_json_data.get("chat", {}).get("max_history_tokens", 3000))
+    SCRAPER_TIMEOUT_SECONDS: float = float(_json_data.get("scraper", {}).get("timeout_seconds", 5.0))
+    AGENTIC_SEARCH_MAX_QUERIES: int = int(_json_data.get("search", {}).get("max_queries", 2))
+
 
     # Briefing & Export Settings
     BRIEFING_TITLE: str = _json_data.get("briefing", {}).get("title", "오늘의 AI 브리핑")
@@ -75,6 +87,10 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = bool(_json_data.get("briefing", {}).get("email", {}).get("use_tls", True))
     EMAIL_AUTO_SEND: bool = bool(_json_data.get("briefing", {}).get("email", {}).get("auto_send", False))
 
+    # Security & Environment
+    SECRET_KEY: str = _json_data.get("security", {}).get("secret_key", "agentlens-default-secret-key-32chars-minimum-safe-value")
+    ENVIRONMENT: str = "development"
+
     # Webhooks
     SLACK_WEBHOOK_URL: str = _json_data.get("webhooks", {}).get("slack_webhook_url", "")
     DISCORD_WEBHOOK_URL: str = _json_data.get("webhooks", {}).get("discord_webhook_url", "")
@@ -88,16 +104,31 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def merge_json_and_env(self):
         llm = _json_data.get("llm", {})
+        if not self.ANTHROPIC_API_KEY:
+            self.ANTHROPIC_API_KEY = llm.get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY", "")
+        if not self.ANTHROPIC_MODEL:
+            self.ANTHROPIC_MODEL = llm.get("anthropic_model") or os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
         if not self.GEMINI_API_KEY:
             self.GEMINI_API_KEY = llm.get("gemini_api_key") or os.environ.get("GEMINI_API_KEY", "")
         if (not self.GEMINI_MODEL or self.GEMINI_MODEL in ["", "gemini-2.0-flash", "gemini-flash-latest"]):
             self.GEMINI_MODEL = llm.get("gemini_model") or os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
         if not self.OPENAI_API_KEY:
             self.OPENAI_API_KEY = llm.get("openai_api_key") or os.environ.get("OPENAI_API_KEY", "")
+        if "ALLOW_MOCK_FALLBACK" in os.environ:
+            self.ALLOW_MOCK_FALLBACK = os.environ.get("ALLOW_MOCK_FALLBACK", "").lower() in ("true", "1", "yes")
+        elif "allow_mock_fallback" in llm:
+            self.ALLOW_MOCK_FALLBACK = bool(llm.get("allow_mock_fallback"))
+        if "TESTING" in os.environ:
+            self.TESTING = os.environ.get("TESTING", "").lower() in ("true", "1", "yes")
         if not self.SLACK_WEBHOOK_URL and _json_data.get("webhooks", {}).get("slack_webhook_url"):
+
             self.SLACK_WEBHOOK_URL = _json_data.get("webhooks", {}).get("slack_webhook_url") or os.environ.get("SLACK_WEBHOOK_URL", "")
         if not self.DISCORD_WEBHOOK_URL and _json_data.get("webhooks", {}).get("discord_webhook_url"):
             self.DISCORD_WEBHOOK_URL = _json_data.get("webhooks", {}).get("discord_webhook_url") or os.environ.get("DISCORD_WEBHOOK_URL", "")
+        if not self.SECRET_KEY:
+            self.SECRET_KEY = _json_data.get("security", {}).get("secret_key") or os.environ.get("SECRET_KEY", "agentlens-default-secret-key-32chars-minimum-safe-value")
+        if self.ENVIRONMENT == "production" and len(self.SECRET_KEY) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters in production mode.")
         return self
 
     @property

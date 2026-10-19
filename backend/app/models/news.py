@@ -24,6 +24,10 @@ class NewsItem(Base):
     raw_score = Column(Integer, default=0)
     comments_count = Column(Integer, default=0)
     hotness_score = Column(Float, default=0.0, index=True)
+    # Scraped full content and timestamp for deep research workflow (v2.4)
+    full_content = Column(Text, nullable=True)
+    scraped_at = Column(DateTime, nullable=True, index=True)
+
     published_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     dedup_hash = Column(String(64), unique=True, index=True, nullable=False)

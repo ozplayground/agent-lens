@@ -22,6 +22,7 @@ if "sqlite" in settings.DATABASE_URL:
         cursor.execute("PRAGMA synchronous=NORMAL;")
         cursor.execute("PRAGMA cache_size=-64000;")
         cursor.execute("PRAGMA busy_timeout=30000;")
+        cursor.execute("PRAGMA foreign_keys = ON;")
         cursor.close()
 
 AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
@@ -37,3 +38,36 @@ async def get_db():
             raise
         finally:
             await session.close()
+
+
+from sqlalchemy import text
+
+async def ensure_db_schema():
+    """Ensure newly added columns exist in SQLite database if created prior to v2.4."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        def _check_sqlite_cols(connection):
+            try:
+                res = connection.execute(text("PRAGMA table_info(news_items);")).fetchall()
+                columns = [row[1] for row in res]
+                if columns:
+                    if "full_content" not in columns:
+                        connection.execute(text("ALTER TABLE news_items ADD COLUMN full_content TEXT;"))
+                    if "scraped_at" not in columns:
+                        connection.execute(text("ALTER TABLE news_items ADD COLUMN scraped_at DATETIME;"))
+                    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_news_items_scraped_at ON news_items (scraped_at);"))
+            except Exception:
+                pass
+
+            try:
+                res_m = connection.execute(text("PRAGMA table_info(chat_messages);")).fetchall()
+                msg_columns = [row[1] for row in res_m]
+                if msg_columns:
+                    if "model_tier" not in msg_columns:
+                        connection.execute(text("ALTER TABLE chat_messages ADD COLUMN model_tier VARCHAR(20);"))
+                    if "usage_json" not in msg_columns:
+                        connection.execute(text("ALTER TABLE chat_messages ADD COLUMN usage_json TEXT;"))
+            except Exception:
+                pass
+        await conn.run_sync(_check_sqlite_cols)
+

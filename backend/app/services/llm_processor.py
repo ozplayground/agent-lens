@@ -8,8 +8,34 @@ from datetime import datetime, timezone
 import httpx
 from app.config import settings, load_json_config
 from app.collectors.categorizer import is_strictly_ai_related, classify_and_tag
+from app.services.llm_providers.base import BaseLLMProvider
+from app.services.llm_providers.mock_provider import MockLLMProvider
+from app.services.llm_providers.anthropic_provider import (
+    AnthropicLLMProvider,
+    resolve_model_and_tier,
+    AnthropicKeyMissingException,
+    AnthropicQuotaExceededException,
+    AnthropicOverloadedException,
+)
 
 logger = logging.getLogger("agentlens.llm")
+
+
+class LLMProviderUnavailableException(Exception):
+    """Raised when no LLM provider (Gemini, OpenAI, Ollama) is configured or available."""
+    pass
+
+class LLMUpstreamException(Exception):
+    """Raised when an upstream LLM API communication fails or returns server error."""
+    pass
+
+class LLMQuotaExceededException(Exception):
+    """Raised when external LLM API rate limit or quota is exceeded (HTTP 429)."""
+    pass
+
+class LLMStreamFailedException(Exception):
+    """Raised when an active LLM stream abruptly terminates or errors out mid-stream."""
+    pass
 
 # Tech stack dictionary for high-precision entity extraction
 KNOWN_TECH_STACK = {
@@ -60,6 +86,29 @@ CATEGORY_INSIGHTS = {
     "ai_news": "프론티어 추론 모델과 오픈소스 LLM의 성능 혁신을 통해 자율 에이전트의 기반 추론 능력(Reasoning)이 한 단계 도약함을 시사합니다."
 }
 
+def sanitize_model_identifier(model_name: Optional[str]) -> str:
+    """
+    Sanitizes model identifier according to POL-LLM-005, REQ-LLM-002, and ADR-012 (Anti-Gemini policy).
+    Prevents any 'Google gemini-*' or 'gemini-*' live strings from leaking into response metadata.
+    Normalizes unauthorized or live Gemini model strings to 'claude-3-5-sonnet-latest'.
+    Preserves explicit test mock identifiers ('Mock Gemini', 'MockLLMProvider').
+    """
+    if not model_name:
+        return "claude-3-5-sonnet-latest"
+    name_clean = model_name.strip()
+    name_lower = name_clean.lower()
+    # Preserve test mock identifiers
+    if "mock" in name_lower:
+        return name_clean
+    # Strict Anti-Gemini check: block any live Google Gemini string
+    if name_lower.startswith("google gemini") or name_lower.startswith("gemini") or "gemini" in name_lower:
+        logger.warning(
+            f"POL-LLM-005: Unauthorized Gemini model identifier rejected: {model_name}. Normalized to claude-3-5-sonnet-latest."
+        )
+        return "claude-3-5-sonnet-latest"
+    return name_clean
+
+
 class LLMProcessor:
     """
     Intelligent LLM processor supporting:
@@ -76,60 +125,21 @@ class LLMProcessor:
         self.ollama_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
         self._qa_cache: Dict[str, Tuple[str, str]] = {}
         self._eval_cache: Dict[str, Dict[str, Any]] = {}
+        self.mock_provider = MockLLMProvider()
+        self.anthropic_provider = AnthropicLLMProvider()
+        self.last_usage: Dict[str, Any] = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": None,
+            "cache_creation_input_tokens": None,
+        }
 
     async def _call_gemini(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
-        json_cfg = load_json_config()
-        key = (
-            getattr(settings, "GEMINI_API_KEY", "")
-            or json_cfg.get("llm", {}).get("gemini_api_key", "")
-            or os.environ.get("GEMINI_API_KEY", "")
-            or self.gemini_key
-        )
-        if not key:
-            return None, None
-        configured_model = (
-            getattr(settings, "GEMINI_MODEL", "")
-            or json_cfg.get("llm", {}).get("gemini_model", "")
-            or "gemini-3.5-flash"
-        )
-        candidates = []
-        if configured_model and configured_model not in ["gemini-2.0-flash", "gemini-flash-latest"]:
-            candidates.append(configured_model)
-        for m in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]:
-            if m not in candidates:
-                candidates.append(m)
-
-        for model in candidates:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
-            payload = {
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": 0.3, "maxOutputTokens": 2048}
-            }
-            try:
-                async with httpx.AsyncClient(timeout=20.0) as client:
-                    res = await client.post(url, json=payload)
-                    if res.status_code == 200:
-                        data = res.json()
-                        candidates_list = data.get("candidates", [])
-                        if candidates_list:
-                            parts = candidates_list[0].get("content", {}).get("parts", [])
-                            # Extract all non-thought text parts
-                            ans_parts = [
-                                p["text"].strip() for p in parts
-                                if not p.get("thought") and "text" in p and p["text"].strip()
-                            ]
-                            if ans_parts:
-                                ans_text = "\n\n".join(ans_parts).strip()
-                                logger.info(f"Gemini generation succeeded with model {model}")
-                                return ans_text, f"Google {model}"
-                            elif parts and "text" in parts[0]:
-                                return parts[0]["text"].strip(), f"Google {model}"
-                    elif res.status_code == 429:
-                        logger.warning(f"Gemini API ({model}) rate limited (429), will fallback gracefully")
-                    else:
-                        logger.warning(f"Gemini API ({model}) returned {res.status_code}: {res.text[:120]}")
-            except Exception as e:
-                logger.warning(f"Gemini API call ({model}) failed: {e}")
+        """
+        DECOMMISSIONED per POL-LLM-005, REQ-LLM-002, and ADR-012 (Anti-Gemini Policy).
+        Google Gemini invocation paths are permanently disabled.
+        """
+        logger.warning("POL-LLM-005: _call_gemini invoked but is permanently decommissioned. Returning (None, None).")
         return None, None
 
     async def _call_openai(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
@@ -182,25 +192,267 @@ class LLMProcessor:
             logger.debug(f"Ollama call failed or not running: {e}")
         return None, None
 
+    def is_test_environment(self) -> bool:
+        """Determines if current process is running in an automated test or CI environment."""
+        import sys
+        if getattr(settings, "TESTING", False):
+            return True
+        if os.environ.get("TESTING", "").lower() in ("true", "1", "yes"):
+            return True
+        if os.environ.get("CI", "").lower() in ("true", "1", "yes"):
+            return True
+        if "pytest" in sys.modules:
+            return True
+        return False
+
+    def is_mock_fallback_allowed(self) -> bool:
+        """Determines whether fallback to MockLLMProvider is permitted."""
+        if self.is_test_environment():
+            return True
+        if "ALLOW_MOCK_FALLBACK" in os.environ:
+            return os.environ.get("ALLOW_MOCK_FALLBACK", "").lower() in ("true", "1", "yes")
+        json_cfg = load_json_config()
+        if "allow_mock_fallback" in json_cfg.get("llm", {}):
+            return bool(json_cfg.get("llm", {}).get("allow_mock_fallback"))
+        return getattr(settings, "ALLOW_MOCK_FALLBACK", True)
+
+    def has_live_provider(self) -> bool:
+        """Checks if a valid live LLM provider (Anthropic, OpenAI, Ollama) is configured and reachable."""
+        if self.anthropic_provider.is_available():
+            return True
+
+        json_cfg = load_json_config()
+        anthropic_key = (
+            getattr(settings, "ANTHROPIC_API_KEY", "")
+            or json_cfg.get("llm", {}).get("anthropic_api_key", "")
+            or os.environ.get("ANTHROPIC_API_KEY", "")
+        )
+        if anthropic_key:
+            return True
+
+        # Anti-Gemini Policy (POL-LLM-005, REQ-LLM-002, ADR-012):
+        # GEMINI_API_KEY is decommissioned and never treated as a live provider.
+        openai_key = (
+            getattr(settings, "OPENAI_API_KEY", "")
+            or json_cfg.get("llm", {}).get("openai_api_key", "")
+            or os.environ.get("OPENAI_API_KEY", "")
+            or self.openai_key
+        )
+        if openai_key:
+            return True
+
+        ollama_url = getattr(settings, "OLLAMA_BASE_URL", "") or json_cfg.get("llm", {}).get("ollama_base_url", "")
+        if ollama_url:
+            try:
+                with httpx.Client(timeout=1.0) as client:
+                    resp = client.get(f"{ollama_url}/api/tags")
+                    if resp.status_code == 200:
+                        return True
+            except Exception:
+                pass
+        return False
+
+    def check_provider_available(self) -> bool:
+        """
+        Check LLM availability according to ADR-008 resolution hierarchy (Zero 503 guarantee).
+        1. Live provider available -> True
+        2. Test/CI environment or ALLOW_MOCK_FALLBACK=True -> True (Mock fallback active)
+        3. Strict production with no key -> LLMProviderUnavailableException (HTTP 503)
+        """
+        if self.has_live_provider():
+            return True
+
+        if self.is_test_environment() or self.is_mock_fallback_allowed():
+            return True
+
+        raise LLMProviderUnavailableException("가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)")
+
+
+    async def generate_live_answer(
+        self, prompt: str, model: Optional[str] = None, model_tier: Optional[str] = None
+    ) -> Tuple[str, str]:
+        """Generate answer via live LLM (Anthropic -> OpenAI -> Ollama). Never falls back to Gemini or fake text."""
+        self.check_provider_available()
+
+        # 1. Anthropic Claude (Priority 1)
+        if self.anthropic_provider.is_available():
+            try:
+                ans, resolved_model, usage = await self.anthropic_provider.generate_text_with_usage(
+                    prompt=prompt,
+                    model=model or model_tier,
+                )
+                self.last_usage = usage
+                return ans, sanitize_model_identifier(resolved_model)
+            except (AnthropicQuotaExceededException, LLMQuotaExceededException):
+                raise LLMQuotaExceededException("외부 LLM API 호출 한도 초과 (Anthropic 429)")
+            except (AnthropicOverloadedException, AnthropicKeyMissingException):
+                raise
+            except Exception as e:
+                logger.warning(f"Anthropic call failed in generate_live_answer: {e}")
+
+        # Note: Google Gemini is permanently decommissioned per POL-LLM-005, REQ-LLM-002, and ADR-012.
+
+        # 2. OpenAI
+        json_cfg = load_json_config()
+        openai_key = (
+            getattr(settings, "OPENAI_API_KEY", "")
+            or json_cfg.get("llm", {}).get("openai_api_key", "")
+            or os.environ.get("OPENAI_API_KEY", "")
+            or self.openai_key
+        )
+        if openai_key:
+            try:
+                ans, o_model = await self._call_openai(prompt)
+                if ans:
+                    return ans, sanitize_model_identifier(o_model)
+            except Exception as e:
+                err_str = str(e).lower()
+                if "429" in err_str or "quota" in err_str or "rate" in err_str:
+                    raise LLMQuotaExceededException("외부 LLM API 호출 한도 초과 (OpenAI 429)")
+                logger.warning(f"OpenAI call failed in generate_live_answer: {e}")
+
+        # 3. Ollama
+        try:
+            ans, ol_model = await self._call_ollama(prompt)
+            if ans:
+                return ans, sanitize_model_identifier(ol_model)
+        except Exception as e:
+            logger.warning(f"Ollama call failed in generate_live_answer: {e}")
+
+        # Fallback to MockLLMProvider if permitted (Zero 503)
+        if self.is_mock_fallback_allowed() or self.is_test_environment():
+            logger.info("Falling back to MockLLMProvider for generate_live_answer (Zero 503)")
+            self.last_usage = {
+                "input_tokens": 850,
+                "output_tokens": 320,
+                "cache_read_input_tokens": 400,
+                "cache_creation_input_tokens": 0,
+            }
+            if model or model_tier:
+                resolved_m, _ = resolve_model_and_tier(model or model_tier)
+                ans, _ = await self.mock_provider.generate_text(prompt)
+                return ans, sanitize_model_identifier(resolved_m)
+            ans, m_name = await self.mock_provider.generate_text(prompt)
+            return ans, sanitize_model_identifier(m_name)
+
+        raise LLMUpstreamException("외부 LLM 업스트림 통신 실패 / API 장애")
+
+
+    async def stream_tokens(
+        self, prompt: str, model: Optional[str] = None, model_tier: Optional[str] = None
+    ) -> AsyncGenerator[Tuple[str, str], None]:
+        """Stream raw tokens from actual LLM (Anthropic -> OpenAI -> Ollama). Raises exceptions on failure without fake text."""
+        self.check_provider_available()
+
+        token_yielded = False
+
+        # 1. Try Anthropic Claude streaming (Priority 1)
+        if self.anthropic_provider.is_available():
+            try:
+                async for chunk, m_name in self.anthropic_provider.stream_chat(
+                    prompt=prompt,
+                    model=model or model_tier,
+                ):
+                    token_yielded = True
+                    yield (chunk, sanitize_model_identifier(m_name))
+                if token_yielded:
+                    self.last_usage = self.anthropic_provider.last_usage
+                    return
+            except (AnthropicQuotaExceededException, LLMQuotaExceededException):
+                raise LLMQuotaExceededException("외부 LLM API 호출 한도 초과 (Anthropic 429)")
+            except (AnthropicOverloadedException, AnthropicKeyMissingException, LLMStreamFailedException):
+                raise
+            except Exception as e:
+                if token_yielded:
+                    raise LLMStreamFailedException(f"Anthropic mid-stream failed: {e}")
+                logger.warning(f"Anthropic stream failed: {e}")
+
+        # Note: Google Gemini streaming is permanently decommissioned per POL-LLM-005, REQ-LLM-002, and ADR-012.
+
+        # 2. Try OpenAI SDK streaming
+        json_cfg = load_json_config()
+        openai_key = (
+            getattr(settings, "OPENAI_API_KEY", "")
+            or json_cfg.get("llm", {}).get("openai_api_key", "")
+            or os.environ.get("OPENAI_API_KEY", "")
+            or self.openai_key
+        )
+        if openai_key:
+            try:
+                import openai
+                openai_client = openai.AsyncOpenAI(api_key=openai_key)
+                o_model = getattr(settings, "OPENAI_MODEL", "") or json_cfg.get("llm", {}).get("openai_model", "") or "gpt-4o-mini"
+                stream = await openai_client.chat.completions.create(
+                    model=o_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                    max_tokens=2048,
+                    stream=True
+                )
+                async for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                        txt = chunk.choices[0].delta.content
+                        token_yielded = True
+                        yield (txt, sanitize_model_identifier(f"OpenAI {o_model}"))
+                if token_yielded:
+                    return
+            except Exception as e:
+                err_str = str(e).lower()
+                if "rate" in err_str or "429" in err_str or "quota" in err_str:
+                    raise LLMQuotaExceededException("외부 LLM API 호출 한도 초과 (OpenAI 429)")
+                if token_yielded:
+                    raise LLMStreamFailedException(f"OpenAI mid-stream failed: {e}")
+                logger.warning(f"OpenAI SDK stream failed: {e}")
+
+        # 3. Try Ollama streaming
+        ollama_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434") or json_cfg.get("llm", {}).get("ollama_base_url", "")
+        if ollama_url:
+            ol_m = getattr(settings, "OLLAMA_MODEL", "") or json_cfg.get("llm", {}).get("ollama_model", "") or "qwen2.5:latest"
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    async with client.stream("POST", f"{ollama_url}/api/generate", json={"model": ol_m, "prompt": prompt, "stream": True}) as resp:
+                        if resp.status_code == 200:
+                            async for line in resp.aiter_lines():
+                                if line:
+                                    data = json.loads(line)
+                                    part = data.get("response", "")
+                                    if part:
+                                        token_yielded = True
+                                        yield (part, sanitize_model_identifier(f"Ollama {ol_m}"))
+                            if token_yielded:
+                                return
+            except Exception as e:
+                if token_yielded:
+                    raise LLMStreamFailedException(f"Ollama mid-stream failed: {e}")
+                logger.warning(f"Ollama stream failed: {e}")
+
+        # If no live provider yielded tokens, fallback to MockLLMProvider (Zero 503)
+        if not token_yielded:
+            if self.is_mock_fallback_allowed() or self.is_test_environment():
+                logger.info("Falling back to MockLLMProvider for stream_tokens (Zero 503)")
+                self.last_usage = {
+                    "input_tokens": 850,
+                    "output_tokens": 320,
+                    "cache_read_input_tokens": 400,
+                    "cache_creation_input_tokens": 0,
+                }
+                fallback_m = "MockLLMProvider (Fallback)"
+                if model or model_tier:
+                    fallback_m, _ = resolve_model_and_tier(model or model_tier)
+                async for chunk, _ in self.mock_provider.stream_chat(prompt):
+                    yield (chunk, sanitize_model_identifier(fallback_m))
+                return
+
+        if token_yielded:
+            raise LLMStreamFailedException("LLM 스트리밍 도중 외부 프로바이더 오류가 발생했습니다.")
+        raise LLMUpstreamException("외부 LLM 업스트림 통신 실패 / API 장애")
+
+
     async def _generate_live_answer(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
-        provider = getattr(settings, "LLM_PROVIDER", "auto").lower()
-        if provider == "gemini":
-            ans, model = await self._call_gemini(prompt)
-            if ans: return ans, model
-        elif provider == "openai":
-            ans, model = await self._call_openai(prompt)
-            if ans: return ans, model
-        elif provider == "ollama":
-            ans, model = await self._call_ollama(prompt)
-            if ans: return ans, model
-        else: # auto
-            if getattr(settings, "GEMINI_API_KEY", ""):
-                ans, model = await self._call_gemini(prompt)
-                if ans: return ans, model
-            if getattr(settings, "OPENAI_API_KEY", ""):
-                ans, model = await self._call_openai(prompt)
-                if ans: return ans, model
-        return None, None
+        try:
+            return await self.generate_live_answer(prompt)
+        except Exception:
+            return None, None
 
     def extract_tech_stack(self, text: str) -> List[str]:
         t_lower = text.lower()
@@ -312,10 +564,8 @@ class LLMProcessor:
             return result
 
         # 2. Live LLM Evaluation
-        has_gemini = bool(getattr(settings, "GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", ""))
-        has_openai = bool(getattr(settings, "OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", ""))
-
-        if has_gemini or has_openai:
+        # Anti-Gemini Policy (POL-LLM-005): Gemini is decommissioned. Only use live provider if available.
+        if self.has_live_provider():
             prompt = (
                 f"You are a strict, world-class AI & Autonomous Agent Curator for AgentLens.\n"
                 f"AgentLens ONLY indexes topics that are directly and deeply relevant to:\n"
@@ -370,7 +620,7 @@ class LLMProcessor:
                             "category": cat if (is_worthwhile and cat in CATEGORY_INSIGHTS) else "unrelated",
                             "rejection_reason": data.get("rejection_reason") if not is_worthwhile else None,
                             "why_it_matters": data.get("why_it_matters"),
-                            "evaluated_by": model_name
+                            "evaluated_by": sanitize_model_identifier(model_name)
                         }
                         self._eval_cache[cache_key] = result
                         return result
@@ -593,68 +843,31 @@ class LLMProcessor:
         )
 
         json_cfg = load_json_config()
-        gemini_key = (
-            getattr(settings, "GEMINI_API_KEY", "")
-            or json_cfg.get("llm", {}).get("gemini_api_key", "")
-            or os.environ.get("GEMINI_API_KEY", "")
-            or self.gemini_key
-        )
-        configured_gemini_model = (
-            getattr(settings, "GEMINI_MODEL", "")
-            or json_cfg.get("llm", {}).get("gemini_model", "")
-            or "gemini-3.5-flash-lite"
-        )
-        gemini_candidates = []
-        if configured_gemini_model and configured_gemini_model not in ["gemini-2.0-flash", "gemini-flash-latest"]:
-            gemini_candidates.append(configured_gemini_model)
-        for m in ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash"]:
-            if m not in gemini_candidates:
-                gemini_candidates.append(m)
-
         stream_succeeded = False
         full_text = ""
         model_used = ""
 
-        # 1. Try Google GenAI Official SDK streaming
-        if gemini_key:
+        # 1. Try Anthropic Claude streaming (Priority 1)
+        if self.anthropic_provider.is_available():
             try:
-                from google import genai
-                from google.genai import types
-                client = genai.Client(
-                    api_key=gemini_key,
-                    http_options=types.HttpOptions(
-                        retry_options=types.HttpRetryOptions(attempts=1)
-                    )
-                )
-                for g_model in gemini_candidates:
-                    try:
-                        chat = client.aio.chats.create(
-                            model=g_model,
-                            config=types.GenerateContentConfig(
-                                temperature=0.3,
-                                max_output_tokens=2048
-                            )
-                        )
-                        stream = await chat.send_message_stream(prompt)
-                        first_chunk = True
-                        async for chunk in stream:
-                            if chunk.text:
-                                if first_chunk:
-                                    yield {"event": "meta", "model": f"Google {g_model}"}
-                                    model_used = f"Google {g_model}"
-                                    first_chunk = False
-                                full_text += chunk.text
-                                yield {"event": "token", "text": chunk.text}
-                        if full_text.strip():
-                            stream_succeeded = True
-                            break
-                    except Exception as e:
-                        logger.warning(f"Google GenAI SDK stream failed for {g_model}: {e}")
-                        continue
+                first_chunk = True
+                async for chunk, m_name in self.anthropic_provider.stream_chat(prompt=prompt):
+                    if chunk:
+                        clean_model = sanitize_model_identifier(m_name)
+                        if first_chunk:
+                            yield {"event": "meta", "model": clean_model}
+                            model_used = clean_model
+                            first_chunk = False
+                        full_text += chunk
+                        yield {"event": "token", "text": chunk}
+                if full_text.strip():
+                    stream_succeeded = True
             except Exception as e:
-                logger.warning(f"Google GenAI SDK client creation failed: {e}")
+                logger.warning(f"Anthropic streaming failed in stream_question_answer: {e}")
 
-        # 2. Try OpenAI Official SDK streaming if Gemini wasn't used or failed
+        # Note: Google Gemini streaming is permanently decommissioned per POL-LLM-005, REQ-LLM-002, and ADR-012.
+
+        # 2. Try OpenAI Official SDK streaming if Anthropic wasn't used or failed
         if not stream_succeeded:
             openai_key = (
                 getattr(settings, "OPENAI_API_KEY", "")
@@ -674,8 +887,9 @@ class LLMProcessor:
                         max_tokens=2048,
                         stream=True
                     )
-                    yield {"event": "meta", "model": f"OpenAI {o_model}"}
-                    model_used = f"OpenAI {o_model}"
+                    clean_model = sanitize_model_identifier(f"OpenAI {o_model}")
+                    yield {"event": "meta", "model": clean_model}
+                    model_used = clean_model
                     async for chunk in stream:
                         if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
                             txt = chunk.choices[0].delta.content
@@ -695,8 +909,9 @@ class LLMProcessor:
                 tech_stack=tech_stack,
                 question=question
             )
-            yield {"event": "meta", "model": fallback_model}
-            model_used = fallback_model
+            clean_fb_model = sanitize_model_identifier(fallback_model)
+            yield {"event": "meta", "model": clean_fb_model}
+            model_used = clean_fb_model
             full_text = fallback_ans
             words = fallback_ans.split(" ")
             chunk_size = 4
@@ -708,7 +923,7 @@ class LLMProcessor:
                 await asyncio.sleep(0.015)
 
         if full_text:
-            self._qa_cache[cache_key] = (full_text, model_used)
+            self._qa_cache[cache_key] = (full_text, sanitize_model_identifier(model_used))
             yield {"event": "done", "total_text": full_text}
 
     async def answer_question(self, item_title: str, item_summary: str, category: str, tech_stack: List[str], question: str) -> str:

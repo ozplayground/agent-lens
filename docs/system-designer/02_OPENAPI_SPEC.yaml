@@ -1,13 +1,513 @@
 openapi: 3.1.0
 info:
   title: AgentLens API
-  version: 2.1.0
-  description: Global AI Agent, Harness & MCP News Curation Intelligence Platform RESTful API Specification
+  version: 0.2.0
+  description: |
+    Global AI Agent, Harness & MCP Vertical News Curation Platform and Dedicated AI Chat / Personal RAG RESTful API Specification
+    (0.2.0 Gemini 무단 폴백 전면 차단, Anthropic Claude 3.5/5.5 전용 고정, Claude Sonnet 5.5 전담 수집 파이프라인 [FUNC-COLL-005] & 프롬프트 캐싱, AI 챗 상단 헤더 & 입력창 듀얼 모델 선택기 [FUNC-CHAT-013: claude-3-5-haiku, claude-3-5-sonnet, claude-3-5-opus], Zero-Leak API 키 보안 거버넌스 [POL-SEC-004], Multi-LLM Provider Resiliency & Mock Fallback Chain [FUNC-SYS-005], Dual-Layer Chat Session Persistence & Multi-turn Continuity [FUNC-CHAT-012], Live Full-Text Scraping & SQLite full_content Caching [FUNC-CHAT-009], Agentic Web Search [FUNC-CHAT-010], 4-Section Structured Engineering Report & Markdown Export [FUNC-CHAT-011, REQ-EXPORT-001], Power User Keyboard Shortcuts & Command Palette [FUNC-NAV-001, FUNC-FEED-007], Zero-Flicker SSR Dark Mode [FUNC-THEME-001], and Local FastMCP Server Integration [FUNC-SYS-004]).
 servers:
   - url: http://localhost:8000
     description: Local Backend Server
 
+tags:
+  - name: Chat
+    description: 전용 AI 챗 워크스페이스, 세션 영속화 및 멀티턴 복원, Mock LLM Fallback 체인 (503 에러 원천 차단), 실시간 전문 스크래핑 & 자율 보충 검색 에이전틱 워크플로우, 4단 구조화 엔지니어링 리포트 및 개인 지식 RAG
+  - name: News
+    description: 기사 피드 조회, 단건 상세, 인라인 Ask AI 및 RSS 내보내기
+  - name: Briefing
+    description: 일일 종합 브리핑 자동 합성, Notion/이메일 발행 및 연동 설정
+  - name: Sources
+    description: 수집 대상 피드/저장소 목록, 신규 등록, 활성화 토글 및 삭제
+  - name: Research
+    description: URL 자동 감지, 신규 소스 발굴 추천 및 자율 딥 리서치 파이프라인
+  - name: Schedule
+    description: 정기 크론 수집 현황, 실시간 진행률, 수동 즉시 수집 및 클린 재수집
+  - name: Trends
+    description: Tech Radar 기술 스택 랭킹, 카테고리 점유율 및 급상승(Surging) 지표
+  - name: Webhook
+    description: Slack Block Kit 및 Discord Rich Embeds 웹훅 발송
+  - name: Stats
+    description: 데이터베이스 누적 아티클, 카테고리 및 출처별 통계
+  - name: Mcp
+    description: FastMCP 서버 정보 및 Claude Desktop / Cursor IDE 도구 연동 가이드
+  - name: System
+    description: 시스템 루트 메타데이터 및 헬스체크
+
 paths:
+  /api/chat/stream:
+    post:
+      summary: 전용 AI 챗 Claude 3-Tier SSE 다중 이벤트 실시간 스트리밍 질의응답 (Server-Sent Events)
+      description: |
+        단일 기사 집중(Scoped Focus) 또는 타깃팅된 전체 뉴스 코퍼스 지식 검색(Global Corpus) 모드를 기반으로
+        자율 에이전틱 리서치 워크플로우를 가동하여 실시간 마크다운 답변을 Server-Sent Events(SSE)로 스트리밍합니다.
+        
+        [Anthropic Claude 3.5/5.5 멀티 모델 라우팅 및 인라인 동적 전환 (FUNC-CHAT-013)]
+        - 사용자의 작업 의도에 맞춘 3-Tier 모델(`claude-3-5-haiku`, `claude-3-5-sonnet`, `claude-3-5-opus`, 기본값: `claude-3-5-sonnet`)을 지원합니다.
+        - 대화 도중 모델을 교체하더라도 세션을 초기화하지 않고 기존 멀티턴 맥락(최대 10턴, 3,000토큰)을 100% 무손실 인계(Zero Context Erasure)합니다.
+        
+        [백엔드 LLM 장애 복원력 및 Mock Provider / Fallback 체인 (FUNC-SYS-005, REQ-LLM-001)]
+        - 사전 가용성 검증(`check_provider_available`):
+          1) 테스트 환경(`TESTING=True` 또는 `PYTEST_CURRENT_TEST` 감지) 시 외부 API 키 유무와 무관하게 즉각 `MockLLMProvider`로 안전 전환되어 503 에러 발생을 원천 차단하고 100% 정상 스트림을 공급합니다.
+          2) 일반 프로덕션 환경에서 API 키가 누락되었더라도 `ALLOW_MOCK_FALLBACK=True` 구성 시 안전한 Mock 스트림으로 폴백합니다.
+          3) 엄격한 프로덕션(`ALLOW_MOCK_FALLBACK=False`) 환경에서만 관리자 조치를 위해 `503 Service Unavailable` (`ERR_CLAUDE_API_KEY_MISSING` / `ERR_ANTHROPIC_KEY_MISSING`)을 반환합니다.
+        
+        [Zero-Leak API 키 보안 거버넌스 및 서버 사이드 격리 (POL-SEC-004)]
+        - 브라우저 클라이언트에 Anthropic API 키를 일체 노출하지 않으며, 백엔드 단독 `.env` 보관 및 FastAPI SSE 프록시 스트리밍으로 통신합니다.
+        
+        [대화 세션 연동 및 자동 영속화 (Session Persistence & Multi-turn Continuity, FUNC-CHAT-012)]
+        - 클라이언트는 요청 페이로드에 `session_id`를 지정하여 대화 세션을 바인딩합니다.
+        - 스트리밍 응답이 완료(`event: done`)되는 즉시, 백엔드는 단일 ACID 트랜잭션 내에서:
+          1) 사용자 질의 메시지(role: 'user', content: question, status: 'completed') INSERT
+          2) AI 어시스턴트 응답 메시지(role: 'assistant', content: answer, sources: sources, status: 'completed', model, latency_ms) INSERT
+          3) 세션의 `updated_at` 타임스탬프 갱신 및 최초 턴 질문 기준 앞 30자 자동 타이틀링(Auto-Titling)을 수행합니다.
+        
+        [에이전틱 워크플로우 및 SSE 다중 이벤트 스트림 프로토콜]
+        1. event: status (StatusPayload)
+           - 단계별 진행 상태를 실시간 통지합니다:
+             - 'extracting_source': 원본 URL 실시간 전문 비동기 스크래핑 (Trafilatura/Readability, 캐시 히트 시 0ms)
+             - 'evaluating_sufficiency': LLM 기반 원본 본문 정보 충실도 자체 평가
+             - 'agentic_searching': 지식 결손(설치법, 비교, 패치) 또는 페이월 차단 감지 시 앵커링 웹 검색 자율 가동 (DuckDuckGo/Tavily)
+             - 'synthesizing': Senior Staff Architect 4단 엔지니어링 리포트 프롬프트 조립 (Claude 프롬프트 캐싱 적용)
+        2. event: sources (SourcesPayload)
+           - 답변 생성에 주입된 원본 소스([1]) 및 외부 보충 출처([S1], [S2]) 목록을 분리하여 선행 전달합니다.
+           - ChatFocusFilter 바인딩 내역 및 기간 자동 완화 여부(is_relaxed)를 포함합니다.
+        3. event: token (TokenPayload)
+           - 실제 Anthropic Claude 모델 또는 MockLLMProvider가 생성한 순수 마크다운 텍스트 토큰을 실시간 스트리밍합니다.
+           - 피상적 2줄 요약 앵무새 답변을 차단하고 4대 섹션 구조화 리포트를 생성합니다.
+        4. event: done (DonePayload)
+           - 스트리밍 완료 통계(session_id, model, model_tier, sources_count, latency_ms, usage)를 전달하고 연결을 종료합니다.
+           - 클라이언트 UI는 스텝 트래커를 접이식 완료 아코디언으로 즉시 축소 전환하고 어시스턴트 카드 푸터에 실제 모델 배지와 레이턴시를 렌더링합니다.
+        5. event: error (StreamErrorPayload)
+           - 스트림 진행 도중 외부 LLM 단절 또는 타임아웃 발생 시 에러 신호를 방출하고 정상 종료합니다.
+      tags: [Chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatStreamRequest'
+      responses:
+        '200':
+          description: 실시간 SSE 다중 이벤트 스트림 수립 성공 (text/event-stream) - 실제 Claude 스트림 또는 Mock Fallback 스트림
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events 다중 이벤트 스트림 (status, sources, token, done, error)
+              examples:
+                live_claude_stream:
+                  summary: 실제 Claude 3.5 Sonnet 스트리밍 응답 예시
+                  value: |
+                    event: status
+                    data: {"step":"extracting_source","label":"🌐 원본 소스 본문 추출 중 (Trafilatura)...","timestamp":"2026-10-19T09:40:01Z","progress":20}
+
+                    event: status
+                    data: {"step":"evaluating_sufficiency","label":"🧠 본문 정보 충실도 분석 중...","timestamp":"2026-10-19T09:40:02Z","progress":45}
+
+                    event: status
+                    data: {"step":"agentic_searching","label":"🔍 보충 기술 문서 자율 검색 중...","timestamp":"2026-10-19T09:40:03Z","progress":65,"query":"LangGraph v0.3 install pip python","sources_found":2}
+
+                    event: status
+                    data: {"step":"synthesizing","label":"📝 심층 엔지니어링 리포트 종합 중 (Sonnet 5.5)...","timestamp":"2026-10-19T09:40:04Z","progress":85}
+
+                    event: sources
+                    data: {"sources":[{"index":1,"type":"primary","id":42,"title":"LangGraph v0.3 Release Notes","url":"https://github.com/langchain-ai/langgraph","source":"github","category":"agent_tech","quality_score":9.2,"domain":"github.com"},{"index":"S1","type":"supplementary","id":null,"title":"LangGraph Installation & Quickstart Guide","url":"https://langchain-ai.github.io/langgraph/how-tos/installation/","source":"web_search","category":null,"quality_score":null,"domain":"langchain-ai.github.io"}],"applied_filters":null,"is_relaxed":false,"primary_count":1,"supplementary_count":1}
+
+                    event: token
+                    data: {"token":"## 1. 핵심 아키텍처 및 동작 원리\n\n"}
+
+                    event: token
+                    data: {"token":"LangGraph v0.3은 분산 상태 머신(State Machine) 그래프를 기반으로..."}
+
+                    event: done
+                    data: {"done":true,"session_id":"7b6a48f2-2973-45f6-8c46-9562725b821a","model":"claude-3-5-sonnet-latest","model_tier":"sonnet","sources_count":2,"primary_count":1,"supplementary_count":1,"latency_ms":642,"usage":{"input_tokens":1250,"output_tokens":840,"cache_read_input_tokens":2500,"cache_creation_input_tokens":0}}
+                mock_fallback_stream:
+                  summary: 테스트/키 미등록 시 Mock LLM Provider 폴백 응답 예시 (Zero 503)
+                  value: |
+                    event: status
+                    data: {"step":"extracting_source","label":"🌐 원본 소스 본문 추출 중 (Mock Fallback)...","timestamp":"2026-10-19T09:40:01Z","progress":20}
+
+                    event: status
+                    data: {"step":"synthesizing","label":"📝 Mock 엔지니어링 리포트 종합 중...","timestamp":"2026-10-19T09:40:02Z","progress":85}
+
+                    event: sources
+                    data: {"sources":[{"index":1,"type":"primary","id":42,"title":"LangGraph v0.3 Mock Source","url":"https://example.com/mock","source":"github","category":"agent_tech","quality_score":8.5,"domain":"example.com"}],"applied_filters":null,"is_relaxed":false,"primary_count":1,"supplementary_count":0}
+
+                    event: token
+                    data: {"token":"## 1. 핵심 아키텍처 및 동작 원리 (Mock Fallback)\n\n본 응답은 테스트 및 Mock Fallback 체인에 의해 생성된 엔지니어링 분석 리포트입니다.\n\n## 2. 주요 기능 및 코드 구현 예시\n\n```python\n# Mock Code Example\nimport langgraph\nprint('AgentLens Mock Fallback Active')\n```\n\n## 3. 기존 기술 대비 차별점 및 벤치마크\n\n- 테스트 환경 503 에러 원천 차단 및 무중단 TDD 스트리밍 보장\n\n## 4. 실무 도입 시 고려사항 및 트레이드오프\n\n- 프로덕션 배포 시 유효한 ANTHROPIC_API_KEY 주입 권장\n"}
+
+                    event: done
+                    data: {"done":true,"session_id":"7b6a48f2-2973-45f6-8c46-9562725b821a","model":"mock-provider","model_tier":"sonnet","sources_count":1,"primary_count":1,"supplementary_count":0,"latency_ms":120}
+        '400':
+          description: 유효하지 않은 요청 파라미터 (빈 질문 ERR_CHAT_PAYLOAD_EMPTY, 2,000자 초과 ERR_CHAT_PAYLOAD_TOO_LARGE, 지원하지 않는 스코프 ERR_INVALID_SCOPE_PARAM, 미지원 모델 티어 ERR_INVALID_MODEL_TIER 등)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Scoped 모드에서 지정된 source_id 기사를 찾을 수 없음 (ERR_HANDOVER_SOURCE_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Anthropic Claude TPM/RPM 호출 한도 초과 (ERR_CLAUDE_QUOTA_EXCEEDED, ERR_ANTHROPIC_RATE_LIMIT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '499':
+          description: 클라이언트 요청 취소 또는 모델 전환 등으로 진행 중 스트림 중단 (ERR_STREAM_ABORTED_BY_USER)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: 외부 LLM 업스트림 통신 실패 또는 외부 웹 검색 실패 (ERR_LLM_UPSTREAM_FAILED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 엄격 프로덕션 환경에서 Anthropic API 키 미설정(ERR_CLAUDE_API_KEY_MISSING) 또는 Anthropic 서버 과부하(ERR_CLAUDE_OVERLOADED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: 원본 스크래핑 또는 스트리밍 백엔드 응답 타임아웃 (ERR_CHAT_STREAM_TIMEOUT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/chat/query:
+    post:
+      summary: 전용 AI 챗 Claude 3-Tier 동기식 단건 질의응답 (Non-streaming)
+      description: |
+        스트리밍 없이 단일 JSON 응답으로 질문에 대한 Claude 모델 답변 및 인용 출처 목록을 반환합니다.
+        3-Tier 모델(`claude-3-5-haiku`, `claude-3-5-sonnet`, `claude-3-5-opus`) 선택 및 토큰 소비 메타데이터(usage)를 제공합니다.
+        포커스 필터(ChatFocusFilter: 카테고리, 기간, 정렬, 고신호 한정)가 RAG 검색 쿼리에 동적으로 바인딩됩니다.
+        REST 클라이언트, CLI 도구, 자동화 테스트 및 배치 작업에 적합합니다.
+        
+        [Mock Provider Fallback (FUNC-SYS-005)]
+        테스트 환경(`TESTING=True`, `pytest`) 또는 `ALLOW_MOCK_FALLBACK=True` 설정 시, 외부 API 키 부재 시에도 503 에러 없이 200 OK 상태로 Mock 4단 리포트 JSON을 정상 반환합니다.
+      tags: [Chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatQueryRequest'
+      responses:
+        '200':
+          description: AI 답변 및 인용 출처 반환 성공 (실제 Claude 모델 답변 또는 Mock Fallback 답변)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatQueryResponse'
+        '400':
+          description: 유효하지 않은 요청 파라미터 (ERR_CHAT_PAYLOAD_EMPTY, ERR_CHAT_PAYLOAD_TOO_LARGE, ERR_INVALID_SCOPE_PARAM, ERR_INVALID_MODEL_TIER)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Scoped 모드에서 대상 기사를 찾을 수 없음 (ERR_HANDOVER_SOURCE_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Claude API 호출 한도 초과 (ERR_CLAUDE_QUOTA_EXCEEDED, ERR_ANTHROPIC_RATE_LIMIT)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: 외부 LLM 업스트림 통신 실패 (ERR_LLM_UPSTREAM_FAILED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 엄격 프로덕션 환경에서 Anthropic API 키 미설정 (ERR_CLAUDE_API_KEY_MISSING) 또는 과부하 (ERR_CLAUDE_OVERLOADED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 서버 내부 오류 (ERR_SERVER_INTERNAL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/chat/sources/{source_id}:
+    get:
+      summary: 컨텍스트 기사 메타데이터 및 상세 정보 조회
+      description: |
+        뉴스 피드/상세 모달에서 전용 챗으로의 컨텍스트 핸드오버(Context Handover) 시 활성 기사 칩을 생성하거나,
+        답변 내 인라인 인용 뱃지([N]) 호버/탭 시 출처 뉴스 프리뷰 팝오버를 렌더링하기 위한 기사 상세 메타데이터를 조회합니다.
+      tags: [Chat]
+      parameters:
+        - name: source_id
+          in: path
+          required: true
+          description: 조회 대상 뉴스 기사 고유 ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 기사 상세 메타데이터 반환 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSourceDetailResponse'
+        '404':
+          description: 대상 기사를 찾을 수 없음 (ERR_HANDOVER_SOURCE_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/chat/search:
+    get:
+      summary: 코퍼스 지식 검색 프리뷰 (FTS5 + BM25 + Quality 스코어링 + Focus Filter)
+      description: |
+        LLM 답변 생성 없이 SQLite FTS5 역색인 검색과 하이브리드 RAG 랭킹 공식
+        (BM25 50% + Quality Score 30% + Recency 20%)을 적용하여
+        매칭되는 고신호 기사 청크 목록을 사전 검색/프리뷰합니다.
+        카테고리, 기간 범위(time_range), 정렬 기준(sort), 고신호 한정(high_signal_only) 파라미터를 지원합니다.
+      tags: [Chat]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: 검색 질의 키워드
+          schema:
+            type: string
+            minLength: 2
+        - name: top_k
+          in: query
+          required: false
+          description: 반환할 상위 청크 수 (기본값 5, 최대 20)
+          schema:
+            type: integer
+            default: 5
+            minimum: 1
+            maximum: 20
+        - name: min_quality
+          in: query
+          required: false
+          description: 최소 품질 점수 필터 (기본값 5.0, 노이즈 컷오프)
+          schema:
+            type: number
+            default: 5.0
+            minimum: 1.0
+            maximum: 10.0
+        - name: category
+          in: query
+          required: false
+          description: 특정 카테고리 한정 필터
+          schema:
+            type: string
+            enum: [all, harness, mcp_plugins_skills, agent_tech, ai_news]
+            default: all
+        - name: time_range
+          in: query
+          required: false
+          description: 수집 소식 기간 범위 필터 (24h, 7d, 30d, all)
+          schema:
+            type: string
+            enum: [all, 24h, 7d, 30d]
+            default: all
+        - name: sort
+          in: query
+          required: false
+          description: 정렬 및 랭킹 우선순위 (hot, latest, quality)
+          schema:
+            type: string
+            enum: [hot, latest, quality]
+            default: hot
+        - name: high_signal_only
+          in: query
+          required: false
+          description: 고신호 (품질점수 7.8 이상 Must-Read) 소식 한정 여부
+          schema:
+            type: boolean
+            default: false
+        - name: source
+          in: query
+          required: false
+          description: 특정 출처 한정 필터
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 매칭된 지식 청크 프리뷰 목록 반환
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSearchResponse'
+        '400':
+          description: 유효하지 않은 검색어 (2자 미만 등)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 검색 엔진 내부 오류
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/chat/sessions:
+    get:
+      summary: 대화 세션 목록 조회 (List Sessions)
+      description: |
+        데이터베이스에 영속화된 대화 세션 목록을 최근 활동순(`updated_at DESC`)으로 정렬하여 조회합니다.
+        FIFO 보존 한도(최대 30개)에 따라 최근 세션 목록을 반환하며, 좌측 히스토리 사이드바 및 모바일 드로어 렌더링에 사용됩니다.
+      tags: [Chat]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: 반환할 최대 세션 수 (기본값 30, 최대 50)
+          schema:
+            type: integer
+            default: 30
+            minimum: 1
+            maximum: 50
+        - name: offset
+          in: query
+          required: false
+          description: 페이징 오프셋
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: 최근 대화 세션 요약 목록 반환 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatSessionSummary'
+        '500':
+          description: 서버 내부 오류
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: 대화 세션 생성 또는 업서트 (Create or Upsert Session)
+      description: |
+        새로운 대화 세션을 생성하거나 오프라인 동기화/메시지 배치를 업서트합니다.
+        신규 세션 생성으로 전체 세션 수가 30개를 초과할 경우, `updated_at`이 가장 오래된 세션을 자동으로 FIFO 영구 축출(Auto-Eviction)합니다.
+      tags: [Chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatSessionCreateRequest'
+      responses:
+        '201':
+          description: 대화 세션 생성 또는 업서트 완료
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionDetail'
+        '400':
+          description: 유효하지 않은 요청 데이터 (UUID 포맷 오류 등)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 세션 저장 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/chat/sessions/{session_id}:
+    get:
+      summary: 대화 세션 상세 및 전체 메시지 이력 조회 (Get Session Detail)
+      description: |
+        지정된 `session_id`에 해당하는 세션 메타데이터(스코프 모드, Scoped 기사 메타데이터, 포커스 필터)와
+        시간순(`created_at ASC`)으로 정렬된 전체 대화 메시지 목록을 조회합니다.
+        사이드바에서 과거 세션 카드를 클릭하여 100% 완전 복원(Full Context Hydration, [FUNC-CHAT-012])할 때 사용됩니다.
+      tags: [Chat]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: 조회할 대화 세션 UUID v4
+          schema:
+            type: string
+            format: uuid
+            example: 7b6a48f2-2973-45f6-8c46-9562725b821a
+      responses:
+        '200':
+          description: 세션 상세 및 정렬된 대화 메시지 목록 반환 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionDetail'
+        '404':
+          description: 요청한 세션을 찾을 수 없음 (ERR_SESSION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 서버 내부 오류
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: 대화 세션 및 연관 메시지 원자적 CASCADE 영구 삭제 (Delete Session)
+      description: |
+        지정된 `session_id`에 해당하는 대화 세션을 삭제합니다.
+        데이터베이스 외래키 `ON DELETE CASCADE` 제약조건에 의해 해당 세션에 속한 모든 `chat_messages` 레코드가 원자적으로 동시 영구 삭제됩니다.
+      tags: [Chat]
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: 삭제할 대화 세션 UUID v4
+          schema:
+            type: string
+            format: uuid
+            example: 7b6a48f2-2973-45f6-8c46-9562725b821a
+      responses:
+        '200':
+          description: 대화 세션 및 하위 메시지 삭제 완료
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '404':
+          description: 대상 세션을 찾을 수 없음 (ERR_SESSION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 세션 삭제 트랜잭션 실패 (ERR_SESSION_DELETE_FAILED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/news:
     get:
       summary: 뉴스 피드 목록 다차원 필터링 및 페이징 조회
@@ -670,6 +1170,918 @@ paths:
 
 components:
   schemas:
+    ChatFocusFilter:
+      type: object
+      description: 수집 소식 타깃팅 포커스 필터 조건 (Focus Mode)
+      properties:
+        category:
+          type: string
+          enum: [all, harness, mcp_plugins_skills, agent_tech, ai_news]
+          default: all
+          description: 소식 카테고리 필터
+          example: mcp_plugins_skills
+        time_range:
+          type: string
+          enum: [all, 24h, 7d, 30d]
+          default: all
+          description: 수집 소식 기간 범위 필터
+          example: 7d
+        sort:
+          type: string
+          enum: [hot, latest, quality]
+          default: hot
+          description: 정렬 및 우선순위 기준 (hot 하이브리드 RAG 점수, latest 최신순, quality 품질 점수순)
+          example: hot
+        high_signal_only:
+          type: boolean
+          default: false
+          description: 고신호 (품질점수 7.8 이상 Must-Read) 소식 한정 여부
+          example: false
+
+    ChatMessageHistory:
+      type: object
+      description: 이전 대화 턴 히스토리
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system]
+          example: user
+        content:
+          type: string
+          example: 이전 질의응답 내용입니다.
+      required: [role, content]
+
+    ChatStreamRequest:
+      type: object
+      description: 전용 AI 챗 실시간 스트리밍 질의 페이로드
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: 사용자 질문 프롬프트 본문
+          example: 최근 공개된 SWE-bench 평가 하네스의 주요 변경 사항은?
+        model:
+          type: string
+          enum: [claude-3-5-haiku, claude-3-5-sonnet, claude-3-5-opus]
+          default: claude-3-5-sonnet
+          description: Anthropic Claude 3.5/5.5 3-Tier 모델 식별자 (⚡ Haiku 5.5, 🎯 Sonnet 5.5 (기본값), 🧠 Opus 5.5). 미지정 시 기본값 `claude-3-5-sonnet` 적용.
+          example: claude-3-5-sonnet
+        scope:
+          type: string
+          enum: [scoped, global]
+          default: global
+          description: 검색 스코프 모드 (scoped 단일 기사 격리 / global 전체 코퍼스 지식 검색)
+          example: global
+        source_id:
+          type: integer
+          nullable: true
+          description: Scoped 모드 시 컨텍스트로 주입할 대상 기사 고유 ID
+          example: 42
+        session_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 대화 세션 식별자 (UUID v4). 지정된 경우 해당 세션에 사용자 질문과 어시스턴트 완료 답변이 자동으로 트랜잭션 영속화됩니다.
+          example: 7b6a48f2-2973-45f6-8c46-9562725b821a
+        history:
+          type: array
+          description: 멀티턴 대화 연속성 보존을 위한 이전 대화 이력 목록 (최근 최대 10턴/20개 메시지 슬라이딩 윈도우)
+          items:
+            $ref: '#/components/schemas/ChatMessageHistory'
+        top_k:
+          type: integer
+          default: 5
+          minimum: 1
+          maximum: 10
+          description: Global 모드 시 RAG 검색으로 주입할 상위 아티클 수
+          example: 5
+        filters:
+          $ref: '#/components/schemas/ChatFocusFilter'
+          nullable: true
+          description: 수집 소식 타깃팅 포커스 필터 (카테고리, 기간, 정렬, 고신호 한정)
+      required: [question]
+
+    ChatSessionSummary:
+      type: object
+      description: 대화 세션 요약 메타데이터 (히스토리 사이드바 및 모바일 드로어 렌더링용)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 대화 세션 고유 식별자 (UUID v4)
+          example: 7b6a48f2-2973-45f6-8c46-9562725b821a
+        title:
+          type: string
+          maxLength: 100
+          description: 세션 제목 (첫 질문 앞 30자 자동 타이틀링 또는 사용자 지정)
+          example: LangGraph v0.3 Functional API 설명
+        created_at:
+          type: string
+          format: date-time
+          description: 세션 최초 생성 일시 (ISO 8601 UTC)
+          example: '2026-09-28T08:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: 마지막 질의 및 수정 일시 (ISO 8601 UTC, 정렬 인덱스)
+          example: '2026-09-28T08:15:30Z'
+        scope_mode:
+          type: string
+          enum: [scoped, global]
+          description: 검색 스코프 모드
+          example: scoped
+        active_source_id:
+          type: integer
+          nullable: true
+          description: Scoped 모드 기사 ID (news_items.id 외래키)
+          example: 42
+        message_count:
+          type: integer
+          description: 세션 내 누적 메시지 총 건수
+          example: 4
+        last_message_preview:
+          type: string
+          nullable: true
+          description: 마지막 메시지 본문 미리보기 (최대 100자)
+          example: '## 1. 핵심 아키텍처 및 동작 원리...'
+        active_filters:
+          $ref: '#/components/schemas/ChatFocusFilter'
+          nullable: true
+          description: Global 모드 시 적용된 타깃 포커스 필터
+      required: [id, title, created_at, updated_at, scope_mode, message_count]
+
+    ChatMessageItem:
+      type: object
+      description: 개별 대화 턴 메시지 엔티티
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 메시지 고유 식별자 (UUID v4)
+          example: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
+        session_id:
+          type: string
+          format: uuid
+          description: 소속 세션 UUID v4 (외래키, ON DELETE CASCADE)
+          example: 7b6a48f2-2973-45f6-8c46-9562725b821a
+        role:
+          type: string
+          enum: [user, assistant, system]
+          description: 화자 역할
+          example: user
+        content:
+          type: string
+          description: 메시지 본문 내용 (마크다운)
+          example: LangGraph v0.3의 Functional API 변경점을 설명해줘
+        created_at:
+          type: string
+          format: date-time
+          description: 메시지 발송/생성 일시 (ISO 8601 UTC)
+          example: '2026-09-28T08:00:00Z'
+        sources:
+          type: array
+          nullable: true
+          description: 어시스턴트 답변에 인용된 원본 및 보충 출처 목록 (JSON/TEXT 영속화)
+          items:
+            $ref: '#/components/schemas/ChatSourceItem'
+        status:
+          type: string
+          enum: [pending, streaming, completed, error, aborted]
+          description: 메시지 상태
+          example: completed
+        model:
+          type: string
+          nullable: true
+          description: 답변 생성에 사용된 Claude 모델 식별자
+          example: claude-3-5-sonnet-latest
+        latency_ms:
+          type: integer
+          nullable: true
+          description: 응답 생성 소요 시간 (밀리초)
+          example: 3450
+      required: [id, session_id, role, content, created_at, status]
+
+    ChatSessionDetail:
+      type: object
+      description: 대화 세션 전체 상세 정보 및 정렬된 대화 메시지 이력 (멀티턴 완전 복원용)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 세션 UUID v4
+          example: 7b6a48f2-2973-45f6-8c46-9562725b821a
+        title:
+          type: string
+          maxLength: 100
+          description: 세션 제목
+          example: LangGraph v0.3 Functional API 설명
+        created_at:
+          type: string
+          format: date-time
+          description: 세션 생성 일시 (ISO 8601 UTC)
+          example: '2026-09-28T08:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: 마지막 질의 일시 (ISO 8601 UTC)
+          example: '2026-09-28T08:15:30Z'
+        scope_mode:
+          type: string
+          enum: [scoped, global]
+          description: 검색 스코프 모드
+          example: scoped
+        active_source_id:
+          type: integer
+          nullable: true
+          description: Scoped 모드 대상 기사 ID (news_items.id 외래키)
+          example: 42
+        active_source:
+          $ref: '#/components/schemas/ChatSourceDetailResponse'
+          nullable: true
+          description: Scoped 기사 메타데이터 상세 (클라이언트 칩 및 컨텍스트 복원용)
+        active_filters:
+          $ref: '#/components/schemas/ChatFocusFilter'
+          nullable: true
+          description: Global 모드 적용 포커스 필터
+        messages:
+          type: array
+          description: 시간순(created_at ASC)으로 정렬된 전체 대화 메시지 목록
+          items:
+            $ref: '#/components/schemas/ChatMessageItem'
+      required: [id, title, created_at, updated_at, scope_mode, messages]
+
+    ChatSessionCreateRequest:
+      type: object
+      description: 대화 세션 생성 또는 업서트 요청 페이로드
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 클라이언트 사전 발급 UUID v4 (미지정 시 서버에서 자동 생성)
+          example: 7b6a48f2-2973-45f6-8c46-9562725b821a
+        title:
+          type: string
+          maxLength: 100
+          default: 새 대화
+          description: 세션 제목 (기본값 '새 대화', 최초 질의 완료 시 앞 30자 자동 타이틀링)
+          example: LangGraph v0.3 Functional API 설명
+        scope_mode:
+          type: string
+          enum: [scoped, global]
+          default: global
+          description: 검색 스코프 모드
+          example: global
+        active_source_id:
+          type: integer
+          nullable: true
+          description: Scoped 모드 대상 기사 ID
+          example: 42
+        active_filters:
+          $ref: '#/components/schemas/ChatFocusFilter'
+          nullable: true
+          description: 타깃 포커스 필터
+        messages:
+          type: array
+          description: 초기 또는 동기화할 대화 메시지 목록 (선택)
+          items:
+            $ref: '#/components/schemas/ChatMessageItem'
+      required: []
+
+    ChatQueryRequest:
+      type: object
+      description: 전용 AI 챗 동기식 단건 질의 페이로드
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: 사용자 질문 프롬프트 본문
+          example: LangGraph와 AutoGen의 멀티에이전트 패턴 차이점은?
+        model:
+          type: string
+          enum: [claude-3-5-haiku, claude-3-5-sonnet, claude-3-5-opus]
+          default: claude-3-5-sonnet
+          description: Anthropic Claude 3.5/5.5 3-Tier 모델 식별자 (⚡ Haiku 5.5, 🎯 Sonnet 5.5 (기본값), 🧠 Opus 5.5). 미지정 시 기본값 `claude-3-5-sonnet` 적용.
+          example: claude-3-5-sonnet
+        scope:
+          type: string
+          enum: [scoped, global]
+          default: global
+          description: 검색 스코프 모드
+          example: global
+        source_id:
+          type: integer
+          nullable: true
+          description: Scoped 모드 대상 기사 고유 ID
+          example: 105
+        session_id:
+          type: string
+          nullable: true
+          description: 대화 세션 식별자
+          example: 7b6a48f2-2973-45f6-8c46-9562725b821a
+        history:
+          type: array
+          description: 이전 대화 이력 목록
+          items:
+            $ref: '#/components/schemas/ChatMessageHistory'
+        top_k:
+          type: integer
+          default: 5
+          minimum: 1
+          maximum: 10
+          description: 주입할 상위 아티클 수
+          example: 5
+        filters:
+          $ref: '#/components/schemas/ChatFocusFilter'
+          nullable: true
+          description: 수집 소식 타깃팅 포커스 필터 (카테고리, 기간, 정렬, 고신호 한정)
+      required: [question]
+
+    ChatStatusStep:
+      type: string
+      enum: [extracting_source, evaluating_sufficiency, agentic_searching, synthesizing]
+      description: 에이전틱 리서치 워크플로우 실시간 단계 코드
+      example: extracting_source
+
+    StatusPayload:
+      type: object
+      description: SSE event:status 데이터 페이로드 (실시간 진행 단계 통지)
+      properties:
+        step:
+          $ref: '#/components/schemas/ChatStatusStep'
+        label:
+          type: string
+          description: 사용자 친화적 한국어 안내 메시지
+          example: 🌐 원본 소스 본문 추출 중 (Trafilatura)...
+        timestamp:
+          type: string
+          format: date-time
+          description: 상태 발생 시각 (ISO 8601 UTC)
+          example: '2026-09-16T09:40:01Z'
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 진행률 퍼센티지 (0~100)
+          example: 20
+        query:
+          type: string
+          nullable: true
+          description: 자율 생성된 외부 웹 검색 쿼리 (agentic_searching 단계)
+          example: LangGraph v0.3 install pip python
+        queries:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: 자율 생성된 검색 쿼리 목록
+          example: ["LangGraph v0.3 install pip python", "LangGraph official documentation github"]
+        sources_found:
+          type: integer
+          nullable: true
+          description: 보충 검색을 통해 발견된 유효 웹 출처 수
+          example: 2
+      required: [step, label, timestamp, progress]
+
+    ChatSourceType:
+      type: string
+      enum: [primary, supplementary]
+      description: 출처 유형 (primary 기사 원본 출처 [1], supplementary 자율 보충 웹 출처 [S1], [S2])
+      example: primary
+
+    ChatSourceItem:
+      type: object
+      description: AI 답변에 인용 및 주입된 원본 및 보충 출처 항목
+      properties:
+        index:
+          oneOf:
+            - type: integer
+            - type: string
+          description: 인라인 인용 뱃지와 매핑되는 인덱스 (1, 2 또는 'S1', 'S2')
+          example: 1
+        type:
+          $ref: '#/components/schemas/ChatSourceType'
+        id:
+          type: integer
+          nullable: true
+          description: 원본 아티클 ID (primary 출처일 때 필수, supplementary일 때 null)
+          example: 42
+        title:
+          type: string
+          description: 기사 또는 웹페이지 제목
+          example: LangGraph v0.3 Release Notes
+        url:
+          type: string
+          description: 원문 링크 URL
+          example: https://github.com/langchain-ai/langgraph
+        source:
+          type: string
+          description: 수집 출처 식별자 (github, web_search, arxiv 등)
+          example: github
+        category:
+          type: string
+          nullable: true
+          description: 카테고리 코드
+          example: agent_tech
+        quality_score:
+          type: number
+          format: float
+          nullable: true
+          description: 품질 점수 (1.0~10.0, 웹 검색 출처일 경우 null 가능)
+          example: 9.2
+        snippet:
+          type: string
+          nullable: true
+          description: 답변 근거로 사용된 핵심 발췌문
+          example: Built-in persistence and time-travel debugging improvements.
+        domain:
+          type: string
+          nullable: true
+          description: 출처 도메인 호스트명 (파비콘 및 프리뷰용)
+          example: github.com
+        relevance_score:
+          type: number
+          format: float
+          nullable: true
+          description: 기사 맥락과의 관련도 점수 (0.0~1.0)
+          example: 0.88
+        published_at:
+          type: string
+          nullable: true
+          description: 원문 발행 일시 (ISO 8601 UTC)
+          example: '2026-09-15T10:00:00Z'
+      required: [index, type, title, url, source]
+
+    SourcesPayload:
+      type: object
+      description: SSE event:sources 데이터 페이로드 (참조 출처 및 필터 정보)
+      properties:
+        sources:
+          type: array
+          description: 주입 및 인용된 출처 목록 (원본 및 보충 출처)
+          items:
+            $ref: '#/components/schemas/ChatSourceItem'
+        applied_filters:
+          $ref: '#/components/schemas/ChatFocusFilter'
+          nullable: true
+          description: 실제 RAG 지식 검색에 바인딩된 포커스 조건
+        is_relaxed:
+          type: boolean
+          default: false
+          description: 0건 매칭 시 기간 자동 완화 적용 여부
+        primary_count:
+          type: integer
+          nullable: true
+          description: 원본 출처 수
+          example: 1
+        supplementary_count:
+          type: integer
+          nullable: true
+          description: 자율 보충 웹 출처 수
+          example: 2
+      required: [sources]
+
+    TokenPayload:
+      type: object
+      description: SSE event:token 데이터 페이로드 (실시간 마크다운 토큰 조각)
+      properties:
+        token:
+          type: string
+          description: LLM 모델이 실시간 생성한 마크다운 텍스트 조각
+          example: "## 1. 핵심 아키텍처"
+      required: [token]
+
+    DonePayload:
+      type: object
+      description: SSE event:done 데이터 페이로드 (스트리밍 완료 통계)
+      properties:
+        done:
+          type: boolean
+          default: true
+          example: true
+        session_id:
+          type: string
+          description: 대화 세션 UUID
+          example: 7b6a48f2-2973-45f6-8c46-9562725b821a
+        model:
+          type: string
+          description: 생성에 사용된 Claude 모델 식별자
+          example: claude-3-5-sonnet-latest
+        model_tier:
+          type: string
+          enum: [haiku, sonnet, opus]
+          description: 적용된 3-Tier 모델 식별자
+          example: sonnet
+        sources_count:
+          type: integer
+          description: 총 인용 출처 건수
+          example: 3
+        primary_count:
+          type: integer
+          nullable: true
+          description: 원본 출처 건수
+          example: 1
+        supplementary_count:
+          type: integer
+          nullable: true
+          description: 보충 출처 건수
+          example: 2
+        latency_ms:
+          type: integer
+          description: 총 소요 시간 (밀리초)
+          example: 642
+        usage:
+          $ref: '#/components/schemas/TokenUsageMeta'
+          nullable: true
+          description: Anthropic Claude 토큰 소비 및 프롬프트 캐시 적중 통계
+      required: [done, session_id, model, model_tier, sources_count, latency_ms]
+
+    StreamErrorPayload:
+      type: object
+      description: SSE event:error 데이터 페이로드 (스트림 도중 장애 통지)
+      properties:
+        error_code:
+          type: string
+          description: 비즈니스 에러 코드
+          example: ERR_CLAUDE_OVERLOADED
+        message:
+          type: string
+          description: 에러 상세 메시지
+          example: Anthropic 서버 과부하가 발생했습니다. 잠시 후 다시 시도해주세요.
+        status_code:
+          type: integer
+          description: HTTP 대응 상태 코드
+          example: 503
+        step:
+          type: string
+          nullable: true
+          description: 에러 발생 단계
+          example: synthesizing
+      required: [error_code, message, status_code]
+
+    ChatSourceMeta:
+      $ref: '#/components/schemas/ChatSourceItem'
+
+    ChatQueryResponse:
+      type: object
+      description: 전용 AI 챗 동기식 질의응답 결과 (4단 엔지니어링 리포트 및 이원화 출처 포함)
+      properties:
+        answer:
+          type: string
+          description: Claude 모델이 생성한 4단 구조화 마크다운 답변 텍스트 (인라인 [1], [S1] 인용 뱃지 포함)
+          example: "## 1. 핵심 아키텍처 및 동작 원리\n\nLangGraph v0.3은 분산 상태 머신을 기반으로..."
+        sources:
+          type: array
+          description: 답변 생성에 주입 및 인용된 출처 목록 (원본 및 보충 출처)
+          items:
+            $ref: '#/components/schemas/ChatSourceItem'
+        session_id:
+          type: string
+          description: 바인딩된 대화 세션 UUID
+          example: 7b6a48f2-2973-45f6-8c46-9562725b821a
+        model:
+          type: string
+          description: 사용된 Claude 모델 식별자
+          example: claude-3-5-sonnet-latest
+        model_tier:
+          type: string
+          enum: [haiku, sonnet, opus]
+          description: 적용된 3-Tier 모델 식별자
+          example: sonnet
+        scope:
+          type: string
+          enum: [scoped, global]
+          example: scoped
+        applied_filters:
+          $ref: '#/components/schemas/ChatFocusFilter'
+          nullable: true
+          description: 실제 RAG 지식 검색에 바인딩 및 적용된 포커스 조건
+        is_relaxed:
+          type: boolean
+          default: false
+          description: 0건 매칭 시 기간 자동 완화 적용 여부
+        latency_ms:
+          type: integer
+          description: 총 응답 소요 시간 (밀리초)
+          example: 642
+        usage:
+          $ref: '#/components/schemas/TokenUsageMeta'
+          nullable: true
+          description: Anthropic Claude 토큰 소비 및 프롬프트 캐시 적중 통계
+      required: [answer, sources, session_id, model, model_tier, scope, latency_ms]
+
+    ChatSourceDetailResponse:
+      type: object
+      description: 컨텍스트 핸드오버 및 인용 팝오버용 기사 상세 메타데이터 (전문 및 스크래핑 상태 포함)
+      properties:
+        id:
+          type: integer
+          example: 101
+        title:
+          type: string
+          example: "FastMCP: High-performance Python MCP Framework"
+        url:
+          type: string
+          example: https://github.com/jlowin/fastmcp
+        source:
+          type: string
+          example: github
+        category:
+          type: string
+          example: mcp_plugins_skills
+        author:
+          type: string
+          nullable: true
+          example: Jeremiah Lowin
+        summary:
+          type: string
+          example: FastMCP provides decorator-based syntax for creating MCP servers in Python.
+        tldr_bullets:
+          type: array
+          items: { type: string }
+          example:
+            - 데코레이터 기반 경량 MCP 서버 정의 문법 제공
+            - 표준 입출력(stdio) 및 SSE 전송 방식 동시 지원
+            - 비동기 AsyncIO 네이티브 아키텍처 적용
+        why_it_matters:
+          type: string
+          example: Claude Desktop 및 다양한 클라이언트에 연동 가능한 MCP 서버 개발 생산성을 극대화합니다.
+        tech_stack:
+          type: array
+          items: { type: string }
+          example: [Python, FastMCP, Claude]
+        tags:
+          type: array
+          items: { type: string }
+          example: [mcp, fastmcp, anthropic]
+        quality_score:
+          type: number
+          format: float
+          example: 9.1
+        is_high_signal:
+          type: boolean
+          example: true
+        hotness_score:
+          type: number
+          format: float
+          example: 8.5
+        full_content:
+          type: string
+          nullable: true
+          description: 실시간 추출된 원본 아티클 전문 (마크다운 포맷)
+          example: "# FastMCP\n\nFastMCP is a high-level framework for building Model Context Protocol servers..."
+        scraped_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 전문 스크래핑 완료 일시 (ISO 8601 UTC)
+          example: '2026-09-16T08:35:00Z'
+        is_scraped:
+          type: boolean
+          description: 전문 스크래핑 및 캐시 적재 완료 여부
+          example: true
+        published_at:
+          type: string
+          example: 2026-09-15T08:00:00Z
+        created_at:
+          type: string
+          example: 2026-09-15T08:30:00Z
+      required: [id, title, url, source, category, summary, tldr_bullets, why_it_matters, quality_score, is_high_signal, published_at]
+
+    ChatSearchChunk:
+      type: object
+      description: RAG 하이브리드 스코어링이 적용된 지식 청크
+      properties:
+        index:
+          type: integer
+          example: 1
+        id:
+          type: integer
+          example: 105
+        title:
+          type: string
+          example: "FastMCP: High-performance Python MCP Framework"
+        url:
+          type: string
+          example: https://github.com/jlowin/fastmcp
+        source:
+          type: string
+          example: github
+        category:
+          type: string
+          example: mcp_plugins_skills
+        snippet:
+          type: string
+          example: Provides decorator-based MCP server creation with async support.
+        quality_score:
+          type: number
+          format: float
+          example: 9.1
+        published_at:
+          type: string
+          example: 2026-09-14T08:30:00Z
+        bm25_score:
+          type: number
+          format: float
+          description: SQLite FTS5 bm25 매칭 점수
+          example: -4.35
+        rag_score:
+          type: number
+          format: float
+          description: 정규화 결합 하이브리드 RAG 최종 순위 점수 (0.0~1.0)
+          example: 0.884
+      required: [index, id, title, url, source, category, snippet, quality_score, published_at, bm25_score, rag_score]
+
+    ChatSearchResponse:
+      type: object
+      description: 코퍼스 지식 검색 프리뷰 결과
+      properties:
+        query:
+          type: string
+          description: 실행된 정규화 검색어
+          example: FastMCP Python
+        total_matches:
+          type: integer
+          description: FTS5 조건에 부합한 총 아티클 수
+          example: 7
+        chunks:
+          type: array
+          description: RAG 점수 상위 정렬된 기사 청크 목록
+          items:
+            $ref: '#/components/schemas/ChatSearchChunk'
+        latency_ms:
+          type: integer
+          description: 검색 엔진 소요 시간 (밀리초)
+          example: 28
+      required: [query, total_matches, chunks, latency_ms]
+
+    ErrorResponse:
+      type: object
+      description: 표준 비즈니스 에러 응답
+      properties:
+        error_code:
+          type: string
+          description: |
+            정의된 표준 비즈니스 에러 코드 목록:
+            - ERR_CLAUDE_API_KEY_MISSING: Anthropic Claude API 키 미설정 (엄격 프로덕션 키 부재)
+            - ERR_ANTHROPIC_KEY_MISSING: Anthropic Claude API 키 미설정 별칭
+            - ERR_CLAUDE_QUOTA_EXCEEDED: Anthropic Claude TPM/RPM 호출 한도 초과 (HTTP 429)
+            - ERR_ANTHROPIC_RATE_LIMIT: Anthropic Claude 호출 한도 초과 별칭 (HTTP 429)
+            - ERR_CLAUDE_OVERLOADED: Anthropic 서버 과부하 (HTTP 503 / 529)
+            - ERR_ANTHROPIC_OVERLOADED: Anthropic 서버 과부하 별칭
+            - ERR_INVALID_MODEL_TIER: 허용되지 않은 모델 티어 코드 요청 (HTTP 400)
+            - ERR_SONNET_SCHEMA_VALIDATION: Claude Sonnet 5.5 수집 Pydantic JSON 스키마 검증 실패
+            - ERR_STREAM_ABORTED_BY_USER: 모델 전환 또는 브라우저 이탈 등으로 인한 스트림 중단 (HTTP 499)
+            - ERR_ARTICLE_EXTRACTION_FAIL: 원문 웹페이지 404/403 또는 본문 추출 실패 (HTTP 502)
+            - ERR_LLM_PROVIDER_UNAVAILABLE: 가용한 LLM 프로바이더 엔진 미설정 (엄격 프로덕션 키 부재)
+            - ERR_LLM_UPSTREAM_FAILED: 외부 LLM API 통신 실패 또는 5xx 장애
+            - ERR_LLM_QUOTA_EXCEEDED: 외부 LLM API 호출 한도 초과 (HTTP 429)
+            - ERR_LLM_STREAM_FAILED: 스트리밍 중간 단절 또는 네트워크 타임아웃
+            - ERR_LLM_PAYLOAD_PARSE_FAILED: LLM 응답 JSON 파싱 실패
+            - ERR_CHAT_PAYLOAD_EMPTY: 질문 본문 공백 또는 빈 문자열
+            - ERR_CHAT_PAYLOAD_TOO_LARGE: 질문 2,000자 초과
+            - ERR_INVALID_SCOPE_PARAM: 유효하지 않은 스코프 파라미터 (scoped / global 외 값)
+            - ERR_HANDOVER_SOURCE_NOT_FOUND: Scoped 모드 기사 미존재 (HTTP 404)
+            - ERR_SEARCH_QUERY_TOO_SHORT: 코퍼스 지식 검색어 2글자 미만
+            - ERR_SESSION_NOT_FOUND: 요청한 세션 ID 미존재 (HTTP 404)
+            - ERR_SESSION_DELETE_FAILED: 세션 레코드 삭제 트랜잭션 실패
+            - ERR_SESSION_INVALID_UUID: 세션 ID UUID v4 형식 불일치
+            - ERR_SESSION_CONFLICT_STREAMING: 스트리밍 중 충돌 발생
+            - ERR_FEED_FETCH_FAILED: 피드 조회 실패 또는 서버 내부 오류
+            - ERR_FEED_CARD_NOT_FOUND: 포커스된 인덱스의 카드 미존재
+            - ERR_INVALID_PAGE_PARAM: 음수 또는 유효하지 않은 페이징 파라미터
+            - ERR_SCRAPE_BLOCKED: 원본 사이트 페이월 / 403 차단 (우아한 다운그레이드)
+            - ERR_SCRAPE_EMPTY_CONTENT: 원본 본문 500자 미만 (요약 모드 다운그레이드)
+            - ERR_SCRAPE_TIMEOUT: 원본 사이트 스크래핑 5.0초 초과
+            - ERR_COLLECTION_IN_PROGRESS: 이미 수집 작업이 진행 중임 (HTTP 409)
+            - ERR_COLLECTION_FAILED: 수집 파이프라인 내부 에러
+            - ERR_RESET_CONFLICT: 수집 중 리셋 또는 중복 작업 충돌 (HTTP 409)
+            - ERR_MCP_INVALID_TOOL_ARG: FastMCP 도구 인자 누락 또는 유효성 오류
+            - ERR_MCP_TOOL_EXECUTION_FAILED: FastMCP 도구 실행 실패
+            - ERR_SERVER_INTERNAL: 서버 내부 처리 중 예외 발생
+          enum:
+            - ERR_CLAUDE_API_KEY_MISSING
+            - ERR_ANTHROPIC_KEY_MISSING
+            - ERR_CLAUDE_QUOTA_EXCEEDED
+            - ERR_ANTHROPIC_RATE_LIMIT
+            - ERR_CLAUDE_OVERLOADED
+            - ERR_ANTHROPIC_OVERLOADED
+            - ERR_INVALID_MODEL_TIER
+            - ERR_SONNET_SCHEMA_VALIDATION
+            - ERR_STREAM_ABORTED_BY_USER
+            - ERR_ARTICLE_EXTRACTION_FAIL
+            - ERR_LLM_PROVIDER_UNAVAILABLE
+            - ERR_LLM_UPSTREAM_FAILED
+            - ERR_LLM_QUOTA_EXCEEDED
+            - ERR_LLM_STREAM_FAILED
+            - ERR_LLM_PAYLOAD_PARSE_FAILED
+            - ERR_CHAT_PAYLOAD_EMPTY
+            - ERR_CHAT_PAYLOAD_TOO_LARGE
+            - ERR_INVALID_SCOPE_PARAM
+            - ERR_HANDOVER_SOURCE_NOT_FOUND
+            - ERR_SEARCH_QUERY_TOO_SHORT
+            - ERR_SESSION_NOT_FOUND
+            - ERR_SESSION_DELETE_FAILED
+            - ERR_SESSION_INVALID_UUID
+            - ERR_SESSION_CONFLICT_STREAMING
+            - ERR_FEED_FETCH_FAILED
+            - ERR_FEED_CARD_NOT_FOUND
+            - ERR_INVALID_PAGE_PARAM
+            - ERR_SCRAPE_BLOCKED
+            - ERR_SCRAPE_EMPTY_CONTENT
+            - ERR_SCRAPE_TIMEOUT
+            - ERR_COLLECTION_IN_PROGRESS
+            - ERR_COLLECTION_FAILED
+            - ERR_RESET_CONFLICT
+            - ERR_MCP_INVALID_TOOL_ARG
+            - ERR_MCP_TOOL_EXECUTION_FAILED
+            - ERR_SERVER_INTERNAL
+          example: ERR_HANDOVER_SOURCE_NOT_FOUND
+        message:
+          type: string
+          description: 사용자 친화적 에러 메시지
+          example: 요청하신 기사를 찾을 수 없습니다.
+        details:
+          type: object
+          nullable: true
+          description: 상세 디버그 정보
+      required: [error_code, message]
+
+    TokenUsageMeta:
+      type: object
+      description: Anthropic Claude 토큰 소비 및 프롬프트 캐시 적중 메타데이터
+      properties:
+        input_tokens:
+          type: integer
+          description: 모델에 주입된 총 입력 토큰 수
+          example: 1250
+        output_tokens:
+          type: integer
+          description: 모델이 생성한 총 출력 토큰 수
+          example: 840
+        cache_read_input_tokens:
+          type: integer
+          nullable: true
+          description: 프롬프트 캐시에서 읽어온 토큰 수 (90% 비용 절감)
+          example: 2500
+        cache_creation_input_tokens:
+          type: integer
+          nullable: true
+          description: 신규 생성되어 캐시된 토큰 수
+          example: 0
+
+    SummaryItemSchema:
+      type: object
+      description: Claude Sonnet 5.5 수집 파이프라인에서 추출 및 검증된 기사 정제 스키마 (Pydantic v2)
+      properties:
+        summary:
+          type: array
+          items:
+            type: string
+          minItems: 3
+          maxItems: 3
+          description: 3줄 핵심 요약 불릿 (TL;DR Bullets)
+          example:
+            - LangGraph v0.3이 정식 출시되며 함수형 API를 도입했습니다.
+            - 멀티 에이전트 상태 격리 및 브랜칭 워크플로우를 대폭 단순화했습니다.
+            - 기존 선언적 그래프와 100% 하위 호환성을 유지합니다.
+        why_it_matters:
+          type: string
+          minLength: 150
+          description: 엔지니어링 실무 도입 관점의 심층 시사점 (최소 150자 필수)
+          example: 분산 상태 머신 구현 시 보일러플레이트를 40% 이상 절감하며, 특히 동적 서브그래프 호출 격리를 통해 프로덕션 하네스 구축 시 동시성 병목을 원천 해소할 수 있는 중대한 아키텍처적 도약입니다.
+        tech_stack:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 5
+          description: 공인 기술 사전(Known Tech Registry) 기반 정밀 태깅
+          example: [LangGraph, Python, Docker Sandbox]
+        tags:
+          type: array
+          items:
+            type: string
+          minItems: 2
+          maxItems: 6
+          description: 세부 도메인 토픽 분류 태그
+          example: [agent-orchestration, workflow, multi-agent]
+        quality_score:
+          type: number
+          format: float
+          minimum: 1.0
+          maximum: 10.0
+          description: 엔지니어링 신호 품질 평가 점수 (1.0~10.0)
+          example: 8.9
+        category:
+          type: string
+          enum: [harness, mcp_plugins_skills, agent_tech, ai_news]
+          description: 도메인 4대 카테고리
+          example: agent_tech
+      required: [summary, why_it_matters, tech_stack, tags, quality_score, category]
+
     GenericSuccessResponse:
       type: object
       properties:
@@ -751,6 +2163,17 @@ components:
           type: number
           format: float
           example: 8.9
+        full_content:
+          type: string
+          nullable: true
+          description: 실시간 추출된 원본 아티클 전문 (마크다운 포맷)
+          example: "# Anthropic Claude 3.7 Sonnet\n\nToday, we are announcing Claude 3.7 Sonnet..."
+        scraped_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 전문 스크래핑 완료 일시 (ISO 8601 UTC)
+          example: '2026-09-16T08:30:00Z'
         published_at:
           type: string
           format: date-time
@@ -808,7 +2231,8 @@ components:
         model_used:
           type: string
           nullable: true
-          example: gemini-2.0-flash
+          description: 답변 생성에 사용된 모델 식별자 (Google gemini-* 생성 엄격 금지, claude-3-5-sonnet-latest 등 Claude 모델 한정)
+          example: claude-3-5-sonnet-latest
       required: [news_id, question, answer]
 
     BriefingCategoryItem:
