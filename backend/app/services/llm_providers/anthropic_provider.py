@@ -159,7 +159,7 @@ class AnthropicLLMProvider(BaseLLMProvider):
         model: Optional[str] = None,
         system_blocks: Optional[List[Dict[str, Any]]] = None,
         max_tokens: int = 4096,
-        temperature: float = 0.3,
+        temperature: Optional[float] = None,
         **kwargs,
     ) -> Tuple[str, str, Dict[str, Any]]:
         """Generates complete text response returning (text, model_identifier, usage_meta)."""
@@ -171,8 +171,10 @@ class AnthropicLLMProvider(BaseLLMProvider):
             "model": resolved_model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
-            "temperature": temperature,
         }
+        # Note: 'temperature' is deprecated for Claude 5.5 / reasoning models; omit to prevent HTTP 400
+        if temperature is not None and not resolved_model.startswith("claude-"):
+            payload["temperature"] = temperature
         if system_blocks:
             payload["system"] = system_blocks
 
@@ -195,7 +197,7 @@ class AnthropicLLMProvider(BaseLLMProvider):
         model: Optional[str] = None,
         system_blocks: Optional[List[Dict[str, Any]]] = None,
         max_tokens: int = 4096,
-        temperature: float = 0.3,
+        temperature: Optional[float] = None,
         **kwargs,
     ) -> AsyncGenerator[Tuple[str, str], None]:
         """Yields (token_text, model_identifier) chunks via SSE streaming."""
@@ -207,9 +209,11 @@ class AnthropicLLMProvider(BaseLLMProvider):
             "model": resolved_model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
-            "temperature": temperature,
             "stream": True,
         }
+        # Note: 'temperature' is deprecated for Claude 5.5 / reasoning models; omit to prevent HTTP 400
+        if temperature is not None and not resolved_model.startswith("claude-"):
+            payload["temperature"] = temperature
         if system_blocks:
             payload["system"] = system_blocks
 
@@ -289,7 +293,6 @@ class AnthropicLLMProvider(BaseLLMProvider):
             model="claude-sonnet-5-5",
             system_blocks=system_blocks,
             max_tokens=1500,
-            temperature=0.2,
         )
 
         cleaned = re.sub(r'^```(?:json)?\s*', '', text.strip(), flags=re.IGNORECASE)

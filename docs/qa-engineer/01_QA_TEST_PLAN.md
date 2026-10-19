@@ -1,19 +1,19 @@
-# [AgentLens] Anthropic 공식 Claude 5.5 모델 규격 및 UI 노출 정규화 (v0.2.1) 통합 QA 테스트 계획서 (QA Test Plan)
+# [AgentLens] Scoped 포커스 그라운딩 강화, 프로덕션 제로-목(Zero-Mock), 과거 모델 무결성 및 UI 경량화 (v0.2.1) 통합 QA 테스트 계획서 (QA Test Plan)
 
 - **작성일자**: 2026-10-19
 - **작성자**: 품질 보증 엔지니어 (`qa-engineer`)
-- **문서 버전**: v0.2.1 (공식 Anthropic Claude 5.5 모델 규격 적용, 3.5 잔재 완전 박멸, UI 내 날것의 모델 식별자 차단 및 브랜드 정규화, Anti-Gemini 격리, 듀얼 모델 셀렉터 0ms 동기화, Zero 503 복원력 및 Zero-Leak 보안 거버넌스 전수 검증)
+- **문서 버전**: v0.2.1 (Scoped 포커스 기사 핸드오버 클로저 지연 해결, 프로덕션 Mock 완전 퇴역 및 Zero-Mock fail-fast 아키텍처, Claude 5.5 `temperature` 제외, 과거 Gemini/GPT 모델 무결성 보존 및 정직한 렌더링, UI 모델 선택기/디바이더 경량화, 전체 379건 자동화 회귀 전수 검증)
 - **상태**: Approved
 - **선행 산출물 및 기준 문서**:
-  - 제품 요구사항 명세서: [`01_PRD.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/01_PRD.md) (v0.2.0: `REQ-LLM-002`, `REQ-UI-008`, `REQ-CLAUDE-001`, `REQ-THEME-001`, `REQ-SHORTCUT-001`, `REQ-EXPORT-001`, `REQ-CHAT-011`, `REQ-CHAT-012`)
-  - 비즈니스 정책 및 엣지 케이스: [`03_POLICIES_AND_EDGES.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/03_POLICIES_AND_EDGES.md) (`POL-LLM-005`: Anti-Gemini Policy, `POL-UI-006`: Dual Model Selector Sync)
+  - 제품 요구사항 명세서: [`01_PRD.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/01_PRD.md) (v0.2.0 & v0.2.1: `REQ-LLM-002`, `REQ-UI-008`, `REQ-CLAUDE-001`, `REQ-THEME-001`, `REQ-SHORTCUT-001`, `REQ-EXPORT-001`, `REQ-CHAT-011`, `REQ-CHAT-012`)
+  - 비즈니스 정책 및 엣지 케이스: [`03_POLICIES_AND_EDGES.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/03_POLICIES_AND_EDGES.md) (`POL-LLM-005`: Anti-Gemini Policy, `POL-LLM-006`: Production Zero-Mock Fail-Fast Policy, `POL-UI-006`: Dual Model Selector Sync)
   - 상세 기능 정의서:
-    - [`05_AI_CHAT_SPECIFICATION.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/fsd/05_AI_CHAT_SPECIFICATION.md) (`FUNC-CHAT-013`: Claude 3-Tier 멀티모델 선택기, `FUNC-CHAT-014`: 듀얼 모델 셀렉터 및 Anti-Gemini 격리)
+    - [`05_AI_CHAT_SPECIFICATION.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/fsd/05_AI_CHAT_SPECIFICATION.md) (`FUNC-CHAT-013`: Claude 3-Tier 멀티모델 선택기, `FUNC-CHAT-014`: 듀얼 모델 셀렉터, `FUNC-CHAT-002`: Scoped 포커스 기사 집중 질의)
     - [`06_UI_THEME_AND_HOTKEYS_SPECIFICATION.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/fsd/06_UI_THEME_AND_HOTKEYS_SPECIFICATION.md) (`FUNC-THEME-001`, `FUNC-NAV-001`)
     - [`01_NEWS_FEED_SPECIFICATION.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/fsd/01_NEWS_FEED_SPECIFICATION.md) (`FUNC-FEED-007`)
   - 시스템 설계서 & OpenAPI: [`01_SYSTEM_DESIGN.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/system-designer/01_SYSTEM_DESIGN.md) (v0.2.0), [`02_OPENAPI_SPEC.yaml`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/system-designer/02_OPENAPI_SPEC.yaml) (OpenAPI 3.1.0 v4.0.0)
-  - UI 컴포넌트 명세서: [`01_COMPONENT_SPEC.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/ui-system-designer/01_COMPONENT_SPEC.md) (v0.2.0: `ChatHeader`, `ChatPromptInput`, `ChatModelSelector`, `ModelTierBadge`, `ModelChangeDivider`)
-  - 데이터 계약 및 MSW 명세서: [`01_CONTRACT_AND_MSW_SPEC.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md) (v0.2.0 Stage 2d Contract Lock)
+  - UI 컴포넌트 명세서: [`01_COMPONENT_SPEC.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/ui-system-designer/01_COMPONENT_SPEC.md) (v0.2.0 & v0.2.1: `ChatHeader`, `ChatPromptInput`, `ChatModelSelector`, `ModelTierBadge`, `ModelChangeDivider`)
+  - 데이터 계약 및 MSW 명세서: [`01_CONTRACT_AND_MSW_SPEC.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md) (v0.2.1 Stage 2d Contract Lock)
   - 5-Pillar 코드 품질 감사 보고서:
     - 백엔드: [`docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md) (v0.2.1 APPROVED)
     - 프론트엔드: [`docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md) (v0.2.1 APPROVED)
@@ -23,42 +23,40 @@
 ## 1. 테스트 범위 및 환경 (Test Scope & Environment)
 
 ### 1.1 테스트 대상 (Test Scope)
-기획 요구사항(`01_PRD.md`), 상세 기능정의서(FSD 01~06), 그리고 공식 Claude 5.5 모델 연동 규약에 따른 핵심 검증 항목:
+기획 요구사항(`01_PRD.md`), 상세 기능정의서(FSD 01~06), 그리고 v0.2.1 버그 픽스 및 아키텍처 거버넌스 규약에 따른 핵심 검증 항목:
 
-1. **공식 Anthropic Claude 5.5 모델 규격 및 단일 소스(SSOT) 매핑 (`REQ-CLAUDE-001`, `ADR-011`)**:
-   - 백엔드 `MODEL_TIER_MAPPING`:
-     * Haiku: `claude-haiku-5-5`
-     * Sonnet: `claude-sonnet-5-5` (기본값)
-     * Opus: `claude-opus-5-5`
-   - 기본 모델 및 티어 전역 상수 통일: `DEFAULT_MODEL = "claude-sonnet-5-5"`, `DEFAULT_TIER = "sonnet"`
-   - `backend/app/config.py`, `backend/app/schemas/chat.py`, `backend/app/services/llm_processor.py`, `backend/app/config/sources.json`, `.env.example` 전역 일관성 검증
-2. **UI 내 날것의 모델 ID 및 3.5 잔재 노출 원천 차단 (`POL-UI-006`, `formatModelDisplayName`)**:
-   - 화면 어디에도 `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5` 등의 내부 기술 식별자나 레거시 `claude-3-5-...`가 노출되지 않음
-   - 뷰 렌더링 시 반드시 `formatModelDisplayName`(별칭 `getModelLabel`) 헬퍼를 통해 `Claude Sonnet 5.5`, `Claude Haiku 5.5`, `Claude Opus 5.5`로 정규화 표출
-   - `ChatMessageItem`, `ChatWorkspace`, `ModelTierBadge`, `ChatModelSelector`, `ModelChangeDivider` 전수 점검
-3. **Anti-Gemini 정책 및 모델 라우팅 정합성 (`POL-LLM-005`, `REQ-LLM-002`)**:
-   - 백엔드: `_call_gemini` 영구 퇴역, `has_live_provider()`에서 Gemini 배제, `sanitize_model_identifier()`를 통해 Gemini 인입 시 `claude-sonnet-5-5`로 강제 정규화
-   - 프론트엔드: `sanitizeModelTier()`에서 Gemini 및 비인가 문자열 인입 시 경고 로그 후 `sonnet`으로 자동 격리
-4. **듀얼 모델 셀렉터 배치 및 0ms 양방향 상태 동기화 (`REQ-UI-008`, `POL-UI-006`)**:
-   - 상단 헤더 우측(`ChatHeader`의 `header-chip`) 및 하단 컴포저 좌하단(`ChatPromptInput`의 `inline-chip`) 동시 마운트
-   - `ChatWorkspace` 단일 진실 공급원(SSOT) 상태를 통한 0ms 즉각 양방향 동기화
-   - 헤더 칩(하향 우측: `top-full right-0`), 컴포저 칩(상향 좌측: `bottom-full left-0`) 스마트 포지셔닝
-5. **무손실 모델 인라인 전환 및 타임라인 구분선 (`ModelChangeDivider`, Zero Context Erasure)**:
-   - 대화 중간 모델 변경 시 기존 대화 이력(`messages`, `activeSource`, `focusFilters`) 100% 무손실 유지
-   - 타임라인 상 시맨틱 구분선(`role="separator"`)을 통해 "Claude Sonnet 5.5로 모델 변경됨 (맥락 100% 보존)" 명확히 안내
-6. **스트리밍 중 듀얼 모델 선택기 잠금 (Streaming Lock)**:
-   - SSE 토큰 스트리밍 진행 중(`isStreaming === true`) 헤더 및 컴포저 선택기 동시 `disabled` 처리 및 툴팁 고지
-7. **어시스턴트 메시지 푸터 모델 배지 및 실시간 레이턴시 표출 (`ModelTierBadge`)**:
-   - 어시스턴트 응답 완료 시 `ModelTierBadge`를 통해 사용된 모델명(`Haiku 5.5` / `Sonnet 5.5` / `Opus 5.5`), 지연시간(ms), 상대 비용($/$$/$$$) 표출
-8. **Claude Sonnet 5.5 데이터 수집 파이프라인 프롬프트 캐싱 메타데이터 (`TokenUsageMeta`)**:
-   - 2,500토큰 초과 시스템 프롬프트 요청 시 `anthropic-beta: prompt-caching-2024-07-31` 헤더 운용
-   - `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` 정량 추적
-9. **Multi-LLM 장애 복원력 및 Zero 503 Mock Fallback 체인**:
-   - Anthropic API 키 부재 및 테스트/CI 환경에서 503 에러 없이 `MockLLMProvider`를 통한 안정적인 4단 리포트 공급
-10. **Zero-Leak API 키 보안 거버넌스**:
-    - 브라우저 스크립트 번들 및 Network 탭에 Anthropic API 키 0바이트 노출 (FastAPI 백엔드 프록시 완벽 격리)
-11. **전역 자동화 테스트 회귀 방어**:
-    - 백엔드 pytest 전체 142건 및 프론트엔드 vitest 전체 230건 (총 372건) 100% Green 통과
+1. **포커스 기사 핸드오버 컨텍스트 인계 및 클로저 래그 해결 (`[BUG-CHAT-001]`, `FUNC-CHAT-002`)**:
+   - 뉴스 피드 카드에서 `c` 단축키 또는 [Ask AI] 클릭 시 URL 파라미터(`?sourceId=...&q=...`) 기반 핸드오버 수행
+   - React 비동기 `useState` 클로저 래그로 인해 `scope: "global"`, `source_id: undefined`가 누락되던 결함을 `handleSendMessage(prompt, options)` 직결로 원천 해결
+   - `POST /api/chat/stream` 전송 페이로드에 `scope: "scoped"` 및 `source_id`가 정확히 직렬화되는지 검증
+2. **기사 포커스(Scoped Mode) 시 기사 제목/요약/전문 프롬프트 온전 주입 및 앵무새 답변 차단**:
+   - Scoped 모드 프롬프트에 포커스 분석 대상 기사의 `title`, `source`, `category`, `snippet`(요약), `full_content[:5000]`(전문) 온전 주입
+   - `[🚨 필수 분석 지침]`을 통해 기사 본문과 무관한 일반 시스템 소개(AgentLens 플랫폼 설명 등) 앵무새 반복 출력 원천 차단
+   - 스크래핑 실패 시에도 원본 요약문(`item.summary`, `why_it_matters`) 보존 검증
+3. **프로덕션 제로-목(Zero-Mock) 거버넌스 및 0-Mock Import Rule (`POL-LLM-006`)**:
+   - 프로덕션 코드(`backend/app/`)에서 `mock_provider.py` 및 사일런트 목 폴백 체인 영구 퇴역 (`ImportError` 검증)
+   - 가용한 라이브 프로바이더 부재 시 사일런트 다운그레이드 없이 명확한 `LLMProviderUnavailableException` (HTTP 503) fail-fast 아키텍처 입증
+   - 프론트엔드 프로덕션 컴포넌트(`ChatWorkspace.tsx`, `ExportToolbar.tsx`)에서 MSW mock fixture import 100% 제거
+4. **Anthropic Claude 5.5 연동 및 `temperature` deprecated 에러 차단**:
+   - Claude 5.5 및 추론 모델군 요청 시 deprecated된 `temperature` 파라미터를 페이로드에서 전면 제외하여 HTTP 400 Bad Request 방어
+5. **과거 Gemini/GPT 대화 이력 모델명의 왜곡 없는 정직한 보존 및 렌더링**:
+   - 백엔드 `sanitize_model_identifier`가 DB에 기저장된 이전 대화/메시지의 과거 모델명(`gemini-2.0-flash`, `gpt-4o` 등)을 임의로 덮어쓰지 않고 원본 그대로 보존
+   - 프론트엔드 `sanitizeModelTier` 및 `formatModelDisplayName`이 과거 레거시 모델명을 정직한 브랜드 레이블(`Gemini 2.5 Flash`, `GPT-4o` 등)로 포맷팅
+   - `ModelTierBadge`에서 비-Claude 모델을 위한 범용 폴백 뱃지(`✨`, `🤖`)를 통해 UI 크래시 없이 안정적 렌더링
+6. **UI 모델 선택기 및 디바이더 경량화 (KISS/YAGNI)**:
+   - `ChatModelSelector` 팝오버 상단의 불필요한 장식 헤더(`Claude 3-Tier Multi-Model`, `Sparkles`, `맥락 100% 보존`) 전면 삭제
+   - `ModelChangeDivider`의 조잡한 부가 라벨(`맥락 100% 보존`) 삭제 및 `Claude {NewTier} 5.5로 모델 변경됨` 단일 안내로 심플화
+7. **공식 Anthropic Claude 5.5 모델 규격 및 단일 소스(SSOT) 매핑 (`REQ-CLAUDE-001`, `ADR-011`)**:
+   - 백엔드 `MODEL_TIER_MAPPING`: Haiku(`claude-haiku-5-5`), Sonnet(`claude-sonnet-5-5`), Opus(`claude-opus-5-5`)
+   - 기본 모델 및 티어: `DEFAULT_MODEL = "claude-sonnet-5-5"`, `DEFAULT_TIER = "sonnet"`
+8. **듀얼 모델 셀렉터 배치 및 0ms 양방향 상태 동기화 (`REQ-UI-008`, `POL-UI-006`)**:
+   - 상단 헤더 우측(`header-chip`) 및 하단 컴포저 좌하단(`inline-chip`) 동시 마운트 및 0ms 즉각 양방향 동기화
+   - 답변 스트리밍 진행 중(`isStreaming === true`) 동시 `disabled` 잠금
+9. **Zero-Leak API 키 보안 거버넌스 및 프로젝트 버전 v0.2.1 동기화**:
+   - 클라이언트 스크립트 번들에 API 키 0바이트 노출
+   - `package.json`, `config.py`, `config.json`, `.env` 전역 `v0.2.1` 일치
+10. **전역 자동화 테스트 회귀 방어**:
+    - 백엔드 pytest 전체 147건 및 프론트엔드 vitest 전체 232건 (총 379건) 100% Green 통과
 
 ### 1.2 테스트 환경 (Test Environment)
 - **API 서버**: 로컬 라이브 인스턴스 (`http://localhost:8000`), Python 3.11.9, FastAPI 0.115.6, SQLite 3.43+ WAL (`PRAGMA foreign_keys = ON;`)
@@ -75,16 +73,20 @@
 
 | 케이스 ID | 테스트 구분 | 검증 시나리오 | 사전 조건 및 입력 데이터 | 기대 결과 (Pass Criteria) |
 | :--- | :---: | :--- | :--- | :--- |
-| `TC-ANTIGEM-001`| 보안/정합성 | **백엔드 Anti-Gemini 격리 및 공식 5.5 모델 매핑 검증** | `GEMINI_API_KEY` 설정 후 백엔드 라이브 프로바이더 조회 및 Q&A 실행 | • `has_live_provider()`에서 Gemini 배제 확인<br>• `_call_gemini` 영구 퇴역 확인<br>• `sanitize_model_identifier`를 통해 Gemini 문자열 인입 시 `claude-sonnet-5-5`로 강제 정규화 |
-| `TC-ANTIGEM-002`| UI/보안 | **프론트엔드 Anti-Gemini UI 살균 및 5.5 마스킹 검증** | 레거시 또는 오염된 모델 식별자(`gemini-2.5-flash` 등) 주입 | • `sanitizeModelTier`에서 경고 로그 출력 후 `sonnet`으로 자동 대체<br>• `formatModelDisplayName`을 통해 `Claude Sonnet 5.5`로 안전 변환<br>• `ChatMessageItem` 및 UI 전역에서 Gemini 문자열 노출 0건 입증 |
+| `TC-SCOPED-001`| E2E 정상 | **포커스 기사 핸드오버 컨텍스트 인계 및 클로저 래그 해결** | 기사 카드에서 [Ask AI] 클릭 (`/chat?sourceId=102&q=...`) | • `activeSource` 및 `source_id: 102`, `scope: "scoped"`가 백엔드 `POST /api/chat/stream`에 누락 없이 즉시 직렬화 전송<br>• React 상태 갱신 비동기 지연으로 인한 `scope: global` 탈락 결함 0건 |
+| `TC-SCOPED-002`| E2E/데이터 | **Scoped 모드 기사(제목/요약/전문) 프롬프트 온전 주입 및 앵무새 답변 차단** | `source_id=777` 포커스 상태에서 "모델의 강화학습 원리를 설명해줘" 질의 전송 | • 프롬프트 상단에 기사 제목, 요약, 전문([1]) 정확히 주입<br>• `[🚨 필수 분석 지침]`에 따라 기사 내용 기반 맞춤형 기술 분석 제공<br>• 기사와 무관한 일반 시스템 소개(가짜 목 보고서 등) 앵무새 반복 출력 0건 입증 |
+| `TC-PRODMOCK-001`| 아키텍처/보안| **프로덕션 `mock_provider.py` 영구 퇴역 및 0-Mock 거버넌스 (Fail-Fast 503)** | 프로덕션 `app.services.llm_providers.mock_provider` 임포트 시도 및 라이브 키 부재 상태 질의 | • 프로덕션 코드에서 임포트 시 `ImportError` 발생 확인<br>• 라이브 프로바이더 부재 시 사일런트 목 다운그레이드 없이 명확한 `LLMProviderUnavailableException` (HTTP 503) fail-fast 검증<br>• 프론트엔드 프로덕션 소스 내 MSW mock fixture 임포트 0건 확인 |
+| `TC-ANTHROPIC-TEMP`| 정합성/API | **Claude 5.5 API 호출 시 `temperature` deprecated 에러 차단** | `AnthropicLLMProvider`를 통해 `claude-sonnet-5-5` 스트리밍/텍스트 생성 호출 | • REST 요청 JSON 페이로드에 `temperature` 필드가 전면 제외되어 HTTP 400 에러 원천 차단 확인 |
+| `TC-HIST-001`  | 데이터 무결성 | **과거 Gemini/GPT 대화 이력 모델명의 왜곡 없는 정직한 보존 및 렌더링** | DB에 과거 `gemini-2.0-flash`, `gpt-4o` 기록이 저장된 세션 조회 및 UI 표출 | • 백엔드 `sanitize_model_identifier`에서 과거 모델 식별자 원본 100% 보존<br>• 프론트엔드 `formatModelDisplayName`을 통해 `Gemini 2.5 Flash`, `GPT-4o`로 정직하게 표출<br>• `ModelTierBadge`에서 범용 폴백 뱃지(`✨`, `🤖`)로 크래시 없이 안전하게 렌더링 |
+| `TC-UI-LIGHT-001`| UI/UX | **UI 모델 선택기 팝오버 및 디바이더 군더더기 장식 문구 제거 (경량화)** | `/chat` 진입 후 모델 셀렉터 팝오버 오픈 및 대화 도중 모델 변경 | • 팝오버 상단에 `Claude 3-Tier Multi-Model`, `Sparkles`, `맥락 100% 보존` 장식 헤더 0건 확인 (티어 아이템만 간결 표출)<br>• `ModelChangeDivider`에 `맥락 100% 보존` 고정 부가 라벨 삭제 및 `Claude {NewTier} 5.5로 모델 변경됨` 단일 안내 확인 |
+| `TC-ANTIGEM-001`| 보안/정합성 | **백엔드 Anti-Gemini 격리 및 신규 요청 기본 5.5 모델 매핑** | `GEMINI_API_KEY` 설정 후 백엔드 라이브 프로바이더 조회 및 신규 Q&A 실행 | • `has_live_provider()`에서 Gemini 배제 확인<br>• `_call_gemini` 영구 퇴역 확인<br>• 신규 요청 시 모델 미지정일 때 `claude-sonnet-5-5`로 안전 기본 매핑 |
 | `TC-CLAUDE-001`| E2E 정상 | **Claude 3-Tier 멀티모델 선택기 UX 및 공식 5.5 브랜드 렌더링** | `/chat` 진입 후 모델 셀렉터 확인 및 팝오버 오픈 | • 초기 기본 모델로 `🎯 Sonnet 5.5` 표출<br>• 팝오버 오픈 시 `⚡ Haiku 5.5`, `🎯 Sonnet 5.5`, `🧠 Opus 5.5` 3대 티어 정규 명칭 표출<br>• WAI-ARIA `role="radiogroup"` 및 키보드 방향키 탐색 동작 |
-| `TC-CLAUDE-002`| E2E 정상 | **대화 도중 모델 변경 시 타임라인 구분선 및 무손실 맥락 인계** | 1턴 Sonnet 5.5 대화 후 Opus 5.5로 모델 변경 및 2턴 질의 전송 | • 이전 대화 메시지 및 세션 컨텍스트 100% 무손실 보존 (Zero Context Erasure)<br>• 타임라인 상에 시맨틱 `ModelChangeDivider`(`role="separator"`) 자동 삽입<br>• "Claude Opus 5.5로 모델 변경됨 (맥락 100% 보존)" 표출 확인 |
+| `TC-CLAUDE-002`| E2E 정상 | **대화 도중 모델 변경 시 타임라인 구분선 및 무손실 맥락 인계** | 1턴 Sonnet 5.5 대화 후 Opus 5.5로 모델 변경 및 2턴 질의 전송 | • 이전 대화 메시지 및 세션 컨텍스트 100% 무손실 보존 (Zero Context Erasure)<br>• 타임라인 상에 시맨틱 `ModelChangeDivider`(`role="separator"`) 자동 삽입<br>• "Claude Opus 5.5로 모델 변경됨" 깔끔 표출 확인 |
 | `TC-CLAUDE-003`| UI/보안 | **답변 스트리밍 중 듀얼 모델 선택기 동시 잠금 (Streaming Lock)** | AI 챗 답변이 실시간 SSE 스트리밍 중인 상태 | • 상단 헤더 및 하단 컴포저의 `ChatModelSelector` 트리거 버튼 동시 비활성화(`disabled cursor-not-allowed`)<br>• 클릭 시 "답변 생성 중에는 모델을 변경할 수 없습니다" 안내 툴팁 노출 |
 | `TC-CLAUDE-004`| E2E 정상 | **어시스턴트 메시지 푸터 모델 배지 및 실시간 레이턴시 표출** | 질의 전송 후 답변 스트리밍 완료 (`event: done`) | • 어시스턴트 말풍선 우하단에 `ModelTierBadge` 렌더링<br>• 사용된 모델명(`Haiku 5.5` / `Sonnet 5.5` / `Opus 5.5`) 및 실시간 응답 지연시간(ms), 상대 비용($/$$/$$$) 표출 확인 |
 | `TC-CLAUDE-005`| 데이터/성능 | **Claude Sonnet 5.5 수집 파이프라인 프롬프트 캐싱 메타데이터** | 2,500토큰 초과 시스템 프롬프트 요청 및 스트리밍 완료 | • `anthropic-beta: prompt-caching-2024-07-31` 헤더 전송<br>• `event: done` 페이로드에 `usage` 메타데이터(`input_tokens`, `output_tokens`, `cache_read_input_tokens`) 정상 수화 및 직렬화 보존 |
-| `TC-CLAUDE-006`| 장애/복원 | **외부 API 키 부재 시 Zero 503 Mock Fallback 무중단 복원력** | `ANTHROPIC_API_KEY` 미설정 또는 테스트 환경에서 챗 질의 전송 | • 503 다운타임 없이 `MockLLMProvider`로 안전하게 우아한 폴백 수행<br>• 요청된 `model_tier`가 무손실 보존되며 4단 엔지니어링 리포트 마크다운 정상 스트리밍 |
 | `TC-CLAUDE-007`| 보안 거버넌스 | **Zero-Leak API 키 보안 거버넌스 검증** | 브라우저 전역 스크립트 번들 및 Network 요청 탭 전수 감사 | • `ANTHROPIC_API_KEY`가 클라이언트 번들, DOM, LocalStorage, SSE 페이로드에 0바이트 노출<br>• 오직 FastAPI 백엔드 프록시(`POST /api/chat/stream`)를 통해서만 서버-투-서버 통신 수행 |
-| `TC-CLAUDE-008`| UI 음성검증 | **UI 내 날것의 기술 식별자 및 3.5 잔재 노출 원천 차단 (Negative Assertion)** | `ChatMessageItem` 및 UI 렌더링 뷰 전수 검사 | • `claude-3-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5` 등 기술 식별자 노출 0건<br>• 오직 `Claude Sonnet 5.5`, `Claude Haiku 5.5`, `Claude Opus 5.5` 또는 단축형(`Sonnet 5.5` 등)만 렌더링됨을 단언 |
+| `TC-CLAUDE-008`| UI 음성검증 | **UI 내 날것의 기술 식별자 및 3.5 잔재 노출 원천 차단 (Negative Assertion)** | `ChatMessageItem` 및 UI 렌더링 뷰 전수 검사 | • `claude-3-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5` 등 기술 식별자 노출 0건<br>• 오직 정규화된 브랜드 명칭(`Claude Sonnet 5.5` 등) 또는 단축형(`Sonnet 5.5` 등)만 렌더링됨을 단언 |
 | `TC-DUAL-001`  | E2E 정상 | **듀얼 모델 셀렉터 배치 및 0ms 양방향 동기화** | `/chat` 진입 후 상단 헤더 칩 및 하단 컴포저 칩 확인, 상단에서 Opus 선택 | • 상단 헤더 우측 및 하단 컴포저 좌하단에 모델 칩 동시 마운트<br>• 상단 헤더에서 Opus 선택 시 하단 컴포저 칩도 0ms 즉시 `🧠 Opus 5.5`로 동기화 |
 | `TC-DUAL-002`  | UI/UX | **듀얼 셀렉터 드롭다운 전개 방향 최적화** | 상단 헤더 칩 클릭 후 팝오버 위치 확인, 하단 컴포저 칩 클릭 후 위치 확인 | • 상단 헤더 칩: 하향 우측(`top-full right-0 mt-2`)으로 전개<br>• 하단 컴포저 칩: 상향 좌측(`bottom-full left-0 mb-2`)으로 전개되어 뷰포트 잘림 방지 |
 | `TC-THEME-001` | E2E 정상 | **전역 테마 순환 전환 (`t` 키 및 헤더 버튼)** | 초기 라이트 모드 상태에서 헤더 토글 클릭 또는 단축키 `t` 3회 입력 | • `Light` $\rightarrow$ `Dark` $\rightarrow$ `System` 순환 전환 및 `<html>`의 `dark` 클래스, LocalStorage 영속화 확인 |
@@ -110,21 +112,25 @@
 | `TC-RESP-002`  | 반응형/UI | **모바일 슬라이드 드로어 및 스크롤 락** | 375px 모바일 뷰포트에서 헤더 메뉴 탭하여 `ChatHistoryDrawer` 오픈 | • 좌측 드로어 슬라이드오버, 바디 스크롤 락(`overflow: hidden`), 백드롭 터치 닫힘 확인 |
 | `TC-SEC-001`   | 보안/유효성 | **유효하지 않은 UUID 및 세션 미존재 방어** | `GET /api/chat/sessions/invalid-uuid-123` 또는 미존재 UUID 호출 | • 비정상 UUID: 400 Bad Request, 미존재 UUID: 404 Not Found 및 클라이언트 안전 리셋 |
 | `TC-EDGE-001`  | 엣지/네트워크 | **스트리밍 중 세션 전환 및 네트워크 단절 대응** | 답변 수신 중 타 세션 클릭 또는 오프라인 전환 | • SSE 요청 즉시 `AbortController.abort()` 중단, 오프라인 시 L1 `localStorage` 캐시 열람 |
-| `TC-REG-001`   | 통합 회귀 | **전체 백엔드 API(142건) & 프론트엔드 컴포넌트(230건) 자동화 회귀** | pytest 142건 및 vitest 230건 전체 스위트 실행 | • 백엔드 142개 테스트 100% 통과 (0 Failure)<br>• 프론트엔드 230개 테스트 100% 통과 (0 Failure)<br>• TypeScript 컴파일 에러 0건 (`pnpm tsc --noEmit`) |
+| `TC-REG-001`   | 통합 회귀 | **전체 백엔드 API(147건) & 프론트엔드 컴포넌트(232건) 자동화 회귀** | pytest 147건 및 vitest 232건 전체 스위트 실행 | • 백엔드 147개 테스트 100% 통과 (0 Failure)<br>• 프론트엔드 232개 테스트 100% 통과 (0 Failure)<br>• TypeScript 컴파일 에러 0건 (`pnpm tsc --noEmit`) |
 
 ---
 
 ## 3. 테스트 실행 지침 및 하드 게이트 (Execution Guidelines & Quality Gates)
 
 1. **자동화 검증 스위트 실행 파이프라인**:
-   - 백엔드 pytest 전체 회귀 스위트: `cd backend && ../.venv/bin/pytest -v` (**142개 테스트 전원 Green**)
-   - 프론트엔드 vitest 전체 회귀 스위트: `cd frontend && pnpm test:run` (**230개 테스트 전원 Green**)
+   - 백엔드 pytest 전체 회귀 스위트: `cd backend && ../.venv/bin/pytest -v` (**147개 테스트 전원 Green**)
+   - 프론트엔드 vitest 전체 회귀 스위트: `cd frontend && pnpm test:run` (**232개 테스트 전원 Green**)
    - 프론트엔드 정적 타입 검증: `cd frontend && pnpm tsc --noEmit` (**0 에러, Exit Code 0**)
 2. **하드 퀄리티 게이트 통과 기준 (Hard Quality Gate Criteria)**:
-   - 자동화 테스트 통과율: **100% (Pass Rate = 100%, 372/372건)**
+   - 자동화 테스트 통과율: **100% (Pass Rate = 100%, 379/379건)**
+   - 포커스 기사 핸드오버 클로저 지연(누락): **0건 (Zero Closure Lag)**
+   - Scoped 기사 프롬프트 주입 및 앵무새 답변 발생: **0건 (Zero Parroting Leaks)**
+   - 프로덕션 코드 내 목 객체 및 분기 잔존: **0건 (Zero-Mock Rule Compliance)**
+   - 과거 세션 모델명 왜곡/변조: **0건 (Zero Model Mutilation)**
+   - UI 군더더기 장식 문구 노출: **0건 (Zero Clutter)**
    - UI 날것의 모델 ID 노출: **0건 (Zero Raw Model ID Leaks)**
-   - UI 구버전 3.5 모델 노출: **0건 (Zero 3.5 Model Leaks)**
-   - Gemini 문자열 노출: **0건 (Zero Gemini Leaks)**
+   - Gemini 비인가 신규 생성 노출: **0건 (Zero Gemini Leaks)**
    - 듀얼 셀렉터 동기화 지연: **0ms (Zero Latency Sync)**
    - Blocker 결함 수: **0건**
    - Critical 결함 수: **0건**

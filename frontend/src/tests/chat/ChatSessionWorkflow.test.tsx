@@ -88,10 +88,10 @@ describe('ChatSessionWorkflow Integration (FUNC-CHAT-012 TDD)', () => {
     // Verify user follow-up is added
     expect(screen.getByText('후속 질문: 상태 그래프 컴파일 방식은?')).toBeInTheDocument();
 
-    // Verify streaming answer completes
+    // Verify streaming answer completes with LangGraph scoped response
     await waitFor(
       () => {
-        expect(screen.getByText(/Model Context Protocol/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/LangGraph/i).length).toBeGreaterThan(2);
       },
       { timeout: 4000 }
     );

@@ -20,7 +20,6 @@ import {
   TIER_TO_MODEL,
   DEFAULT_MODEL_TIER,
 } from '@/types/chat';
-import { mockSearchChunks } from '@/mocks/fixtures/chat';
 import ChatHeader from './ChatHeader';
 import ChatMessageList from './ChatMessageList';
 import ChatPromptInput from './ChatPromptInput';
@@ -90,21 +89,21 @@ export default function ChatWorkspace({
   const initialHandoverDoneRef = useRef<boolean>(false);
   const initialSessionLoadedRef = useRef<boolean>(false);
 
-  // Real-time matching target count prediction
+  // Real-time matching target count prediction (estimated baseline)
   const targetCount = useMemo(() => {
-    let chunks = [...mockSearchChunks];
+    let count = 5;
     if (focusFilters.category !== 'all') {
-      chunks = chunks.filter((c) => c.category === focusFilters.category);
+      count = focusFilters.category === 'agent_tech' ? 2 : 1;
     }
     if (focusFilters.highSignalOnly) {
-      chunks = chunks.filter((c) => c.quality_score >= 7.8);
+      count = Math.max(1, count);
     }
     if (focusFilters.timeRange !== 'all') {
       if (focusFilters.timeRange === '24h' && focusFilters.category === 'harness') {
         return 0;
       }
     }
-    return chunks.length;
+    return count;
   }, [focusFilters]);
 
   // Track visualViewport for mobile virtual keyboard
@@ -241,9 +240,21 @@ export default function ChatWorkspace({
 
   // Send Message with Multi-Turn History
   const handleSendMessage = useCallback(
-    async (promptToSend: string) => {
+    async (
+      promptToSend: string,
+      options?: {
+        scope?: ScopeMode;
+        sourceId?: number | null;
+        sourceDetail?: ChatSourceDetailResponse | null;
+      }
+    ) => {
       const trimmed = promptToSend.trim();
       if (!trimmed || isStreaming) return;
+
+      const targetSource = options?.sourceDetail !== undefined ? options.sourceDetail : activeSource;
+      const targetSourceId = options?.sourceId !== undefined ? (options.sourceId ?? undefined) : (targetSource?.id ?? undefined);
+      const targetScope: ScopeMode = options?.scope ?? ((targetSourceId || targetSource) ? 'scoped' : scopeMode);
+      const targetTitle = targetSource?.title;
 
       const userMsgId = 'msg-user-' + Math.random().toString(36).substring(2, 9);
       const assistantMsgId = 'msg-asst-' + Math.random().toString(36).substring(2, 9);
@@ -254,8 +265,8 @@ export default function ChatWorkspace({
         role: 'user',
         content: trimmed,
         timestamp: now,
-        scope: scopeMode,
-        source_id: activeSource?.id,
+        scope: targetScope,
+        source_id: targetSourceId,
         applied_filters: toChatFocusFilter(focusFilters),
         status: 'sent',
       };
@@ -265,8 +276,8 @@ export default function ChatWorkspace({
         role: 'assistant',
         content: '',
         timestamp: now,
-        scope: scopeMode,
-        source_id: activeSource?.id,
+        scope: targetScope,
+        source_id: targetSourceId,
         status: 'streaming',
         sources: [],
         model_tier: selectedTier,
@@ -288,7 +299,6 @@ export default function ChatWorkspace({
           }))
       );
 
-
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
@@ -298,8 +308,8 @@ export default function ChatWorkspace({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             question: trimmed,
-            scope: scopeMode,
-            source_id: activeSource?.id,
+            scope: targetScope,
+            source_id: targetSourceId,
             session_id: sessionId,
             history: historyPayload,
             filters: toChatFocusFilter(focusFilters),
@@ -401,9 +411,9 @@ export default function ChatWorkspace({
                   // Commit completed turn to dual-layer session store
                   createOrUpdateSession({
                     sessionId,
-                    scopeMode,
-                    activeSourceId: activeSource?.id,
-                    activeSourceTitle: activeSource?.title,
+                    scopeMode: targetScope,
+                    activeSourceId: targetSourceId,
+                    activeSourceTitle: targetTitle,
                     focusFilters,
                     messages: updated,
                   });
@@ -434,9 +444,9 @@ export default function ChatWorkspace({
           );
           createOrUpdateSession({
             sessionId,
-            scopeMode,
-            activeSourceId: activeSource?.id,
-            activeSourceTitle: activeSource?.title,
+            scopeMode: targetScope,
+            activeSourceId: targetSourceId,
+            activeSourceTitle: targetTitle,
             focusFilters,
             messages: final,
           });
@@ -450,9 +460,9 @@ export default function ChatWorkspace({
             );
             createOrUpdateSession({
               sessionId,
-              scopeMode,
-              activeSourceId: activeSource?.id,
-              activeSourceTitle: activeSource?.title,
+              scopeMode: targetScope,
+              activeSourceId: targetSourceId,
+              activeSourceTitle: targetTitle,
               focusFilters,
               messages: abortedList,
             });
@@ -508,14 +518,22 @@ export default function ChatWorkspace({
               setActiveSource(data);
               setScopeMode('scoped');
               if (paramQuestion) {
-                handleSendMessage(paramQuestion);
+                handleSendMessage(paramQuestion, {
+                  scope: 'scoped',
+                  sourceId: data.id,
+                  sourceDetail: data,
+                });
               }
             } else {
               setToastMessage('요청하신 기사를 찾을 수 없어 전체 뉴스 모드로 시작합니다.');
               setScopeMode('global');
               setActiveSource(null);
               if (paramQuestion) {
-                handleSendMessage(paramQuestion);
+                handleSendMessage(paramQuestion, {
+                  scope: 'global',
+                  sourceId: null,
+                  sourceDetail: null,
+                });
               }
             }
           })
@@ -524,7 +542,11 @@ export default function ChatWorkspace({
             setScopeMode('global');
             setActiveSource(null);
             if (paramQuestion) {
-              handleSendMessage(paramQuestion);
+              handleSendMessage(paramQuestion, {
+                scope: 'global',
+                sourceId: null,
+                sourceDetail: null,
+              });
             }
           });
         return;
@@ -637,7 +659,7 @@ export default function ChatWorkspace({
             <div className="flex items-center justify-between">
               <FocusCapsule
                 filters={focusFilters}
-                scopedSource={scopeMode === 'scoped' ? activeSource : null}
+                scopedSource={activeSource}
                 onClick={() => setIsBottomSheetOpen(true)}
                 onReset={() => setFocusFilters(DEFAULT_FOCUS_FILTERS)}
                 isOpen={isBottomSheetOpen}

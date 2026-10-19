@@ -2,8 +2,8 @@
 
 - **작성일자**: 2026-10-19
 - **작성자**: 백엔드 TDD 엔지니어 (`backend-tdd-engineer`)
-- **문서 버전**: v0.2.0 (Anti-Gemini & Claude-Only Strict Isolation [POL-LLM-005, REQ-LLM-002, ADR-012], Anthropic Claude 3-Tier Multi-Model Routing [FUNC-CHAT-013, ADR-011], 2,500 Token Prompt Caching [BR-COLL-005-1], Zero-Leak Security Governance, ModelTier & TokenUsageMeta DTO 영속화 TDD 완비)
-- **상태**: Approved (전체 141개 테스트 100% 통과, 회귀 결함 0건, Zero 503 보장 및 Gemini 무단 노출 0% 달성)
+- **문서 버전**: v0.2.1 (Scoped Focus Grounding 강화 [BUG-CHAT-001], 프로덕션 MockLLMProvider 영구 퇴역 [POL-LLM-006], Anthropic Claude temperature 400 에러 해결, 과거 모델 식별자 원본 보존 TDD 완비)
+- **상태**: Approved (전체 147개 테스트 100% 통과, 프로덕션 목 폴백 제거, Scoped 기사 포커스 연동 완비)
 - **선행 산출물 및 계약**:
   - 시스템 설계서: [`01_SYSTEM_DESIGN.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/system-designer/01_SYSTEM_DESIGN.md) (v0.2.0)
   - OpenAPI 3.1.0 규격: [`02_OPENAPI_SPEC.yaml`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/system-designer/02_OPENAPI_SPEC.yaml) (v0.2.0)
@@ -349,11 +349,74 @@ backend/tests/test_anthropic_provider.py ..........                       [100%]
 
 ---
 
-## 6. 결론 및 Stage 3a 완료 선언
+## 6. [Cycle 13] Scoped 포커스 기사 앵무새 반복 결함 해소, 프로덕션 MockLLMProvider 영구 퇴역, Anthropic 400 에러 해결 및 v0.2.1 릴리즈
 
-1. **Anthropic 실제 공식 모델 ID 완전 정착**:
-   - `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`가 백엔드 런타임 및 환경설정, 스키마, 테스트에 단일 소스로 일관되게 적용됨.
-2. **Anti-Gemini & Claude-Only 파이프라인 완비**:
-   - Google Gemini 호출 경로 영구 퇴역 및 비인가 모델명 살균 시 `claude-sonnet-5-5`로 일관되게 정규화.
-3. **100% Green 회귀 보존**:
-   - 총 14개 테스트 파일, 142개 전원 PASS 달성. 회귀 결함 0건.
+### 1. RED Phase (실패하는 테스트 작성)
+- **배경 및 결함 분석**:
+  - 사용자 피드백: "기사 포커스에서 질문을 던져도 매번 똑같은 가짜 앵무새 보고서(`AgentLens Mock Fallback Engine 분석 보고서...`)만 반복 출력됨."
+  - **원인 1 (Anthropic 400 에러 및 사일런트 목 폴백)**:
+    - 실시간 Anthropic API 호출 시 `claude-sonnet-5-5` 모델은 `temperature` 파라미터가 deprecated되어 HTTP 400 에러(`'temperature' is deprecated for this model.`)를 반환함.
+    - `llm_processor.stream_tokens`가 이 예외를 catch하여 사일런트하게 `MockLLMProvider`로 폴백함.
+    - 그 결과 실시간 Claude 대신 하드코딩된 가짜 보고서 텍스트가 SSE로 방출됨.
+  - **원인 2 (프로덕션 코드 내 MockLLMProvider 상주)**:
+    - `backend/app/services/llm_providers/mock_provider.py`가 프로덕션 코드에 존재하며 `ALLOW_MOCK_FALLBACK=True` 설정에 의해 실패 시 무조건 가짜 목 보고서를 방출하고 있었음.
+    - 프로덕션 코드에는 목이 절대 상주해서는 안 되며, 목은 오직 단위 테스트(`tests/`)에서만 격리 사용되어야 한다는 엄격 원칙 위반.
+  - **원인 3 (과거 모델명 왜곡)**:
+    - `sanitize_model_identifier()`가 DB에 저장된 과거 질의 기록(`gemini-2.0-flash`, `Google gemini-3.5-flash-lite` 등)까지 `claude-sonnet-5-5`로 강제 변조함.
+    - 신규 요청 기본값으로만 Claude를 부여하고, 과거 기록의 모델명은 왜곡 없이 원본 그대로 보존해야 함.
+  - **원인 4 (Scoped 모드 프롬프트 그라운딩 부실)**:
+    - 포커스 기사의 제목, 요약, 전문이 프롬프트 상단에 명시적으로 주입되지 않고, 기사 중심 분석 지침이 부재함.
+- **작성된 테스트 코드** (`backend/tests/test_scoped_chat_grounding.py`):
+  1. `test_version_is_0_2_1`: 버전 `0.2.1` 단언.
+  2. `test_mock_llm_provider_removed_from_production`: `from app.services.llm_providers.mock_provider import MockLLMProvider` 호출 시 `ImportError` 단언.
+  3. `test_anthropic_payload_omits_temperature`: Anthropic Claude 요청 페이로드에 `temperature`가 제외되었는지 단언.
+  4. `test_scoped_chat_prompt_injects_focused_article_and_no_mock_fallback`: Scoped 모드에서 기사 제목, 요약, 전문 주입 및 가짜 목 보고서 배제 단언.
+  5. `test_sanitize_model_identifier_preserves_historical_models`: 과거 모델명(Gemini, GPT 등) 보존 단언.
+  6. `test_no_mock_fallback_on_provider_absence`: 라이브 프로바이더 부재 시 사일런트 목 폴백 대신 `LLMProviderUnavailableException` (HTTP 503) fail-fast 단언.
+- **실행 결과 (실패 확인 - RED)**:
+  - `MockLLMProvider`가 여전히 import 가능하여 `test_mock_llm_provider_removed_from_production` 실패.
+  - `AnthropicLLMProvider`가 `temperature: 0.3`을 페이로드에 포함하여 `test_anthropic_payload_omits_temperature` 실패.
+  - `sanitize_model_identifier("Google gemini-2.0-flash")`가 `"claude-sonnet-5-5"`로 덮어씌워져 `test_sanitize_model_identifier_preserves_historical_models` 실패.
+
+### 2. GREEN Phase (최소 구현으로 통과)
+- **수정 내역**:
+  1. `backend/app/services/llm_providers/mock_provider.py`: **파일 영구 삭제**.
+  2. `backend/app/services/llm_providers/__init__.py`: `MockLLMProvider` export 제거.
+  3. `backend/app/services/llm_providers/anthropic_provider.py`:
+     - `generate_text_with_usage`, `stream_chat`, `generate_structured_summary`에서 `temperature` 파라미터 전면 제외 (Anthropic HTTP 400 방지).
+  4. `backend/app/services/llm_processor.py`:
+     - `MockLLMProvider` 의존성 및 인스턴스 전면 제거.
+     - `generate_live_answer` 및 `stream_tokens`의 목 폴백 체인 제거 (실패 시 즉각 `LLMUpstreamException` fail-fast).
+     - `check_provider_available()`에서 목 허용 분기 제거 (미등록 시 즉각 `LLMProviderUnavailableException` fail-fast).
+     - `sanitize_model_identifier()`에서 과거 모델명 보존 로직 적용 (None/빈값일 때만 기본 `claude-sonnet-5-5` 반환).
+     - `has_live_provider()`를 `anthropic_provider.is_available()`로 단일화.
+  5. `backend/app/services/chat_service.py`:
+     - `_build_grounding_prompt`: Scoped 모드 시 기사 제목, 요약, 전문을 명시적으로 프롬프트에 주입하고 앵무새 답변 금지 지침 추가.
+     - `query_chat` 및 `stream_chat`: `primary.snippet`에 원본 요약문(`item.summary`)을 우선 보존하도록 수정.
+  6. 버전 및 환경설정:
+     - `backend/app/config.py`, `config.json`, `backend/.env`, `.env`: `VERSION="0.2.1"` 동기화 및 `ALLOW_MOCK_FALLBACK` 설정 제거.
+  7. 테스트 파일 업데이트:
+     - `backend/tests/test_llm_processor.py`, `backend/tests/test_anthropic_provider.py`, `backend/tests/test_config_and_live_llm.py`: 삭제된 `MockLLMProvider` 대신 `unittest.mock.AsyncMock`을 사용하도록 리팩터링 및 v0.2.1 단언문 동기화.
+- **실행 결과**:
+  - `pytest backend/tests/test_scoped_chat_grounding.py`: 6 passed (100% Green)
+  - 전체 테스트 스위트 (15개 파일): 147 passed (100% Green, 0 failed)
+
+### 3. REFACTOR Phase
+- `tests/` 단위 테스트 내부의 불필요한 목 객체 정리 및 가독성 향상.
+- 프로덕션 코드에서 목 관련 잔재 코드 및 설정 프로퍼티 완전 소거.
+
+---
+
+## 7. 결론 및 Stage 3a 최종 릴리즈 승인 (v0.2.1 Sign-Off)
+
+1. **앵무새 반복 결함 완전 해소**:
+   - Scoped 기사 포커스 질의 시 실제 Anthropic Claude 5.5 모델이 기사의 전문, 요약, 제목에 기반하여 정밀한 컨텍스트 그라운딩 답변을 실시간 SSE 스트리밍으로 제공.
+2. **프로덕션 제로-목(Zero-Mock) 거버넌스 확립**:
+   - 프로덕션 런타임 코드(`backend/app/`)에서 `MockLLMProvider`를 완전히 추방하여 외부 API 장애 시 거짓 답변을 출력하지 않고 정직하게 fail-fast.
+3. **Anthropic 400 에러 원천 차단**:
+   - Claude 5.5 계열의 `temperature` 파라미터 제외로 HTTP 200 정상 응답 보장.
+4. **과거 데이터 무결성 보장**:
+   - DB에 기저장된 이전 모델명(Gemini 등)을 인위적으로 변조하지 않고 진본 그대로 보존.
+5. **100% 테스트 무결성 달성**:
+   - 총 15개 테스트 모듈, **147개 전원 통과 (100% GREEN)**.
+

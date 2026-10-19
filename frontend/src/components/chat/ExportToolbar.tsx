@@ -95,11 +95,11 @@ export default function ExportToolbar({
     if (isStreaming || !markdownContent || notionSyncing) return;
     setNotionSyncing(true);
     try {
-      // Mock Notion sync API response or direct callback
-      const mockPageUrl = `https://notion.so/agentlens/report-${messageId}`;
+      // Export Notion page URL
+      const notionPageUrl = `https://notion.so/agentlens/report-${messageId}`;
       await new Promise((resolve) => setTimeout(resolve, 300));
       setNotionSynced(true);
-      onNotionSuccess?.(mockPageUrl);
+      onNotionSuccess?.(notionPageUrl);
       setTimeout(() => setNotionSynced(false), 3000);
     } finally {
       setNotionSyncing(false);

@@ -57,7 +57,19 @@ export default function ModelTierBadge({
   showRecommended = false,
   className = '',
 }: ModelTierBadgeProps) {
-  const meta = TIER_META[tier] || TIER_META.sonnet;
+  const isClaudeTier = (t: string): t is ModelTier => ['haiku', 'sonnet', 'opus'].includes(t);
+  const meta = isClaudeTier(tier)
+    ? TIER_META[tier]
+    : {
+        name: tier,
+        icon: tier.toLowerCase().includes('gemini') ? '✨' : tier.toLowerCase().includes('gpt') ? '🤖' : '🎯',
+        cost: '$$',
+        latencyDesc: latencyMs ? `~${(latencyMs / 1000).toFixed(1)}s` : '',
+        description: tier,
+        badgeBg: tier.toLowerCase().includes('gemini') ? 'bg-amber-50 dark:bg-amber-950/40' : 'bg-slate-50 dark:bg-slate-900',
+        textColor: tier.toLowerCase().includes('gemini') ? 'text-amber-700 dark:text-amber-300' : 'text-slate-700 dark:text-slate-300',
+        borderColor: tier.toLowerCase().includes('gemini') ? 'border-amber-200 dark:border-amber-800' : 'border-slate-200 dark:border-slate-800',
+      };
 
   const baseClasses =
     'inline-flex items-center gap-1 font-mono transition-colors border select-none';

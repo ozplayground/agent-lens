@@ -59,133 +59,113 @@ def test_base_llm_provider_interface():
     assert "generate_text" in abstract_methods
     assert "stream_chat" in abstract_methods
 
+from typing import AsyncGenerator, Tuple
+from unittest.mock import patch, AsyncMock
+from app.services.llm_providers.base import BaseLLMProvider
+from app.services.llm_processor import LLMProviderUnavailableException, LLMUpstreamException
+
+class UnitTestingMockLLMProvider(BaseLLMProvider):
+    """Unit-test only mock provider implemented with unittest best practices."""
+    def __init__(self, model_name: str = "TestMockLLM"):
+        self._model_name = model_name
+
+    @property
+    def provider_name(self) -> str:
+        return "test_mock"
+
+    def is_available(self) -> bool:
+        return True
+
+    async def generate_text(self, prompt: str, **kwargs) -> Tuple[str, str]:
+        return "## 1. 핵심 아키텍처\nTest unit content.", self._model_name
+
+    async def stream_chat(self, prompt: str, **kwargs) -> AsyncGenerator[Tuple[str, str], None]:
+        yield ("## 1. 핵심 아키텍처\nTest stream content.", self._model_name)
+
 @pytest.mark.asyncio
-async def test_mock_llm_provider_structure_and_tokens():
-    """Verify MockLLMProvider emits 4-section structured engineering report tokens."""
-    from app.services.llm_providers.mock_provider import MockLLMProvider
+async def test_unit_test_mock_provider():
+    """Verify mock providers are strictly used within unit tests."""
+    provider = UnitTestingMockLLMProvider()
+    assert provider.provider_name == "test_mock"
+    text, model = await provider.generate_text("Test")
+    assert "핵심 아키텍처" in text
+    assert model == "TestMockLLM"
 
-    provider = MockLLMProvider()
-    assert provider.provider_name == "mock"
-    assert provider.is_available() is True
-
-    # Test complete text generation
-    text, model = await provider.generate_text("Prompt test")
-    assert "Mock" in model
-    assert "## 1. 핵심 아키텍처" in text
-    assert "## 2. 주요 기능 및 코드 구현" in text
-    assert "## 3. 기존 기술 대비 차별점" in text
-    assert "## 4. 실무 도입 시 고려사항" in text
-
-    # Test streaming
-    tokens = []
-    async for chunk, m in provider.stream_chat("Prompt test"):
-        tokens.append(chunk)
-        assert "Mock" in m
-    full_streamed = "".join(tokens)
-    assert "## 1. 핵심 아키텍처" in full_streamed
-    assert "## 4. 실무 도입 시 고려사항" in full_streamed
-
-def test_check_provider_available_testing_and_fallback_modes():
-    """Verify check_provider_available honors TESTING and ALLOW_MOCK_FALLBACK (Zero 503)."""
-    from unittest.mock import patch
-    from app.services.llm_processor import LLMProviderUnavailableException
-
-    # When testing flag is True -> Should always return True (Zero 503)
-    with patch.object(llm_processor, "has_live_provider", return_value=False), \
-         patch.object(llm_processor, "is_test_environment", return_value=True):
-        assert llm_processor.check_provider_available() is True
-
-    # When not testing, but ALLOW_MOCK_FALLBACK=True -> Should return True
-    with patch.object(llm_processor, "has_live_provider", return_value=False), \
-         patch.object(llm_processor, "is_test_environment", return_value=False), \
-         patch.object(llm_processor, "is_mock_fallback_allowed", return_value=True):
-        assert llm_processor.check_provider_available() is True
-
-    # When not testing and ALLOW_MOCK_FALLBACK=False -> Must fail-fast with 503 in strict production
-    with patch.object(llm_processor, "has_live_provider", return_value=False), \
-         patch.object(llm_processor, "is_test_environment", return_value=False), \
-         patch.object(llm_processor, "is_mock_fallback_allowed", return_value=False):
+def test_check_provider_available_production_gate():
+    """Verify check_provider_available raises 503 when no live provider configured (no fake mock fallback)."""
+    with patch.object(llm_processor, "has_live_provider", return_value=False):
         with pytest.raises(LLMProviderUnavailableException):
             llm_processor.check_provider_available()
 
 @pytest.mark.asyncio
-async def test_generate_live_answer_mock_fallback():
-    """Verify generate_live_answer safely falls back to MockLLMProvider when live keys absent."""
-    from unittest.mock import patch
-
-    with patch.object(llm_processor, "has_live_provider", return_value=False), \
-         patch.object(llm_processor, "is_mock_fallback_allowed", return_value=True):
-        ans, model = await llm_processor.generate_live_answer("자율 에이전트 아키텍처 분석")
-        assert "Mock" in model
-        assert "## 1. 핵심 아키텍처" in ans
-        assert "## 2. 주요 기능 및 코드 구현" in ans
+async def test_generate_live_answer_fails_fast_without_mock_fallback():
+    """Verify generate_live_answer raises LLMUpstreamException when live providers fail (no fake mock report)."""
+    with patch.object(llm_processor, "has_live_provider", return_value=True), \
+         patch.object(llm_processor.anthropic_provider, "is_available", return_value=False), \
+         patch.object(llm_processor, "_call_openai", new_callable=AsyncMock, return_value=(None, None)), \
+         patch.object(llm_processor, "_call_ollama", new_callable=AsyncMock, return_value=(None, None)):
+        with pytest.raises(LLMUpstreamException):
+            await llm_processor.generate_live_answer("Test prompt")
 
 @pytest.mark.asyncio
-async def test_stream_tokens_mock_fallback():
-    """Verify stream_tokens safely yields mock tokens when live keys absent."""
-    from unittest.mock import patch
-
-    with patch.object(llm_processor, "has_live_provider", return_value=False), \
-         patch.object(llm_processor, "is_mock_fallback_allowed", return_value=True):
-        tokens = []
-        async for chunk, model in llm_processor.stream_tokens("에이전트 하네스 분석"):
-            tokens.append(chunk)
-            assert "Mock" in model
-        streamed = "".join(tokens)
-        assert len(streamed) > 100
-        assert "## 1. 핵심 아키텍처" in streamed
+async def test_stream_tokens_fails_fast_without_mock_fallback():
+    """Verify stream_tokens raises LLMUpstreamException when live providers fail (no fake mock report)."""
+    with patch.object(llm_processor, "has_live_provider", return_value=True), \
+         patch.object(llm_processor.anthropic_provider, "is_available", return_value=False), \
+         patch.object(llm_processor, "openai_key", ""), \
+         patch.object(llm_processor, "ollama_url", ""):
+        with pytest.raises(LLMUpstreamException):
+            async for _ in llm_processor.stream_tokens("Test prompt"):
+                pass
 
 @pytest.mark.asyncio
-async def test_chat_stream_zero_503_end_to_end():
-    """Verify POST /api/chat/stream completes 200 OK with full SSE events without mocks (Zero 503)."""
+async def test_chat_stream_end_to_end_with_mocked_llm():
+    """Verify POST /api/chat/stream emits SSE events with mocked live LLM tokens."""
     from httpx import AsyncClient, ASGITransport
     from app.main import app
 
-    payload = {
-        "question": "Zero 503 검증: 자율 에이전트 하네스 구조 설명",
-        "scope": "global"
-    }
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.post("/api/chat/stream", json=payload)
-    assert res.status_code == 200
-    body = res.text
-    assert "event: sources" in body
-    assert "event: token" in body
-    assert "event: done" in body
+    async def mock_stream(prompt, **kwargs):
+        yield ("## 1. 핵심 아키텍처 및 동작 원리\nFastMCP 아키텍처 분석", "claude-sonnet-5-5")
 
-    # Reassemble streamed tokens from SSE data payloads
-    import json
-    tokens = []
-    for line in body.split("\n"):
-        if line.startswith('data: {"token":'):
-            tokens.append(json.loads(line[6:])["token"])
-    assembled_text = "".join(tokens)
-    assert "## 1. 핵심 아키텍처" in assembled_text
-    assert "## 4. 실무 도입 시 고려사항" in assembled_text
-
-
+    with patch.object(llm_processor, "stream_tokens", side_effect=mock_stream):
+        payload = {
+            "question": "자율 에이전트 하네스 구조 설명",
+            "scope": "global"
+        }
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.post("/api/chat/stream", json=payload)
+        assert res.status_code == 200
+        body = res.text
+        assert "event: sources" in body
+        assert "event: token" in body
+        assert "event: done" in body
+        assert "claude-sonnet-5-5" in body
 
 @pytest.mark.asyncio
-async def test_chat_query_zero_503_end_to_end():
-    """Verify POST /api/chat/query completes 200 OK without mocks (Zero 503)."""
+async def test_chat_query_end_to_end_with_mocked_llm():
+    """Verify POST /api/chat/query completes 200 OK with mocked live LLM answer."""
     from httpx import AsyncClient, ASGITransport
     from app.main import app
 
-    payload = {
-        "question": "Zero 503 동기 쿼리 검증: MCP 프로토콜 도구 연동",
-        "scope": "global"
-    }
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.post("/api/chat/query", json=payload)
-    assert res.status_code == 200
-    data = res.json()
-    assert "answer" in data
-    assert len(data["answer"]) > 50
-    assert "## 1. 핵심 아키텍처" in data["answer"]
+    async def mock_answer(prompt, **kwargs):
+        return "## 1. 핵심 아키텍처\nMCP 프로토콜 분석 보고서", "claude-sonnet-5-5"
+
+    with patch.object(llm_processor, "generate_live_answer", side_effect=mock_answer):
+        payload = {
+            "question": "MCP 프로토콜 도구 연동",
+            "scope": "global"
+        }
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            res = await ac.post("/api/chat/query", json=payload)
+        assert res.status_code == 200
+        data = res.json()
+        assert "answer" in data
+        assert "## 1. 핵심 아키텍처" in data["answer"]
+        assert data["model"] == "claude-sonnet-5-5"
 
 @pytest.mark.asyncio
-async def test_scoped_chat_stream_zero_503_end_to_end():
-    """Verify Scoped mode POST /api/chat/stream emits all 4 status events + sources + mock tokens + done."""
+async def test_scoped_chat_stream_end_to_end_with_mocked_llm():
+    """Verify Scoped mode POST /api/chat/stream emits all 4 status events + sources + Claude tokens + done."""
     from httpx import AsyncClient, ASGITransport
     from app.main import app
     from app.database import AsyncSessionLocal
@@ -216,20 +196,25 @@ async def test_scoped_chat_stream_zero_503_end_to_end():
                 session.add(item)
                 await session.commit()
 
-        payload = {
-            "question": "Scoped mode Zero 503 검증: 격리 벤치마크 분석",
-            "scope": "scoped",
-            "source_id": 999
-        }
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            res = await ac.post("/api/chat/stream", json=payload)
-        assert res.status_code == 200
-        body = res.text
-        assert "event: status" in body
-        assert "event: sources" in body
-        assert "event: token" in body
-        assert "event: done" in body
-        assert "MockLLMProvider" in body
+        async def mock_scoped_stream(prompt, **kwargs):
+            yield ("## 1. 핵심 아키텍처\n소식 기반 분석 내용입니다.", "claude-sonnet-5-5")
+
+        with patch.object(llm_processor, "stream_tokens", side_effect=mock_scoped_stream):
+            payload = {
+                "question": "격리 벤치마크 분석",
+                "scope": "scoped",
+                "source_id": 999
+            }
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+                res = await ac.post("/api/chat/stream", json=payload)
+            assert res.status_code == 200
+            body = res.text
+            assert "event: status" in body
+            assert "event: sources" in body
+            assert "event: token" in body
+            assert "event: done" in body
+            assert "claude-sonnet-5-5" in body
+            assert "AgentLens Mock Fallback Engine" not in body
     finally:
         async with AsyncSessionLocal() as session:
             to_del = await session.get(NewsItem, 999)
@@ -237,24 +222,9 @@ async def test_scoped_chat_stream_zero_503_end_to_end():
                 await session.delete(to_del)
                 await session.commit()
 
-
-
-def test_is_mock_fallback_allowed_env_override(monkeypatch):
-    """Verify is_mock_fallback_allowed respects ALLOW_MOCK_FALLBACK env var."""
-    monkeypatch.setattr(llm_processor, "is_test_environment", lambda: False)
-
-    monkeypatch.setenv("ALLOW_MOCK_FALLBACK", "false")
-    assert llm_processor.is_mock_fallback_allowed() is False
-
-    monkeypatch.setenv("ALLOW_MOCK_FALLBACK", "true")
-    assert llm_processor.is_mock_fallback_allowed() is True
-
-def test_mock_llm_provider_custom_model_name():
-    """Verify MockLLMProvider constructor handles custom model identifier."""
-    from app.services.llm_providers.mock_provider import MockLLMProvider
-
-    custom_provider = MockLLMProvider(model_name="Custom-Mock-Agent-v2")
-    assert custom_provider.provider_name == "mock"
-    assert custom_provider._model_name == "Custom-Mock-Agent-v2"
+def test_mock_llm_provider_removed_from_app_services():
+    """Verify MockLLMProvider is strictly deleted from production app.services."""
+    with pytest.raises(ImportError):
+        from app.services.llm_providers.mock_provider import MockLLMProvider
 
 

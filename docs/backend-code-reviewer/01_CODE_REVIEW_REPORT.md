@@ -1,19 +1,20 @@
-# [Backend] Anthropic 공식 5.5 모델 ID 교체 및 3.5 잔재 제거 5-Pillar 코드 품질 감사 및 리뷰 보고서 (Code Review Report)
+# [Backend] Scoped 포커스 그라운딩 강화, 프로덕션 제로-목(Zero-Mock) 확립, Claude 5.5 연동 및 v0.2.1 릴리즈 5-Pillar 코드 품질 감사 및 리뷰 보고서 (Code Review Report)
 
 - **검토일자**: 2026-10-19
 - **검토자**: 시니어 백엔드 코드 리뷰어 (`backend-code-reviewer`)
-- **검토 대상 PR / 작업**: `backend-tdd-engineer`의 Anthropic 공식 5.5 모델 ID(`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`) 적용 및 3.5 잔재 완전 박멸 (Stage 4a)
+- **검토 대상 PR / 작업**: `backend-tdd-engineer`의 Scoped 포커스 기사 주입 로직 강화([BUG-CHAT-001]), 프로덕션 `MockLLMProvider` 및 목 폴백 체인 영구 퇴역([POL-LLM-006]), Anthropic Claude `temperature` 파라미터 제외(HTTP 400 해결), 과거 모델 식별자 원본 보존, v0.2.1 버전 동기화 (Stage 4a)
 - **선행 산출물 및 검토 기준**:
-  - TDD 실행 기록서: [`01_TDD_CYCLE_LOG.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md) (Cycle 12 기록)
+  - TDD 실행 기록서: [`01_TDD_CYCLE_LOG.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md) (Cycle 13 기록)
   - 시스템 설계서: [`01_SYSTEM_DESIGN.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/system-designer/01_SYSTEM_DESIGN.md) (v0.2.0)
-  - 아키텍처 결정 레코드: [`01_ARCHITECTURE_ADR.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/fullstack-architect/01_ARCHITECTURE_ADR.md) (ADR-011: Claude 3-Tier Multi-Model Routing, ADR-012: Anti-Gemini Claude-Only Architecture)
-  - 기획 및 정책: [`01_PRD.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/01_PRD.md), [`03_POLICIES_AND_EDGES.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/03_POLICIES_AND_EDGES.md) (`POL-LLM-005`, `POL-UI-006`)
+  - 아키텍처 결정 레코드: [`01_ARCHITECTURE_ADR.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/fullstack-architect/01_ARCHITECTURE_ADR.md) (ADR-011, ADR-012)
   - 감사 대상 소스 파일:
     * [`backend/app/services/llm_providers/anthropic_provider.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_providers/anthropic_provider.py)
-    * [`backend/app/config.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/config.py)
-    * [`backend/app/schemas/chat.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/schemas/chat.py)
+    * [`backend/app/services/llm_providers/__init__.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_providers/__init__.py)
     * [`backend/app/services/llm_processor.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_processor.py)
-    * [`backend/tests/test_anthropic_provider.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/tests/test_anthropic_provider.py)
+    * [`backend/app/services/chat_service.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/chat_service.py)
+    * [`backend/app/config.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/config.py)
+    * [`backend/tests/test_scoped_chat_grounding.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/tests/test_scoped_chat_grounding.py)
+    * [`backend/tests/test_llm_processor.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/tests/test_llm_processor.py)
 - **최종 판정**: **APPROVED (승인)**
 
 ---
@@ -22,127 +23,145 @@
 
 | 감사 필라 (Pillar) | 세부 검토 기준 | 평가 점수 (1~5) | 검토 소견 및 발견 사항 |
 | :--- | :--- | :---: | :--- |
-| **Pillar 1: 아키텍처 정합성** | 공식 Anthropic 5.5 모델 ID 준수, 3-Tier 라우팅 정합성, ADR-011/012 정합성 | **5 / 5** | 공식 5.5 모델 식별자(`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`)가 단일 소스로 정확히 매핑됨. 3.5 레거시 잔재가 제거되었으며, 비인가 모델 및 Gemini 차단 시 Sonnet 5.5 기본값으로 안전 격리됨. |
-| **Pillar 2: 클린코드 & SOLID** | 단일 책임 원칙, 식별자 명확성, 기본 모델 설정 일관성, KISS/YAGNI 준수 | **5 / 5** | `MODEL_TIER_MAPPING` 딕셔너리 구조가 간결하고 명확함. `DEFAULT_MODEL` 및 `DEFAULT_TIER`가 전역 상수화되어 프로바이더, 스키마, 설정 전반에 일관되게 바인딩됨. 불필요한 복잡도 없음. |
-| **Pillar 3: 보안 & 데이터 무결성** | Zero-Leak API 키 거버넌스, 환경변수 유출 방지, 비인가 모델명 살균, 타입 안정성 | **5 / 5** | 소스코드 내 하드코딩된 실제 API 키 0건 확인(테스트 모의 문자열만 존재). `.env`는 `.gitignore`로 엄격히 격리 유지. `sanitize_model_identifier`로 비인가 모델명 누출 방어. Pydantic Settings 무결성 유지. |
-| **Pillar 4: 성능 & 리소스 최적화** | 2,500토큰 프롬프트 캐싱 유지, 순수 httpx 비동기 스트리밍, O(1) 모델 라우팅 | **5 / 5** | Sonnet 5.5 수집 파이프라인 프롬프트 캐싱(`cache_control: ephemeral`)이 유지되어 입력 비용 90% 절감 구조 확보. 가벼운 `httpx` 비동기 REST 클라이언트 기반 SSE 델타 스트리밍 성능 유지. |
-| **Pillar 5: 테스트 품질 & 회귀 방어** | TDD Red-Green-Refactor 원칙 준수, 142건 전체 백엔드 테스트 100% 통과 | **5 / 5** | Cycle 12에서 RED(3건 실패) ➔ GREEN(16 passed) TDD 사이클 입증. 기본값 검증 테스트 신설. 전체 14개 테스트 파일 142건 전원 Green(14.12s, 실패 0건, 회귀 0건). |
+| **Pillar 1: 아키텍처 정합성** | 프로덕션 제로-목(Zero-Mock) 거버넌스, Router-Service-Provider 계층 분리, Fail-Fast 원칙 | **5 / 5** | 프로덕션 런타임(`backend/app/`)에서 `mock_provider.py` 및 목 폴백 체인이 완전히 삭제됨. 가용한 라이브 프로바이더 부재 시 사일런트 목 다운그레이드 없이 명확한 `LLMProviderUnavailableException` (HTTP 503) fail-fast 아키텍처 확립. |
+| **Pillar 2: 클린코드 & SOLID** | 단일 책임 원칙, 불필요한 목 설정 잔재 소거, 가독성, KISS/YAGNI 준수 | **5 / 5** | `ALLOW_MOCK_FALLBACK`, `is_mock_fallback_allowed` 등 오버엔지니어링 플래그가 전면 소거되어 코드가 극도로 간결해짐. Scoped 프롬프트 조립과 SSE 토큰 스트리밍 로직의 책임 분리가 명확함. |
+| **Pillar 3: 보안 & 데이터 무결성**| Zero-Leak API 키 관리, 과거 모델 식별자 원본 보존, 입력값 유효성 검증 | **5 / 5** | 하드코딩된 API 키 없음(Zero-Leak). `sanitize_model_identifier`가 DB에 기저장된 이전 대화/메시지의 과거 모델명(Gemini, OpenAI 등)을 왜곡 없이 원본 그대로 보존하도록 개선되어 데이터 무결성 완비. |
+| **Pillar 4: 성능 & 리소스 최적화**| 2,500토큰 프롬프트 캐싱 유지, 순수 httpx 비동기 논블로킹 I/O, Scoped 직결 | **5 / 5** | Claude 5.5 연동 시 불필요한 SDK 오버헤드 없이 순수 `httpx` 비동기 스트리밍 유지. Scoped 모드 시 불필요한 글로벌 RAG 코퍼스 검색을 건너뛰고 포커스 기사 직결로 불필요한 I/O 및 레이턴시 최소화. |
+| **Pillar 5: 테스트 품질 & 회귀 방어**| TDD Red-Green-Refactor 준수, 엣지/에러 케이스 커버리지, 전체 테스트 통과 | **5 / 5** | Cycle 13 TDD 사이클(RED ➔ GREEN ➔ REFACTOR) 입증. 전용 `test_scoped_chat_grounding.py` 신설. 백엔드 전체 15개 테스트 스위트 147건 전원 통과(100% Green, 0 failed, 경고 0건). |
 
 ---
 
-## 2. 4대 필수 점검 항목 상세 감사 결과 (Mandatory Verification Items)
+## 2. 6대 감사 핵심 사항 상세 점검 결과 (Core Verification Results)
 
-### 2.1 실제 라이브 API 모델 ID 매핑 검증 - [PASS]
-- **감사 대상**: [`backend/app/services/llm_providers/anthropic_provider.py:L29-L39`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_providers/anthropic_provider.py#L29-L39)
-- **매핑 현황**:
+### 2.1 `mock_provider.py` 및 프로덕션 코드 내 목 폴백 체인 완전 삭제 - [PASS]
+- **감사 대상**:
+  - [`backend/app/services/llm_providers/mock_provider.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_providers/mock_provider.py)
+  - [`backend/app/services/llm_providers/__init__.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_providers/__init__.py)
+  - [`backend/app/services/llm_processor.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_processor.py)
+  - [`backend/app/config.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/config.py)
+- **감사 결과**:
+  1. `mock_provider.py` 파일이 영구 삭제되었으며, `__init__.py`의 `MockLLMProvider` export도 완전히 제거됨 (`git status: D backend/app/services/llm_providers/mock_provider.py`).
+  2. 프로덕션 코드에서 `from app.services.llm_providers.mock_provider import MockLLMProvider` 실행 시 `ImportError`가 발생함을 단위 테스트로 검증함 (`test_mock_llm_provider_removed_from_production`).
+  3. `llm_processor.py` 내 `self.mock_provider`, `is_mock_fallback_allowed`, `ALLOW_MOCK_FALLBACK` 환경변수 처리 분기, 그리고 `generate_live_answer` 및 `stream_tokens` 내 사일런트 목 폴백 브랜치가 완전히 소거됨.
+  4. `check_provider_available()`는 가용한 라이브 프로바이더(Anthropic 등)가 없으면 즉시 `LLMProviderUnavailableException` (HTTP 503)을 발생시키며, 가짜 목 보고서를 절대 방출하지 않음.
+
+### 2.2 Anthropic API 호출 시 `temperature` deprecated 에러 제거 및 Claude 5.5 정상 동작 - [PASS]
+- **감사 대상**: [`backend/app/services/llm_providers/anthropic_provider.py:L175-L177, L214-L216`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_providers/anthropic_provider.py#L175-L177)
+- **감사 결과**:
+  1. Anthropic API에서 Claude 5.5 및 최신 추론 모델군 호출 시 `temperature` 파라미터 전달로 인해 발생하던 HTTP 400 에러(`'temperature' is deprecated for this model.`)를 해결하기 위해, `generate_text_with_usage`, `stream_chat`, `generate_structured_summary` 메서드에서 `claude-` 계열 모델에 대해 `temperature`를 페이로드에서 전면 제외함.
   ```python
-  MODEL_TIER_MAPPING: Dict[str, Tuple[str, str]] = {
-      # Haiku
-      "haiku": ("claude-haiku-5-5", "haiku"),
-      "claude-haiku-5-5": ("claude-haiku-5-5", "haiku"),
-      # Sonnet (default)
-      "sonnet": ("claude-sonnet-5-5", "sonnet"),
-      "claude-sonnet-5-5": ("claude-sonnet-5-5", "sonnet"),
-      # Opus
-      "opus": ("claude-opus-5-5", "opus"),
-      "claude-opus-5-5": ("claude-opus-5-5", "opus"),
-  }
+  # Note: 'temperature' is deprecated for Claude 5.5 / reasoning models; omit to prevent HTTP 400
+  if temperature is not None and not resolved_model.startswith("claude-"):
+      payload["temperature"] = temperature
   ```
-- **해석 및 폴백 로직**:
-  - `resolve_model_and_tier`에서 `"haiku"`, `"sonnet"`, `"opus"` 부분 일치 및 정확 일치 모두 5.5 공식 ID로 정확하게 매핑됨.
-  - `generate_structured_summary` 내 수집 분석 모델도 `"claude-sonnet-5-5"`로 명시적 교체 완료.
-  - `KNOWN_TECH_STACK`([`llm_processor.py:L40-L46`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_processor.py#L40-L46))에 `Claude 5.5`, `Claude 5.5 Sonnet`, `Claude 5.5 Haiku`, `Claude 5.5 Opus` 엔티티 등록 완료.
+  2. 단위 테스트 `test_anthropic_payload_omits_temperature`를 통해 실제 REST 요청 JSON 바디에 `temperature` 키가 존재하지 않음을 단언 및 확인 완료.
 
-### 2.2 기본 모델 `claude-sonnet-5-5` 일관성 검증 - [PASS]
-- **감사 대상**: 설정(`config.py`), 스키마(`schemas/chat.py`), 프로바이더(`anthropic_provider.py`), 살균기(`llm_processor.py`), 환경변수 템플릿(`.env.example`)
+### 2.3 Scoped 포커스 기사 주입 로직 충실 구현 및 앵무새 답변 차단 - [PASS]
+- **감사 대상**: [`backend/app/services/chat_service.py:L244-L274, L331, L491`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/chat_service.py#L244-L274)
+- **감사 결과**:
+  1. **컨텍스트 그라운딩 강화**: Scoped 모드 프롬프트 조립 시 선택된 포커스 기사의 제목(`primary.title`), 출처/카테고리뿐만 아니라 `기사 요약(Summary): {primary.snippet}`과 `전문 본문(Full Content): {full_content[:5000]}`을 상단에 온전히 주입함.
+  2. **강력한 분석 지침 선언**:
+  ```text
+  [🚨 필수 분석 지침]
+  - 현재 세션은 사용자가 위 [포커스 분석 대상 기사 [1]]을 선택하여 집중 질의하는 모드입니다.
+  - 반드시 위 기사의 제목, 요약, 본문 내용과 관련된 구체적 기술 메커니즘을 핵심 근거로 삼아 답변하십시오.
+  - 기사의 실제 기술 내용과 무관한 일반 시스템 소개(예: AgentLens 자체 설명 등)를 앵무새처럼 반복 출력하는 것은 절대 금지됩니다.
+  ```
+  3. **스니펫 보존**: 스크래핑 실패 시에도 기사 원본 요약문(`item.summary` 및 `item.why_it_matters`)을 우선적으로 보존하여 모델이 기사 본질과 동떨어진 답변을 하지 못하도록 차단함.
+  4. 단위 테스트 `test_scoped_chat_prompt_injects_focused_article_and_no_mock_fallback`를 통해 기사 제목, 요약, 전문이 프롬프트에 정확히 주입되고 가짜 앵무새 보고서 텍스트가 SSE 스트림에서 배제됨을 검증함.
+
+### 2.4 과거 Gemini 등 레거시 모델명의 왜곡 없는 정직한 보존 - [PASS]
+- **감사 대상**: [`backend/app/services/llm_processor.py:L92-L101`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_processor.py#L92-L101)
+- **감사 결과**:
+  1. 기존의 과도한 살균 로직(DB에 저장된 과거 Gemini 기록까지 `claude-sonnet-5-5`로 변조하던 결함)을 수정함.
+  ```python
+  def sanitize_model_identifier(model_name: Optional[str]) -> str:
+      """
+      Sanitizes and preserves model identifier.
+      Guarantees historical integrity: if past DB records or messages used Gemini, OpenAI,
+      or other models, their exact model names are strictly preserved and never overwritten.
+      Defaults to 'claude-sonnet-5-5' only when model_name is empty/None for new invocations.
+      """
+      if not model_name:
+          return "claude-sonnet-5-5"
+      return model_name.strip()
+  ```
+  2. 신규 요청에서 모델이 지정되지 않았을 때만 `claude-sonnet-5-5`를 기본값으로 부여하고, DB에 기저장된 과거 레코드(`gemini-2.0-flash`, `Google gemini-3.5-flash-lite`, `gpt-4o-mini` 등)는 변조 없이 원본 그대로 보존됨.
+  3. 단위 테스트 `test_sanitize_model_identifier_preserves_historical_models`를 통해 과거 모델명이 원본 그대로 보존됨을 검증 완료.
+
+### 2.5 프로젝트 버전 `0.2.1` 일관 적용 - [PASS]
+- **감사 대상**: 설정 및 구성 파일 전반
 - **일관성 점검 결과**:
-  1. [`anthropic_provider.py:L41`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_providers/anthropic_provider.py#L41): `DEFAULT_MODEL = "claude-sonnet-5-5"`, `DEFAULT_TIER = "sonnet"`
-  2. [`config.py:L51-L53`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/config.py#L51-L53) 및 `merge_json_and_env`:
-     - `ANTHROPIC_MODEL`: 기본값 `"claude-sonnet-5-5"`
-     - `ANTHROPIC_COLLECTION_MODEL`: 기본값 `"claude-sonnet-5-5"`
-     - `ANTHROPIC_DEFAULT_CHAT_MODEL`: 기본값 `"claude-sonnet-5-5"`
-  3. [`schemas/chat.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/schemas/chat.py):
-     - `ChatStreamRequest.model = "claude-sonnet-5-5"`
-     - `ChatQueryRequest.model = "claude-sonnet-5-5"`
-     - `DonePayload.model = "claude-sonnet-5-5"`
-     - `ChatQueryResponse.model = "claude-sonnet-5-5"`
-  4. [`llm_processor.py:L94-L113`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/llm_processor.py#L94-L113): `sanitize_model_identifier`의 기본값 및 비인가 Gemini 차단 정규화 대상이 `"claude-sonnet-5-5"`로 일관되게 바인딩됨.
-  5. [`.env.example:L28-L29`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L28-L29): `ANTHROPIC_COLLECTION_MODEL="claude-sonnet-5-5"`, `ANTHROPIC_DEFAULT_CHAT_MODEL="claude-sonnet-5-5"`로 명시.
+  - `backend/app/config.py`: `VERSION: str = _json_data.get("app", {}).get("version", "0.2.1")`
+  - `config.json`: `"version": "0.2.1"`
+  - `.env`: `VERSION="0.2.1"`
+  - `backend/.env`: `VERSION="0.2.1"`
+  - 단위 테스트 `test_version_is_0_2_1` 및 `test_config_json_found_and_loaded` 통과.
 
-### 2.3 민감정보(API 키 등) 유출 여부 검증 - [PASS]
-- **Zero-Leak 감사 결과**:
-  - 소스 코드 및 Git 변경분 내 하드코딩된 실제 Anthropic API 키 `0건` 확인.
-  - 단위 테스트(`test_anthropic_provider.py`)에서는 `"sk-ant-test-key"`, `"sk-ant-test-12345"` 등 안전한 Mock 식별자만 사용.
-  - `.gitignore` 규칙에 의해 `.env`, `backend/.env`, `*.env` 파일이 Git 추적에서 완벽히 격리되어 있음 확인.
-  - 클라이언트로 전송되는 DTO 및 SSE 이벤트 데이터 내에 API 키나 인증 헤더 노출 경로가 존재하지 않음.
-
-### 2.4 백엔드 테스트 142건 전체 통과 검증 - [PASS]
+### 2.6 백엔드 전체 테스트(147건) 100% 통과 - [PASS]
 - **실행 결과**:
-  - 명령어: `pytest -v` (가상환경: `.venv/bin/pytest`)
-  - 결과: **142 passed in 14.12s (100% Green, 0 failed, 0 errors, 0 skipped)**
-- **주요 테스트 스위트 통과 현황**:
-  - `backend/tests/test_anthropic_provider.py`: **16 passed** (`test_anthropic_config_and_schema_defaults` 신설 검증 완료)
-  - `backend/tests/test_llm_processor.py`: **14 passed**
-  - `backend/tests/test_chat_sessions.py`: **18 passed**
-  - `backend/tests/test_chat.py`: **34 passed**
-  - `backend/tests/test_collectors.py`: **8 passed**
-  - `backend/tests/test_deep_researcher.py`: **4 passed**
-  - `backend/tests/test_sources_and_research.py`: **6 passed**
-  - `backend/tests/test_trends_and_webhook.py`: **5 passed**
-  - 기타 6개 테스트 파일: **37 passed**
+  - 명령어: `../.venv/bin/pytest -v` (디렉토리: `backend`)
+  - 결과: **147 passed, 0 failed, 0 errors, 0 warnings (100% Green)**
+- **주요 테스트 스위트 통과 현황 (총 15개 파일)**:
+  1. `tests/test_scoped_chat_grounding.py`: **6 passed** (Cycle 13 전용 검증 스위트 신설)
+  2. `tests/test_anthropic_provider.py`: **16 passed**
+  3. `tests/test_chat.py`: **34 passed**
+  4. `tests/test_chat_sessions.py`: **18 passed**
+  5. `tests/test_llm_processor.py`: **14 passed**
+  6. `tests/test_agentic_workflow.py`: **13 passed**
+  7. `tests/test_api.py`: **9 passed**
+  8. `tests/test_briefing_notion_email.py`: **9 passed**
+  9. `tests/test_collectors.py`: **8 passed**
+  10. `tests/test_config_and_live_llm.py`: **3 passed**
+  11. `tests/test_deep_researcher.py`: **4 passed**
+  12. `tests/test_reset_and_delete.py`: **2 passed**
+  13. `tests/test_scheduler.py`: **1 passed**
+  14. `tests/test_sources_and_research.py`: **6 passed**
+  15. `tests/test_trends_and_webhook.py`: **5 passed**
 
 ---
 
 ## 3. 필라별 심층 감사 분석
 
 ### 3.1 Pillar 1: 아키텍처 정합성 (Architecture Compliance)
-- **Anthropic SSOT 확립**:
-  - 기존 3.5 가짜 식별자 및 레거시 모델명이 실제 Anthropic Claude 5.5 공식 ID(`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`)로 완전히 정규화됨.
-  - 하위 호환성을 위해 `schemas/chat.py`의 `ChatModel` Literal에는 기존 3.5 모델명이 포함되어 있으나, 라우팅 엔진(`resolve_model_and_tier`) 인입 시 `sonnet`, `haiku`, `opus` 서브스트링 매칭을 통해 실제 5.5 엔드포인트로 자연스럽게 라우팅됨.
-- **Anti-Gemini 정책(ADR-012, POL-LLM-005) 준수**:
-  - Gemini 또는 비인가 모델 문자열 인입 시 즉각 Sonnet 5.5 기본값(`claude-sonnet-5-5`, `sonnet`)으로 살균되어 타사 모델의 시스템 침투가 원천 차단됨.
+- **프로덕션 제로-목(Zero-Mock) 거버넌스 확립**:
+  - 프로덕션 코드에 목 객체가 잔존하여 실제 장애를 가리는 안티패턴을 근본적으로 발본색원함.
+  - 외부 LLM 장애 시 사일런트 다운그레이드로 엉뚱한 목 보고서를 방출하는 대신, `LLMProviderUnavailableException` (HTTP 503) 및 `LLMUpstreamException` (HTTP 502)으로 명확히 fail-fast하는 건강한 엔지니어링 아키텍처를 복원함.
+- **테스트 격리 원칙 준수**:
+  - 테스트 코드(`tests/`)에서만 `AsyncMock` 또는 `UnitTestingMockLLMProvider`를 사용하여 외부 네트워크 호출을 안전하게 차단함.
 
 ### 3.2 Pillar 2: 클린코드 & SOLID (Clean Code & SOLID)
-- **단일 책임 및 가독성**:
-  - `MODEL_TIER_MAPPING` 딕셔너리가 간결하게 3개 티어로 정리되었으며, 불필요한 구버전 별칭들이 깔끔히 정리되어 가독성과 유지보수성이 대폭 향상됨.
-  - `DEFAULT_MODEL` 상수를 기준으로 단일 소스 원칙이 견고하게 확립됨.
+- **오버엔지니어링 제거 (KISS/YAGNI)**:
+  - `ALLOW_MOCK_FALLBACK` 환경변수와 프로덕션 목 분기 등 100여 줄의 불필요한 분기문과 상태 관리가 깔끔히 소거됨.
+  - `ChatService._build_grounding_prompt`는 역할과 책임이 매우 명료해졌으며, Scoped 모드와 Global 모드의 차이가 프롬프트 구조상에 직관적으로 드러남.
 
 ### 3.3 Pillar 3: 보안 & 데이터 무결성 (Security & Data Integrity)
-- **Zero-Leak 거버넌스 완비**:
-  - API 키는 서버 환경설정 및 `AnthropicLLMProvider` 내부에서만 다루어지며, 클라이언트 반환값이나 로그로 유출되지 않음.
-  - `sanitize_model_identifier`를 거치지 않은 비인가 모델명이 응답 메타데이터에 기재되지 않도록 완벽히 방어됨.
+- **데이터 진본성(Authenticity) 보존**:
+  - 기존에 무차별적으로 모델명을 덮어쓰던 살균 로직을 개선하여, DB에 저장된 과거 대화 메시지의 역사적 진본성을 완벽하게 보장함.
+  - 실제 Anthropic API 키는 `.env`에 안전하게 격리되어 있으며, 소스코드 및 커밋에 Zero-Leak을 유지함.
 
 ### 3.4 Pillar 4: 성능 & 리소스 최적화 (Performance & Resource Optimization)
-- **Prompt Caching 경제성 유지**:
-  - `build_cached_system_block`을 통한 2,500토큰 이상의 시스템 프롬프트 캐싱 메커니즘(`cache_control: {"type": "ephemeral"}`)이 온전히 유지되어 Sonnet 5.5 토큰 비용 90% 절감 달성.
-  - 순수 비동기 `httpx.AsyncClient` 스트리밍을 통해 불필요한 무거운 SDK 오버헤드 및 블로킹 I/O를 배제함.
+- **Claude 5.5 스트리밍 효율성**:
+  - `temperature` 파라미터가 불필요하게 전송되어 발생하는 400 Bad Request 왕복 지연을 사전에 차단함.
+  - 프롬프트 캐싱 메커니즘(`cache_control: {"type": "ephemeral"}`)을 Sonnet 5.5 수집 파이프라인에 온전히 유지하여 토큰 비용과 지연 시간을 최소화함.
 
 ### 3.5 Pillar 5: 테스트 품질 & 회귀 방어 (Test Quality & Regression Defense)
-- **TDD 사이클 충실도**:
-  - `backend-tdd-engineer`의 `01_TDD_CYCLE_LOG.md`에 명시된 바와 같이 RED Phase(기존 3.5 단언문 실패 3건 확인) ➔ GREEN Phase(구현 및 통과) ➔ REFACTOR 과정을 충실히 수행함.
-  - 신규 `test_anthropic_config_and_schema_defaults`를 통해 런타임뿐만 아니라 DTO 스키마 기본값까지 철저히 회귀 방어선에 편입시킴.
+- **회귀 방어벽 완비**:
+  - `test_scoped_chat_grounding.py`에 6개 핵심 단언문을 신설하여, 향후 프로덕션 코드에 다시 목이 유입되거나 `temperature` 파라미터가 잘못 추가되는 사고를 컴파일/테스트 단계에서 즉각 포착하도록 구성함.
+  - 비동기 테스트 환경에서 발생하던 `coroutine was never awaited` 런타임 경고까지 완벽히 해소함.
 
 ---
 
-## 4. 세부 피드백 및 개선 제안 (Action Items)
-
-5대 필라 모두 충족되어 승인 판정을 내리며, 향후 개선을 위한 권장 사항(Non-blocking) 1건을 제안합니다:
-
-### [경미 / 호환성 정리 권장] `schemas/chat.py` 내 레거시 `ChatModel` Literal 마이그레이션 정리
-- **위치**: [`backend/app/schemas/chat.py:L5-L15`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/schemas/chat.py#L5-L15)
-- **현상**: 구버전 프론트엔드 및 OpenAPI 클라이언트 하위 호환성을 위해 `claude-3-5-*` 문자열들이 `ChatModel` Literal에 남아 있음.
-- **제안**: 프론트엔드 마이그레이션 및 OpenAPI 스펙 전면 동기화가 완료되는 시점에 사용되지 않는 `claude-3-5-*` Literal들을 점진적으로 Deprecated 처리하고 제거할 것을 권장합니다.
-
----
-
-## 5. 최종 리뷰 판정 및 출시 승인
+## 4. 최종 리뷰 판정 및 출시 승인
 
 - **판정 결과**: **APPROVED (승인)**
 - **승인 코멘트**:
-  본 백엔드 작업(공식 Anthropic 5.5 모델 ID 교체 및 3.5 잔재 제거)은 5대 필라 감사 기준 및 4대 필수 점검 항목을 완벽히 충족하였습니다.
-  - 실제 Anthropic 공식 5.5 모델 식별자(`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`) 매핑 완료.
-  - 기본 모델이 `claude-sonnet-5-5`로 시스템 전반(설정, DTO, 프로바이더, 살균기)에 걸쳐 일관되게 정규화됨.
-  - API 키 및 비밀정보 유출 0건(Zero-Leak 완비).
-  - 총 14개 테스트 파일 142건 전체 테스트 100% Green 달성(회귀 결함 0건).
+  본 백엔드 작업(Scoped 포커스 그라운딩 강화, 프로덕션 제로-목 확립, Claude 5.5 연동 및 v0.2.1 릴리즈)은 5대 필라 감사 기준 및 6대 감사 핵심 사항을 완벽히 충족하였습니다.
+  - 프로덕션 코드 내 `mock_provider.py` 및 사일런트 목 폴백 체인이 완전히 삭제되었습니다.
+  - Anthropic API 호출 시 `temperature` deprecated 에러가 제거되어 실제 Claude 5.5가 정상 동작합니다.
+  - Scoped 포커스 기사의 제목, 요약, 전문 주입 및 앵무새 답변 차단 지침이 충실히 구현되었습니다.
+  - 과거 레거시 모델명이 왜곡 없이 정직하게 보존됩니다.
+  - 프로젝트 버전이 `0.2.1`로 일관되게 적용되었습니다.
+  - 총 15개 테스트 스위트, 147건 전체 백엔드 테스트가 100% 통과(경고 0건)하였습니다.
 
-  보안 결함이나 아키텍처 위반 사항이 전혀 발견되지 않았으므로, 다음 파이프라인 단계(프론트엔드 코드 리뷰 및 통합 QA)로의 진행을 공식 승인합니다.
+  결함이나 위험 요소가 없으므로, 최종 출시 및 다음 파이프라인 단계로의 진행을 공식 승인합니다.

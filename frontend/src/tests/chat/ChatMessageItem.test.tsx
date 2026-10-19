@@ -64,13 +64,10 @@ describe('ChatMessageItem Component', () => {
     expect(screen.getByText('FastMCP와 LangGraph의 차이점은 무엇인가요?')).toBeInTheDocument();
   });
 
-  it('sanitizes legacy gemini model_used and renders formatted Claude Sonnet 5.5 without any raw model ID or gemini output (POL-LLM-005, REQ-LLM-002)', () => {
+  it('faithfully preserves and renders legacy gemini model_used without distortion', () => {
     render(<ChatMessageItem message={assistantMessage} />);
 
-    expect(screen.getByText('Claude Sonnet 5.5')).toBeInTheDocument();
-    expect(screen.queryByText(/claude-3-5/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/claude-sonnet-5-5/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/gemini/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Gemini 2.5 Flash')).toBeInTheDocument();
     // Inline citations [1] and [2] are rendered as buttons
     const badge1 = screen.getByRole('button', { name: /출처 1번/i });
     const badge2 = screen.getByRole('button', { name: /출처 2번/i });

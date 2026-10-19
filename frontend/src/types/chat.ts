@@ -150,49 +150,98 @@ export const MODEL_TO_TIER: Record<string, ModelTier> = {
   'claude-3-5-opus-latest': 'opus',
 };
 
-/** Anti-Gemini 격리 및 비인가 모델 식별자 자동 살균 규격 (POL-LLM-005, REQ-LLM-002) */
-export function sanitizeModelTier(rawModel: string | undefined | null): ModelTier {
+/**
+ * 모델 식별자/티어 살균 및 정규화
+ * 과거 대화 이력의 모델명(Gemini, GPT 등)은 있는 그대로 보존하고,
+ * Claude 계열 모델은 적절한 티어(haiku, sonnet, opus)로 정규화합니다.
+ */
+export function sanitizeModelTier(rawModel: string | undefined | null): ModelTier | string {
   if (!rawModel) return 'sonnet';
   const normalized = rawModel.toLowerCase().trim();
-  // Google Gemini 모델 식별자 원천 배제 및 살균
-  if (normalized.includes('gemini') || normalized.includes('google')) {
-    console.warn('[Anti-Gemini Policy Enforced] Unauthorized model rejected:', rawModel);
-    return 'sonnet';
-  }
   if (normalized === 'haiku' || normalized.includes('haiku')) return 'haiku';
   if (normalized === 'opus' || normalized.includes('opus')) return 'opus';
-  return 'sonnet'; // 기본 안전 폴백
+  if (normalized === 'sonnet' || normalized.includes('sonnet')) return 'sonnet';
+  // 과거 이력 모델 식별자(Gemini, GPT 등) 왜곡 없이 보존
+  return rawModel.trim();
 }
 
 export interface ModelDisplayFormatOptions {
-  /** 아이콘(🎯, ⚡, 🧠) 포함 여부 (기본값: false) */
+  /** 아이콘(🎯, ⚡, 🧠, ✨, 🤖) 포함 여부 (기본값: false) */
   withIcon?: boolean;
   /** 'Claude ' 접두사 생략 여부 (기본값: false) */
   short?: boolean;
 }
 
 /**
- * Anthropic Claude 모델 식별자/티어를 화면 표시 규격 레이블로 안전하게 변환
- * 내부 날것의 모델 ID(claude-sonnet-5-5 등)나 비인가 모델(Gemini 등)의 UI 노출을 원천 차단
- * 
- * - formatModelDisplayName() => "Claude Sonnet 5.5"
- * - formatModelDisplayName("claude-haiku-5-5", { withIcon: true }) => "⚡ Claude Haiku 5.5"
- * - formatModelDisplayName("sonnet", { withIcon: true, short: true }) => "🎯 Sonnet 5.5"
+ * 모델 식별자/티어를 화면 표시 규격 레이블로 변환
+ * 과거 대화 이력의 실제 사용 모델(Gemini, GPT 등)을 있는 그대로 정직하게 표시하고,
+ * Claude 모델은 깔끔한 브랜드 명칭(Claude Sonnet 5.5 등)으로 포맷팅합니다.
  */
 export function formatModelDisplayName(
   rawModel?: string | null,
   options?: ModelDisplayFormatOptions
 ): string {
-  const tier = sanitizeModelTier(rawModel);
-  const icon = tier === 'haiku' ? '⚡' : tier === 'opus' ? '🧠' : '🎯';
-  const shortName = tier === 'haiku' ? 'Haiku 5.5' : tier === 'opus' ? 'Opus 5.5' : 'Sonnet 5.5';
-  const prefix = options?.short ? '' : 'Claude ';
-  const baseLabel = `${prefix}${shortName}`;
-
-  if (options?.withIcon) {
-    return `${icon} ${baseLabel}`;
+  if (!rawModel) {
+    const shortName = 'Sonnet 5.5';
+    const baseLabel = options?.short ? shortName : `Claude ${shortName}`;
+    return options?.withIcon ? `🎯 ${baseLabel}` : baseLabel;
   }
-  return baseLabel;
+
+  const trimmed = rawModel.trim();
+  const lower = trimmed.toLowerCase();
+
+  // 과거 이력 Gemini 모델: 왜곡 없이 정확하게 표시
+  if (lower.includes('gemini') || lower.includes('google')) {
+    let name = 'Gemini';
+    if (lower === 'gemini-1.5-flash') name = 'Gemini 1.5 Flash';
+    else if (lower === 'gemini-1.5-pro') name = 'Gemini 1.5 Pro';
+    else if (lower === 'gemini-2.5-flash') name = 'Gemini 2.5 Flash';
+    else if (lower === 'gemini-ultra') name = 'Gemini Ultra';
+    else if (lower.includes('flash-lite')) name = 'Gemini 3.5 Flash Lite';
+    else if (lower === 'gemini') name = 'Gemini';
+    else {
+      name = trimmed
+        .replace(/^(google\s+)/i, '')
+        .split(/[-_ ]+/)
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(' ');
+    }
+    return options?.withIcon ? `✨ ${name}` : name;
+  }
+
+  // 과거 이력 GPT 모델: 왜곡 없이 정확하게 표시
+  if (lower.includes('gpt')) {
+    let name = 'GPT';
+    if (lower === 'gpt-4o') name = 'GPT-4o';
+    else if (lower === 'gpt-4o-mini') name = 'GPT-4o Mini';
+    else if (lower === 'gpt-4') name = 'GPT-4';
+    else if (lower === 'gpt-3.5-turbo') name = 'GPT-3.5 Turbo';
+    else {
+      name = trimmed.toUpperCase();
+    }
+    return options?.withIcon ? `🤖 ${name}` : name;
+  }
+
+  // Claude 계열 모델
+  if (lower === 'haiku' || lower.includes('haiku')) {
+    const shortName = 'Haiku 5.5';
+    const baseLabel = options?.short ? shortName : `Claude ${shortName}`;
+    return options?.withIcon ? `⚡ ${baseLabel}` : baseLabel;
+  }
+
+  if (lower === 'opus' || lower.includes('opus')) {
+    const shortName = 'Opus 5.5';
+    const baseLabel = options?.short ? shortName : `Claude ${shortName}`;
+    return options?.withIcon ? `🧠 ${baseLabel}` : baseLabel;
+  }
+
+  if (lower === 'sonnet' || lower.includes('sonnet')) {
+    const shortName = 'Sonnet 5.5';
+    const baseLabel = options?.short ? shortName : `Claude ${shortName}`;
+    return options?.withIcon ? `🎯 ${baseLabel}` : baseLabel;
+  }
+
+  return trimmed;
 }
 
 export const getModelLabel = formatModelDisplayName;
@@ -836,8 +885,8 @@ export interface ChatModelSelectorProps {
 }
 
 export interface ModelTierBadgeProps {
-  /** 렌더링 대상 모델 티어 */
-  tier: ModelTier;
+  /** 렌더링 대상 모델 티어 또는 과거 모델명 */
+  tier: ModelTier | string;
   /** 뱃지 렌더링 스타일 변형 */
   variant?: 'chip' | 'footer' | 'pill' | 'pipeline';
   /** 실제 SSE 스트리밍 측정 소요 시간 (ms 단위) */

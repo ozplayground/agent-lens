@@ -253,17 +253,24 @@ class ChatService:
 
             if sources:
                 primary = sources[0]
-                prompt_parts.append(f"\n[기사 원본 출처 [1]]\n제목: {primary.title}\n출처: {primary.source} | 카테고리: {primary.category}")
-                if full_content:
+                prompt_parts.append(f"\n[포커스 분석 대상 기사 원본 출처 [1]]\n제목: {primary.title}\n출처: {primary.source} | 카테고리: {primary.category}")
+                if primary.snippet:
+                    prompt_parts.append(f"기사 요약(Summary):\n{primary.snippet}")
+                if full_content and full_content.strip() and full_content.strip() != (primary.snippet or "").strip():
                     prompt_parts.append(f"전문 본문(Full Content):\n{full_content[:5000]}")
-                else:
-                    prompt_parts.append(f"발췌 요약:\n{primary.snippet}")
 
             supplements = [s for s in sources if s.type == "supplementary"]
             if supplements:
                 prompt_parts.append("\n[자율 보충 웹 검색 출처 [S1], [S2]...]")
                 for s in supplements:
                     prompt_parts.append(f"[{s.index}] {s.title} ({s.domain or s.url}): {s.snippet}")
+
+            prompt_parts.extend([
+                "\n[🚨 필수 분석 지침]",
+                "- 현재 세션은 사용자가 위 [포커스 분석 대상 기사 [1]]을 선택하여 집중 질의하는 모드입니다.",
+                "- 반드시 위 기사의 제목, 요약, 본문 내용과 관련된 구체적 기술 메커니즘을 핵심 근거로 삼아 답변하십시오.",
+                "- 기사의 실제 기술 내용과 무관한 일반 시스템 소개(예: AgentLens 자체 설명 등)를 앵무새처럼 반복 출력하는 것은 절대 금지됩니다.",
+            ])
         else:
             if sources:
                 prompt_parts.append("\n[검색된 코퍼스 지식 출처 목록]")
@@ -321,7 +328,7 @@ class ChatService:
                 source=item.source,
                 category=item.category,
                 quality_score=float(item.quality_score or 6.0),
-                snippet=full_content[:400] if full_content else (item.summary or item.why_it_matters or item.title),
+                snippet=item.summary or item.why_it_matters or (full_content[:400] if full_content else item.title),
                 full_content=full_content,
                 published_at=pub_str,
             )
@@ -481,7 +488,7 @@ class ChatService:
                 source=item.source,
                 category=item.category,
                 quality_score=float(item.quality_score or 6.0),
-                snippet=full_content[:400] if full_content else (item.summary or item.why_it_matters or item.title),
+                snippet=item.summary or item.why_it_matters or (full_content[:400] if full_content else item.title),
                 full_content=full_content,
                 published_at=pub_str,
             )

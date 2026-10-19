@@ -864,10 +864,11 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(MODEL_TO_TIER['claude-3-5-opus-latest']).toBe('opus');
     });
 
-    it('verifies sanitizeModelTier anti-gemini isolation and safe fallback', () => {
-      expect(sanitizeModelTier('gemini-2.5-flash')).toBe('sonnet');
-      expect(sanitizeModelTier('Google gemini-3.5-flash-lite')).toBe('sonnet');
-      expect(sanitizeModelTier('gemini-ultra')).toBe('sonnet');
+    it('verifies sanitizeModelTier preserves historical models and defaults to sonnet for claude', () => {
+      expect(sanitizeModelTier('gemini-2.5-flash')).toBe('gemini-2.5-flash');
+      expect(sanitizeModelTier('Google gemini-3.5-flash-lite')).toBe('Google gemini-3.5-flash-lite');
+      expect(sanitizeModelTier('gemini-ultra')).toBe('gemini-ultra');
+      expect(sanitizeModelTier('gpt-4o')).toBe('gpt-4o');
       expect(sanitizeModelTier('claude-sonnet-5-5')).toBe('sonnet');
       expect(sanitizeModelTier('claude-haiku-5-5')).toBe('haiku');
       expect(sanitizeModelTier('claude-opus-5-5')).toBe('opus');
@@ -882,7 +883,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(sanitizeModelTier('sonnet')).toBe('sonnet');
       expect(sanitizeModelTier(undefined)).toBe('sonnet');
       expect(sanitizeModelTier(null)).toBe('sonnet');
-      expect(sanitizeModelTier('unknown')).toBe('sonnet');
+      expect(sanitizeModelTier('unknown')).toBe('unknown');
     });
 
     it('verifies formatModelDisplayName and getModelLabel masks raw IDs with clean 5.5 brand names', () => {
@@ -891,7 +892,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(formatModelDisplayName('claude-sonnet-5-5')).toBe('Claude Sonnet 5.5');
       expect(formatModelDisplayName('claude-haiku-5-5')).toBe('Claude Haiku 5.5');
       expect(formatModelDisplayName('claude-opus-5-5')).toBe('Claude Opus 5.5');
-      expect(formatModelDisplayName('gemini-2.5-flash')).toBe('Claude Sonnet 5.5');
+      expect(formatModelDisplayName('gemini-2.5-flash')).toBe('Gemini 2.5 Flash');
 
       // Full with icon
       expect(formatModelDisplayName('claude-sonnet-5-5', { withIcon: true })).toBe('🎯 Claude Sonnet 5.5');
@@ -1207,7 +1208,30 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(text).toContain('"latency_ms":1780');
       expect(text).toContain('"cache_read_input_tokens":2500');
     });
+
+    it('handles POST /api/chat/stream with scope=scoped and source_id=102 returning customized LangGraph report', async () => {
+      const res = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: 'LangGraph v0.2 아키텍처는?',
+          scope: 'scoped',
+          source_id: 102,
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      // Verifies custom tokens for LangGraph
+      expect(text).toContain('LangGraph v0.2');
+      expect(text).toContain('time-travel debugging');
+      expect(text).toContain('agent_tech');
+      // Verifies source 102 is primary
+      expect(text).toContain('"id":102');
+      expect(text).toContain('LangGraph v0.2: Production Multi-Agent Workflows & Time-Travel');
+    });
   });
 });
+
 
 

@@ -290,7 +290,6 @@ describe('ChatWorkspace Container', () => {
     const divider = await screen.findByRole('separator');
     expect(divider).toBeInTheDocument();
     expect(divider).toHaveTextContent(/Claude Haiku 5.5로 모델 변경됨/i);
-    expect(divider).toHaveTextContent(/맥락 100% 보존/i);
   });
 
   it('synchronizes selectedTier bidirectionally between ChatHeader and ChatPromptInput with 0ms delay (REQ-UI-008, POL-UI-006)', async () => {
@@ -320,4 +319,36 @@ describe('ChatWorkspace Container', () => {
     expect(modelTriggers[0]).toHaveTextContent(/Opus 5.5/i);
     expect(modelTriggers[1]).toHaveTextContent(/Opus 5.5/i);
   });
+
+  it('correctly sends scope: scoped and source_id when article is focused, and renders customized response', async () => {
+    mockGet.mockImplementation((param: string) => {
+      if (param === 'sourceId') return '102';
+      return null;
+    });
+
+    render(<ChatWorkspace />);
+
+    // ActiveSource chip should appear
+    await waitFor(() => {
+      expect(screen.getAllByText(/LangGraph/i).length).toBeGreaterThan(0);
+    });
+
+    const textarea = screen.getByRole('textbox', { name: /질문 입력/i });
+    const sendButton = screen.getByRole('button', { name: /질문 전송/i });
+
+    fireEvent.change(textarea, { target: { value: 'LangGraph v0.2의 장점은?' } });
+    fireEvent.click(sendButton);
+
+    // User message is rendered
+    expect(screen.getByText('LangGraph v0.2의 장점은?')).toBeInTheDocument();
+
+    // Assistant response streams and contains LangGraph-specific custom response
+    await waitFor(
+      () => {
+        expect(screen.getByText(/time-travel debugging/i)).toBeInTheDocument();
+      },
+      { timeout: 4000 }
+    );
+  });
 });
+

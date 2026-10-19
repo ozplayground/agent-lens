@@ -2,8 +2,8 @@
 
 - **작성일자**: 2026-10-19
 - **작성자**: 프론트엔드 TDD 엔지니어 (`frontend-tdd-engineer`)
-- **문서 버전**: v0.2.0 (Stage 3b: Dual Model Selector [REQ-UI-008, POL-UI-006], Anti-Gemini UI Sterilization [POL-LLM-005, REQ-LLM-002], 0ms Bidirectional Sync, 24개 테스트 파일 228개 테스트 100% PASS)
-- **상태**: Approved (24개 테스트 스위트, 228개 테스트 100% 통과, TypeScript Type Check Exit 0)
+- **문서 버전**: v0.2.1 (Stage 3b: Scoped Handover Bug Fix, Zero Mock in Production, Historical Model Name Integrity, UI Simplification, 24개 테스트 파일 232개 테스트 100% PASS)
+- **상태**: Approved (24개 테스트 스위트, 232개 테스트 100% 통과, TypeScript Type Check Exit 0)
 - **선행 계약 및 설계 문서**:
   - [`01_COMPONENT_SPEC.md`](../ui-system-designer/01_COMPONENT_SPEC.md) (Stage 2c 컴포넌트 인터랙션 및 상태 명세)
   - [`01_CONTRACT_AND_MSW_SPEC.md`](../contract-integrator/01_CONTRACT_AND_MSW_SPEC.md) (Stage 2d Contract Lock v4.0)
@@ -23,7 +23,8 @@
 | **`FUNC-CHAT-012`** | `src/components/chat/ChatHistoryDrawer.tsx`<br/>`src/components/chat/SessionList.tsx`<br/>`src/components/chat/SessionItemCard.tsx` | `src/tests/chat/ChatHistoryDrawer.test.tsx`<br/>`src/tests/chat/ChatSidebar.test.tsx` | 5대 UI 상태(Idle, Loading, Error, Empty, Success)<br/>슬라이드 드로어, 딤 백드롭, 인라인 삭제 팝오버 |
 | **`FUNC-LAYOUT-001`** | `src/components/chat/ChatMessageItem.tsx`<br/>`src/components/MarkdownViewer.tsx`<br/>`src/components/NewsCard.tsx` | `src/tests/ResponsiveLayout.test.tsx`<br/>`src/tests/NewsCard.test.tsx` | 0px 가로 스크롤 방어 (`min-w-0`, `[overflow-wrap:anywhere]`)<br/>코드블록/테이블 국소 스크롤 격리, 카드 포커스 링 |
 | **`FUNC-CHAT-013`**<br/>**`REQ-UI-008`**<br/>**`POL-UI-006`** | `src/components/chat/ChatModelSelector.tsx`<br/>`src/components/chat/ChatHeader.tsx`<br/>`src/components/chat/ChatPromptInput.tsx`<br/>`src/components/chat/ChatWorkspace.tsx`<br/>`src/components/chat/ModelTierBadge.tsx`<br/>`src/components/chat/ModelChangeDivider.tsx` | `src/tests/chat/ChatModelSelector.test.tsx`<br/>`src/tests/chat/ChatHeader.test.tsx`<br/>`src/tests/chat/ChatWorkspace.test.tsx` | Claude 3-Tier (`haiku`, `sonnet`, `opus`) 모델 라우팅<br/>Dual Model Selector (Header + Composer), 0ms 양방향 상태 동기화<br/>Fitts의 법칙 컴포저 인라인 칩, WAI-ARIA RadioGroup, 스트리밍 잠금 |
-| **`POL-LLM-005`**<br/>**`REQ-LLM-002`** | `src/components/chat/ChatMessageItem.tsx`<br/>`src/types/chat.ts` (`sanitizeModelTier`) | `src/tests/chat/ChatMessageItem.test.tsx` | Anti-Gemini UI 살균 방어: UI 전역 Gemini 명칭 0바이트 보장<br/>비인가 모델 탐지 시 경고 및 Claude 3.5 Sonnet 자동 폴백 |
+| **`POL-LLM-005`**<br/>**`REQ-LLM-002`** | `src/components/chat/ChatMessageItem.tsx`<br/>`src/types/chat.ts` (`sanitizeModelTier`) | `src/tests/chat/ChatMessageItem.test.tsx` | Anti-Gemini UI 살균 방어: 신규 질의 기본 Claude 3.5 Sonnet 강제<br/>UI 내 신규 모델 표출 시 Claude 3-Tier 무결성 보장 |
+| **`FUNC-CHAT-014`**<br/>**`BUG-CHAT-001`**<br/>**`POL-PROD-001`** | `src/components/chat/ChatWorkspace.tsx`<br/>`src/types/chat.ts`<br/>`src/components/chat/ChatModelSelector.tsx`<br/>`src/components/chat/ModelChangeDivider.tsx` | `src/tests/chat/ChatWorkspace.test.tsx`<br/>`src/tests/chat/ContractAndMsw.test.ts`<br/>`src/tests/chat/ChatMessageItem.test.tsx`<br/>`src/tests/chat/ChatModelSelector.test.tsx` | 기사 포커스 핸드오버 비동기 레이스 해결 (`scope: 'scoped'`, `source_id: number` 직렬화)<br/>프로덕션 코드 내 MSW Mock 완전 격리 (0-Mock Import Rule)<br/>과거 세션 모델 정직 렌더링 (Gemini/GPT 변조 금지, 신규 질의만 Sonnet 기본)<br/>팝오버 헤더 및 디바이더 문구 제거 (UI 경량화) |
 
 ---
 
@@ -495,6 +496,109 @@ Tests       48 passed (48)
 
 ---
 
+### [Cycle 9] 기사 포커스 핸드오버 버그 픽스, 프로덕션 Mock 완전 격리, 과거 모델 무결성 보존 및 UI 경량화 (v0.2.1)
+- **목표 기능**:
+  1. 기사 포커스 핸드오버 버그 픽스: 피드/URL 파라미터(`?articleId=...&question=...`)를 통한 `/chat` 진입 시, 비동기 상태 갱신 지연(`activeSource`, `scopeMode`)으로 인해 `POST /api/chat/stream`에 `scope: "global"`, `source_id: undefined`가 전송되던 레이스 컨디션을 해결하고, `scope: "scoped"` 및 `source_id: number`가 누락 없이 백엔드로 전송되도록 보장 (`BUG-CHAT-001`, `FUNC-CHAT-014`).
+  2. 프로덕션 코드 내 Mock 완전 격리 (`POL-PROD-001`): 프로덕션 런타임 컴포넌트(`ChatWorkspace.tsx`, `ExportToolbar.tsx`)에서 `mockSearchChunks`, `mockPageUrl` 등 MSW/Mock 의존성을 100% 제거하여 런타임 시 실제 FastAPI 백엔드로만 요청이 인입되도록 조치 (MSW는 `frontend/src/tests/` 단위/통합 테스트 스위트에만 국한).
+  3. 과거 대화 세션 모델 정직 렌더링 (`POL-LLM-006`): `sanitizeModelTier`가 과거 Gemini 세션(`gemini-2.5-flash`, `gpt-4o` 등)의 모델명을 강제로 `Claude 3.5 Sonnet`으로 왜곡하던 문제를 해결하고, 과거 모델 식별자를 있는 그대로 정직하게 렌더링(신규 질의만 기본값 Claude Sonnet 5.5 적용).
+  4. UI 경량화 및 군더더기 제거: `ChatModelSelector` 팝오버 상단의 불필요한 헤더(`Claude 3-Tier Multi-Model`, `맥락 100% 보존`, `Sparkles` 아이콘)와 `ModelChangeDivider`의 조잡한 부가 문구(`맥락 100% 보존`)를 제거하여 간결하고 직관적인 UI 완성.
+  5. MSW 모의 핸들러 및 테스트 동기화: MSW `POST /api/chat/stream` 핸들러에서 `scope === 'scoped'` 요청 수신 시 해당 기사 메타데이터 기반 4단 기술 리포트(`generateArticleScopedAnswerTokens`)를 스트리밍하도록 고도화.
+  6. 버전 규격 동기화: `frontend/package.json` 및 `frontend/src/app/api/health/route.ts` 버전을 `0.2.1`로 상향.
+- **대응 기능 ID**: `FUNC-CHAT-014`, `BUG-CHAT-001`, `POL-PROD-001`, `POL-LLM-006`
+
+#### 1. RED Phase (실패하는 RTL 테스트 작성)
+- **작성된 테스트 코드 (`src/tests/chat/ChatWorkspace.test.tsx`, `src/tests/chat/ContractAndMsw.test.ts`, `src/tests/chat/ChatMessageItem.test.tsx`, `src/tests/chat/ChatModelSelector.test.tsx`)**:
+```typescript
+// ChatWorkspace.test.tsx
+it('correctly sends scope: scoped and source_id when article is focused, and renders customized response', async () => {
+  render(<ChatWorkspace />);
+  expect(await screen.findByText(/LangGraph Multi-Agent Architecture/i)).toBeInTheDocument();
+});
+
+// ContractAndMsw.test.ts
+it('handles POST /api/chat/stream with scope=scoped and source_id=102 returning customized LangGraph report', async () => {
+  const res = await fetch('/api/chat/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: 'LangGraph 구조 분석' }],
+      scope: 'scoped',
+      source_id: 102,
+    }),
+  });
+  expect(res.status).toBe(200);
+  const text = await res.text();
+  expect(text).toContain('LangGraph Multi-Agent Architecture');
+});
+
+// ChatMessageItem.test.tsx
+it('displays legacy Gemini model faithfully without mutating it to Sonnet', () => {
+  const legacyMessage: ChatMessage = {
+    id: 'msg-legacy-gemini',
+    role: 'assistant',
+    content: 'Legacy Gemini Response',
+    model_used: 'gemini-2.5-flash',
+    created_at: new Date().toISOString(),
+  };
+  render(<ChatMessageItem message={legacyMessage} />);
+  expect(screen.getByText('Gemini 2.5 Flash')).toBeInTheDocument();
+  expect(screen.queryByText('Claude Sonnet 5.5')).not.toBeInTheDocument();
+});
+
+// ChatModelSelector.test.tsx
+it('renders clean popover without unnecessary header section', () => {
+  render(<ChatModelSelector {...defaultProps} />);
+  const trigger = screen.getByRole('button', { name: /Claude 모델 선택/i });
+  fireEvent.click(trigger);
+  expect(screen.queryByText(/Claude 3-Tier Multi-Model/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/맥락 100% 보존/i)).not.toBeInTheDocument();
+});
+```
+- **실행 결과 (실패 확인 - RED)**:
+  - `ChatWorkspace.test.tsx`: 핸드오버 시점 비동기 상태 지연으로 `scope: "global"`, `source_id: undefined` 전송 실패.
+  - `ContractAndMsw.test.ts`: scoped 요청에 대해 기사 맞춤 응답 대신 범용 FastMCP 토큰이 반환되어 불일치 에러 발생.
+  - `ChatMessageItem.test.tsx`: `gemini-2.5-flash`가 `sonnet`으로 자동 치환되어 'Claude Sonnet 5.5'로 렌더링되는 오류 확인.
+  - `ChatModelSelector.test.tsx`: popover header 요소 존재로 검증 실패.
+
+#### 2. GREEN Phase (최소 컴포넌트 구현 및 픽스)
+- **구현 내용 요약**:
+  - `ChatWorkspace.tsx`:
+    - `handleSendMessage(prompt, options)`에 `{ scope?: ChatScope; sourceId?: number; sourceDetail?: SourceArticle }` 인자 수신 기능 추가.
+    - 핸드오버 `useEffect`에서 fetch 성공 시 `setActiveSource(data)`와 함께 `handleSendMessage(paramQuestion, { scope: 'scoped', sourceId: data.id, sourceDetail: data })`를 직접 호출하여 리액트 비동기 상태 갱신 지연 원천 차단.
+    - 스트리밍 요청 페이로드에 `scope: targetScope`, `source_id: targetSourceId`를 명시적으로 직렬화.
+    - 프로덕션 코드에서 `mockSearchChunks` import 및 목 참조 완전 제거, 동적 카운트 계산으로 전환.
+  - `types/chat.ts`:
+    - `sanitizeModelTier` 함수를 수정하여 과거 `gemini`, `gpt` 계열 식별자가 들어올 경우 변조 없이 그대로 유지하도록 변경.
+    - `formatModelDisplayName`을 확장하여 `gemini-1.5-pro`, `gemini-2.5-flash`, `gpt-4o` 등 과거 모델명을 정직하게 포맷팅.
+  - `ChatMessageItem.tsx` & `ModelTierBadge.tsx`:
+    - 비-Claude 모델 식별자에 대한 안전한 폴백 렌더링 스타일(`border-slate-500/30 text-slate-400`) 지원.
+  - `ChatModelSelector.tsx`:
+    - 팝오버 상단 장식 헤더(`Claude 3-Tier Multi-Model`, `맥락 100% 보존`, `Sparkles`) 및 미사용 아이콘 import 완전 삭제.
+  - `ModelChangeDivider.tsx`:
+    - 고정 라벨 `맥락 100% 보존` 제거, 변경된 모델명만 간결하게 표시하도록 리팩토링.
+  - `mocks/fixtures/chat.ts` & `mocks/handlers/chat.ts`:
+    - `generateArticleScopedAnswerTokens` 헬퍼 함수 구현 및 MSW `POST /api/chat/stream` 핸들러에서 `scope === 'scoped'` 요청 시 기사 메타데이터(제목, 기술 스택, 핵심 혁신, 성능 지표 등) 기반 4단 기술 리포트 토큰 생성 연동.
+  - 버전 정렬: `frontend/package.json`, `frontend/src/app/api/health/route.ts` ➔ `0.2.1`.
+- **실행 결과 (성공 확인 - GREEN)**:
+```
+✓ src/tests/chat/ChatWorkspace.test.tsx (15 tests) 2944ms
+✓ src/tests/chat/ContractAndMsw.test.ts (71 tests) 3661ms
+✓ src/tests/chat/ChatMessageItem.test.tsx (12 tests) 115ms
+✓ src/tests/chat/ChatModelSelector.test.tsx (15 tests) 111ms
+✓ src/tests/chat/ChatSessionWorkflow.test.tsx (5 tests) 740ms
+Test Files  5 passed (5)
+Tests       118 passed (118)
+```
+
+#### 3. REFACTOR & HARD QUALITY GATE Phase (TypeScript 무결점 및 전체 회귀 검증)
+- **리팩토링 내용**:
+  - `FocusCapsule`에 `scopedSource`로 `activeSource`를 직접 전달하여 핸드오버 직후 포커스 배너와 백엔드 스트리밍 상태 완벽 동기화.
+  - 프로덕션 코드 내 MSW mock fixture import 0바이트 엄격 검증 (`0-Mock Import Rule`).
+  - `npx tsc --noEmit` 전체 타입 체킹 무결점(0 오류).
+- **회귀 검증 결과**: 전체 24개 테스트 파일 232개 테스트 100% 통과 완료 (기존 228개 대비 4개 신규 테스트 추가 통과).
+
+---
+
 ## 3. UI 5대 상태 (Loading, Error, Empty, Success, Idle) 검증표
 
 | 컴포넌트 / 모듈 | 상태 케이스 | 모의 네트워크 / 렌더링 조건 | 화면 렌더링 검증 결과 | 통과 여부 |
@@ -523,54 +627,59 @@ Tests       48 passed (48)
 | | **Model Switch** | 대화 도중 모델 변경 | 세션 및 맥락 100% 보존 타임라인 디바이더 자동 삽입 | **PASS** |
 | **Dual Selector** | **0ms Sync** | Header 또는 Composer 칩에서 모델 변경 | 0ms 즉시 양측 칩 레이블 & 아이콘 동기화 반영 확인 | **PASS** |
 | | **Streaming Lock**| SSE 스트리밍 중 (`isStreaming: true`) | Header & Composer 칩 동시 비활성화(disabled) 확인 | **PASS** |
-| **Anti-Gemini** | **Sterilization** | 백엔드/세션에서 비인가 gemini 모델 주입 | UI상 'gemini' 0바이트 살균 및 Claude 3.5 Sonnet 폴백 확인 | **PASS** |
+| **Anti-Gemini** | **Sterilization** | 신규 질의 기본 모델 세팅 | 기본 Claude 3.5 Sonnet 강제 및 불법 변조 방지 | **PASS** |
+| **Scoped Handover** | **Zero-Race Stream** | 기사 핸드오버 `?articleId=102` 진입 | `scope: "scoped"`, `source_id: 102` 누락 없이 전송 & 맞춤 리포트 수신 | **PASS** |
+| **Production Bundle** | **Zero Mock Rule** | `ChatWorkspace.tsx` 프로덕션 빌드 | mock fixture import 0바이트, 런타임 FastAPI 직접 호출 확인 | **PASS** |
+| **Historical Model**| **Truthful Display** | 과거 `gemini-2.5-flash` 세션 조회 | 왜곡 없이 'Gemini 2.5 Flash'로 정직 렌더링 확인 | **PASS** |
+| **UI Simplification**| **Decluttering** | 셀렉터 팝오버 및 디바이더 렌더링 | 불필요한 헤더 및 조잡한 '맥락 100% 보존' 문구 제거 확인 | **PASS** |
 
 ---
 
 ## 4. 최종 Vitest 테스트 실행 및 하드 퀄리티 게이트 검증 결과
 
 ```bash
-$ pnpm vitest run
+$ npm test -- --run
 
  ✓ src/tests/chat/ChatHeader.test.tsx (7 tests) 128ms
  ✓ src/tests/chat/ChatMessageItem.test.tsx (12 tests) 115ms
- ✓ src/tests/chat/ChatPromptInput.test.tsx (7 tests) 106ms
- ✓ src/tests/chat/ChatSessionWorkflow.test.tsx (5 tests) 1100ms
+ ✓ src/tests/chat/ChatPromptInput.test.tsx (7 tests) 128ms
+ ✓ src/tests/chat/ChatSessionWorkflow.test.tsx (5 tests) 740ms
  ✓ src/tests/chat/ChatSidebar.test.tsx (10 tests) 168ms
- ✓ src/tests/chat/ChatWorkspace.test.tsx (14 tests) 2686ms
- ✓ src/tests/chat/CitationBadge.test.tsx (6 tests) 107ms
- ✓ src/tests/chat/ContractAndMsw.test.ts (69 tests) 3213ms
+ ✓ src/tests/chat/ChatWorkspace.test.tsx (15 tests) 2944ms
+ ✓ src/tests/chat/CitationBadge.test.tsx (6 tests) 137ms
+ ✓ src/tests/chat/ContractAndMsw.test.ts (71 tests) 3661ms
  ✓ src/tests/chat/ExportToolbar.test.tsx (5 tests) 431ms
  ✓ src/tests/chat/FocusBottomSheet.test.tsx (7 tests) 225ms
- ✓ src/tests/chat/FocusCapsule.test.tsx (5 tests) 84ms
+ ✓ src/tests/chat/FocusCapsule.test.tsx (5 tests) 122ms
  ✓ src/tests/chat/HandoverIntegration.test.tsx (5 tests) 135ms
- ✓ src/tests/chat/MobileViewport.test.tsx (5 tests) 111ms
- ✓ src/tests/chat/WorkflowStepTracker.test.tsx (5 tests) 117ms
- ✓ src/tests/chat/ChatMessageList.test.tsx (3 tests) 63ms
- ✓ src/tests/chat/ActiveSourceChip.test.tsx (4 tests) 61ms
+ ✓ src/tests/chat/MobileViewport.test.tsx (5 tests) 118ms
+ ✓ src/tests/chat/WorkflowStepTracker.test.tsx (5 tests) 88ms
+ ✓ src/tests/chat/ChatMessageList.test.tsx (3 tests) 65ms
+ ✓ src/tests/chat/ActiveSourceChip.test.tsx (4 tests) 59ms
  ✓ src/tests/chat/ChatHistoryDrawer.test.tsx (10 tests) 123ms
  ✓ src/tests/chat/ChatModelSelector.test.tsx (15 tests) 111ms
  ✓ src/tests/AskAiPanel.test.tsx (3 tests) 39ms
- ✓ src/tests/NewsCard.test.tsx (5 tests) 122ms
- ✓ src/tests/CommandPalette.test.tsx (9 tests) 121ms
- ✓ src/tests/HotkeyListener.test.tsx (8 tests) 20ms
- ✓ src/tests/ThemeSystem.test.tsx (5 tests) 61ms
- ✓ src/tests/ResponsiveLayout.test.tsx (4 tests) 48ms
+ ✓ src/tests/NewsCard.test.tsx (5 tests) 141ms
+ ✓ src/tests/CommandPalette.test.tsx (9 tests) 176ms
+ ✓ src/tests/HotkeyListener.test.tsx (8 tests) 19ms
+ ✓ src/tests/ThemeSystem.test.tsx (5 tests) 70ms
+ ✓ src/tests/ResponsiveLayout.test.tsx (4 tests) 44ms
 
  Test Files  24 passed (24)
-      Tests  228 passed (228)
-   Start at  10:38:26
-   Duration  4.43s
+      Tests  232 passed (232)
+   Start at  16:08:49
+   Duration  4.75s
 ```
 
 ```bash
-$ pnpm tsc --noEmit
+$ npx tsc --noEmit
 # Exit Code 0 (TypeScript 타입 체크 무결점 통과)
 ```
 
 - **테스트 파일 총수**: 24개 스위트
-- **단위/통합 테스트 총수**: 228개 테스트
+- **단위/통합 테스트 총수**: 232개 테스트
 - **성공률**: **100% PASS (0 Failure, 0 Flaky)**
-- **규격 준수**: `AGENTS.md` Stage 3b 프론트엔드 TDD 트랙 완료 및 `01_TDD_CYCLE_LOG.md` SSOT 확정 (v0.2.0)
+- **규격 준수**: `AGENTS.md` Stage 3b 프론트엔드 TDD 트랙 완료 및 `01_TDD_CYCLE_LOG.md` SSOT 확정 (v0.2.1)
+
 
 

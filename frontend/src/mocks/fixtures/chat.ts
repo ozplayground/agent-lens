@@ -366,3 +366,40 @@ export const initialMockSessions: ChatSessionDetail[] = [
   },
 ];
 
+/**
+ * 특정 기사(source_id)에 포커스된 경우, 해당 기사의 메타데이터(제목, 요약, 핵심 tldr, 왜 중요한지 등)를
+ * 기반으로 4단 엔지니어링 리포트 마크다운 토큰을 생성합니다.
+ */
+export function generateArticleScopedAnswerTokens(
+  article: ChatSourceDetailResponse,
+  isRelaxed = false
+): string[] {
+  const answerIntro = isRelaxed
+    ? `> 💡 [안내: 선택 조건에 부합하는 소식이 없어 전체 기간으로 확장 검색했습니다]\n\n`
+    : '';
+
+  const techStackList =
+    article.tech_stack && article.tech_stack.length > 0
+      ? article.tech_stack.join(', ')
+      : '에이전트 기술';
+
+  const bullets =
+    article.tldr_bullets && article.tldr_bullets.length > 0
+      ? article.tldr_bullets.map((b, i) => `${i + 1}. **${b}**`).join('\n')
+      : `1. **${article.summary}**`;
+
+  return [
+    answerIntro,
+    '## 1. 핵심 아키텍처 및 동작 원리\n\n',
+    `**${article.title}**[1]은(는) ${article.summary}\n\n`,
+    `본 소식은 **${article.category}** 영역의 고신호 엔지니어링 기술로, 관련 기술 스택인 \`${techStackList}\`을(를) 중심으로 설계되었습니다[1].\n\n`,
+    '## 2. 주요 기능 및 핵심 요약\n\n',
+    `${bullets}\n\n`,
+    '## 3. 도입 필요성 및 가치 (Why it matters)\n\n',
+    `${article.why_it_matters || '프로덕션 AI 에이전트 시스템의 안정성과 확장성을 극대화합니다.'}[1]\n\n`,
+    '## 4. 실무 도입 시 고려사항 및 추천 적용 방안\n\n',
+    `• **원본 참조 및 아키텍처 연계**: \`${article.source}\` 출처의 공식 명세(${article.url})를 바탕으로 단계적 검증을 수행하십시오[S1].\n`,
+    `• **품질 점수 기반 프로덕션 배포**: 품질 지표 ${article.quality_score}점 기준의 엔터프라이즈 거버넌스 가이드라인을 준수하십시오.`,
+  ];
+}
+

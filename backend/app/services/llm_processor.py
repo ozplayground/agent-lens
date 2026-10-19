@@ -9,7 +9,6 @@ import httpx
 from app.config import settings, load_json_config
 from app.collectors.categorizer import is_strictly_ai_related, classify_and_tag
 from app.services.llm_providers.base import BaseLLMProvider
-from app.services.llm_providers.mock_provider import MockLLMProvider
 from app.services.llm_providers.anthropic_provider import (
     AnthropicLLMProvider,
     resolve_model_and_tier,
@@ -92,25 +91,14 @@ CATEGORY_INSIGHTS = {
 
 def sanitize_model_identifier(model_name: Optional[str]) -> str:
     """
-    Sanitizes model identifier according to POL-LLM-005, REQ-LLM-002, and ADR-012 (Anti-Gemini policy).
-    Prevents any 'Google gemini-*' or 'gemini-*' live strings from leaking into response metadata.
-    Normalizes unauthorized or live Gemini model strings to 'claude-sonnet-5-5'.
-    Preserves explicit test mock identifiers ('Mock Gemini', 'MockLLMProvider').
+    Sanitizes and preserves model identifier.
+    Guarantees historical integrity: if past DB records or messages used Gemini, OpenAI,
+    or other models, their exact model names are strictly preserved and never overwritten.
+    Defaults to 'claude-sonnet-5-5' only when model_name is empty/None for new invocations.
     """
     if not model_name:
         return "claude-sonnet-5-5"
-    name_clean = model_name.strip()
-    name_lower = name_clean.lower()
-    # Preserve test mock identifiers
-    if "mock" in name_lower:
-        return name_clean
-    # Strict Anti-Gemini check: block any live Google Gemini string
-    if name_lower.startswith("google gemini") or name_lower.startswith("gemini") or "gemini" in name_lower:
-        logger.warning(
-            f"POL-LLM-005: Unauthorized Gemini model identifier rejected: {model_name}. Normalized to claude-sonnet-5-5."
-        )
-        return "claude-sonnet-5-5"
-    return name_clean
+    return model_name.strip()
 
 
 class LLMProcessor:
@@ -129,7 +117,6 @@ class LLMProcessor:
         self.ollama_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
         self._qa_cache: Dict[str, Tuple[str, str]] = {}
         self._eval_cache: Dict[str, Dict[str, Any]] = {}
-        self.mock_provider = MockLLMProvider()
         self.anthropic_provider = AnthropicLLMProvider()
         self.last_usage: Dict[str, Any] = {
             "input_tokens": 0,
@@ -209,31 +196,12 @@ class LLMProcessor:
             return True
         return False
 
-    def is_mock_fallback_allowed(self) -> bool:
-        """Determines whether fallback to MockLLMProvider is permitted."""
-        if self.is_test_environment():
-            return True
-        if "ALLOW_MOCK_FALLBACK" in os.environ:
-            return os.environ.get("ALLOW_MOCK_FALLBACK", "").lower() in ("true", "1", "yes")
-        json_cfg = load_json_config()
-        if "allow_mock_fallback" in json_cfg.get("llm", {}):
-            return bool(json_cfg.get("llm", {}).get("allow_mock_fallback"))
-        return getattr(settings, "ALLOW_MOCK_FALLBACK", True)
-
     def has_live_provider(self) -> bool:
         """Checks if a valid live LLM provider (Anthropic, OpenAI, Ollama) is configured and reachable."""
         if self.anthropic_provider.is_available():
             return True
 
         json_cfg = load_json_config()
-        anthropic_key = (
-            getattr(settings, "ANTHROPIC_API_KEY", "")
-            or json_cfg.get("llm", {}).get("anthropic_api_key", "")
-            or os.environ.get("ANTHROPIC_API_KEY", "")
-        )
-        if anthropic_key:
-            return True
-
         # Anti-Gemini Policy (POL-LLM-005, REQ-LLM-002, ADR-012):
         # GEMINI_API_KEY is decommissioned and never treated as a live provider.
         openai_key = (
@@ -258,15 +226,10 @@ class LLMProcessor:
 
     def check_provider_available(self) -> bool:
         """
-        Check LLM availability according to ADR-008 resolution hierarchy (Zero 503 guarantee).
-        1. Live provider available -> True
-        2. Test/CI environment or ALLOW_MOCK_FALLBACK=True -> True (Mock fallback active)
-        3. Strict production with no key -> LLMProviderUnavailableException (HTTP 503)
+        Check LLM availability.
+        Raises LLMProviderUnavailableException (HTTP 503) if no live provider is configured.
         """
         if self.has_live_provider():
-            return True
-
-        if self.is_test_environment() or self.is_mock_fallback_allowed():
             return True
 
         raise LLMProviderUnavailableException("가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)")
@@ -322,22 +285,6 @@ class LLMProcessor:
                 return ans, sanitize_model_identifier(ol_model)
         except Exception as e:
             logger.warning(f"Ollama call failed in generate_live_answer: {e}")
-
-        # Fallback to MockLLMProvider if permitted (Zero 503)
-        if self.is_mock_fallback_allowed() or self.is_test_environment():
-            logger.info("Falling back to MockLLMProvider for generate_live_answer (Zero 503)")
-            self.last_usage = {
-                "input_tokens": 850,
-                "output_tokens": 320,
-                "cache_read_input_tokens": 400,
-                "cache_creation_input_tokens": 0,
-            }
-            if model or model_tier:
-                resolved_m, _ = resolve_model_and_tier(model or model_tier)
-                ans, _ = await self.mock_provider.generate_text(prompt)
-                return ans, sanitize_model_identifier(resolved_m)
-            ans, m_name = await self.mock_provider.generate_text(prompt)
-            return ans, sanitize_model_identifier(m_name)
 
         raise LLMUpstreamException("외부 LLM 업스트림 통신 실패 / API 장애")
 
@@ -429,23 +376,6 @@ class LLMProcessor:
                 if token_yielded:
                     raise LLMStreamFailedException(f"Ollama mid-stream failed: {e}")
                 logger.warning(f"Ollama stream failed: {e}")
-
-        # If no live provider yielded tokens, fallback to MockLLMProvider (Zero 503)
-        if not token_yielded:
-            if self.is_mock_fallback_allowed() or self.is_test_environment():
-                logger.info("Falling back to MockLLMProvider for stream_tokens (Zero 503)")
-                self.last_usage = {
-                    "input_tokens": 850,
-                    "output_tokens": 320,
-                    "cache_read_input_tokens": 400,
-                    "cache_creation_input_tokens": 0,
-                }
-                fallback_m = "MockLLMProvider (Fallback)"
-                if model or model_tier:
-                    fallback_m, _ = resolve_model_and_tier(model or model_tier)
-                async for chunk, _ in self.mock_provider.stream_chat(prompt):
-                    yield (chunk, sanitize_model_identifier(fallback_m))
-                return
 
         if token_yielded:
             raise LLMStreamFailedException("LLM 스트리밍 도중 외부 프로바이더 오류가 발생했습니다.")

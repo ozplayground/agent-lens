@@ -406,24 +406,24 @@ async def test_anti_gemini_has_live_provider_ignores_gemini_key():
 
 
 def test_anti_gemini_model_sanitization():
-    """POL-LLM-005: sanitize_model_identifier converts any live Gemini model string to claude-sonnet-5-5."""
+    """Verify sanitize_model_identifier preserves historical model integrity without forced rewriting."""
     from app.services.llm_processor import sanitize_model_identifier
 
-    # Live Gemini model names must be sanitized to claude-sonnet-5-5
-    assert sanitize_model_identifier("Google gemini-2.0-flash") == "claude-sonnet-5-5"
-    assert sanitize_model_identifier("Google gemini-3.5-flash-lite") == "claude-sonnet-5-5"
-    assert sanitize_model_identifier("gemini-3.5-flash") == "claude-sonnet-5-5"
-    assert sanitize_model_identifier("Google Gemini 1.5 Pro") == "claude-sonnet-5-5"
-    assert sanitize_model_identifier("gemini-2.5-flash") == "claude-sonnet-5-5"
+    # Historical model names must be preserved as-is to protect database integrity
+    assert sanitize_model_identifier("Google gemini-2.0-flash") == "Google gemini-2.0-flash"
+    assert sanitize_model_identifier("Google gemini-3.5-flash-lite") == "Google gemini-3.5-flash-lite"
+    assert sanitize_model_identifier("gemini-3.5-flash") == "gemini-3.5-flash"
+    assert sanitize_model_identifier("Google Gemini 1.5 Pro") == "Google Gemini 1.5 Pro"
+    assert sanitize_model_identifier("gemini-2.5-flash") == "gemini-2.5-flash"
 
     # Valid Claude models remain intact
     assert sanitize_model_identifier("claude-sonnet-5-5") == "claude-sonnet-5-5"
     assert sanitize_model_identifier("claude-haiku-5-5") == "claude-haiku-5-5"
     assert sanitize_model_identifier("claude-opus-5-5") == "claude-opus-5-5"
 
-    # Test mocks are preserved
-    assert sanitize_model_identifier("Mock Gemini") == "Mock Gemini"
-    assert sanitize_model_identifier("MockLLMProvider") == "MockLLMProvider"
+    # Default for new requests
+    assert sanitize_model_identifier(None) == "claude-sonnet-5-5"
+    assert sanitize_model_identifier("") == "claude-sonnet-5-5"
 
 
 def test_anthropic_config_and_schema_defaults():
@@ -452,44 +452,37 @@ def test_anthropic_config_and_schema_defaults():
 @pytest.mark.asyncio
 async def test_anti_gemini_isolation_in_generate_live_answer():
     """POL-LLM-005 & ADR-012: generate_live_answer must never invoke Gemini even if key exists."""
+    from app.services.llm_processor import LLMProviderUnavailableException
+
     with patch.object(settings, "ANTHROPIC_API_KEY", ""), \
          patch.object(settings, "OPENAI_API_KEY", ""), \
          patch.object(settings, "OLLAMA_BASE_URL", ""), \
          patch.object(settings, "GEMINI_API_KEY", "fake_gemini_key_12345"), \
-         patch.object(settings, "ALLOW_MOCK_FALLBACK", True), \
-         patch.object(settings, "TESTING", True), \
+         patch.object(settings, "TESTING", False), \
          patch.object(llm_processor.anthropic_provider, "is_available", return_value=False), \
          patch.object(llm_processor, "_call_gemini", new_callable=AsyncMock) as mock_gemini:
         
-        ans, model_name = await llm_processor.generate_live_answer("Test query")
+        with pytest.raises(LLMProviderUnavailableException):
+            await llm_processor.generate_live_answer("Test query")
         # _call_gemini MUST NEVER BE CALLED
         assert mock_gemini.call_count == 0
-        # Model returned must never be Gemini
-        assert "gemini" not in model_name.lower() or "mock" in model_name.lower()
-        assert not model_name.startswith("Google ")
 
 
 @pytest.mark.asyncio
 async def test_anti_gemini_isolation_in_stream_tokens():
     """POL-LLM-005 & ADR-012: stream_tokens must never invoke Gemini SDK streaming."""
+    from app.services.llm_processor import LLMProviderUnavailableException
+
     with patch.object(settings, "ANTHROPIC_API_KEY", ""), \
          patch.object(settings, "OPENAI_API_KEY", ""), \
          patch.object(settings, "OLLAMA_BASE_URL", ""), \
          patch.object(settings, "GEMINI_API_KEY", "fake_gemini_key_12345"), \
-         patch.object(settings, "ALLOW_MOCK_FALLBACK", True), \
-         patch.object(settings, "TESTING", True), \
+         patch.object(settings, "TESTING", False), \
          patch.object(llm_processor.anthropic_provider, "is_available", return_value=False):
         
-        chunks = []
-        models = []
-        async for chunk, m_name in llm_processor.stream_tokens("Test prompt"):
-            chunks.append(chunk)
-            models.append(m_name)
-        
-        assert len(chunks) > 0
-        for m in models:
-            assert not m.startswith("Google ")
-            assert "gemini" not in m.lower() or "mock" in m.lower()
+        with pytest.raises(LLMProviderUnavailableException):
+            async for _ in llm_processor.stream_tokens("Test prompt"):
+                pass
 
 
 @pytest.mark.asyncio

@@ -9,15 +9,15 @@ export default function ModelChangeDivider({
   previousTier,
   newTier,
   timestamp,
-  contextNotice = '맥락 100% 보존',
+  contextNotice,
   className = '',
 }: ModelChangeDividerProps) {
   const newMeta = TIER_META[newTier] || TIER_META.sonnet;
   const prevMeta = previousTier ? TIER_META[previousTier] : null;
 
   const accessibleLabel = prevMeta
-    ? `Claude ${prevMeta.name}에서 ${newMeta.name}로 모델 변경됨 (${contextNotice})`
-    : `Claude ${newMeta.name}로 모델 변경됨 (${contextNotice})`;
+    ? `Claude ${prevMeta.name}에서 ${newMeta.name}로 모델 변경됨${contextNotice ? ` (${contextNotice})` : ''}`
+    : `Claude ${newMeta.name}로 모델 변경됨${contextNotice ? ` (${contextNotice})` : ''}`;
 
   const formattedTime = timestamp
     ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -46,11 +46,14 @@ export default function ModelChangeDivider({
           Claude {newMeta.name}로 모델 변경됨
         </span>
 
-        <span className="text-slate-400 dark:text-slate-500">·</span>
-
-        <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-          {contextNotice}
-        </span>
+        {contextNotice && (
+          <>
+            <span className="text-slate-400 dark:text-slate-500">·</span>
+            <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+              {contextNotice}
+            </span>
+          </>
+        )}
 
         {formattedTime && (
           <>

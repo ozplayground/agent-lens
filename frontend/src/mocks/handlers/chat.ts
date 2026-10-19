@@ -4,6 +4,7 @@ import {
   mockSearchChunks,
   mockSupplementarySources,
   initialMockSessions,
+  generateArticleScopedAnswerTokens,
 } from '../fixtures/chat';
 import {
   ChatStreamRequest,
@@ -42,7 +43,8 @@ export function resolveModelAndUsage(requestedModel?: ChatModel, requestedTier?:
     tier = requestedTier;
     model = TIER_TO_MODEL[tier];
   } else if (requestedModel) {
-    tier = sanitizeModelTier(requestedModel);
+    const sanitized = sanitizeModelTier(requestedModel);
+    tier = (['haiku', 'sonnet', 'opus'].includes(sanitized as any) ? sanitized : 'sonnet') as ModelTier;
     model = TIER_TO_MODEL[tier];
   }
 
@@ -321,25 +323,30 @@ export const chatHandlers = [
       resolveModelAndUsage(model, model_tier);
 
     // 4) 4단 구조화 엔지니어링 리포트 마크다운 토큰 조립
-    const answerIntro = isRelaxed
-      ? `> 💡 [안내: 선택 조건에 부합하는 소식이 없어 전체 기간으로 확장 검색했습니다]\n\n`
-      : '';
+    let answerBodyTokens: string[];
+    if (scope === 'scoped' && source_id && mockArticles[source_id]) {
+      answerBodyTokens = generateArticleScopedAnswerTokens(mockArticles[source_id], isRelaxed);
+    } else {
+      const answerIntro = isRelaxed
+        ? `> 💡 [안내: 선택 조건에 부합하는 소식이 없어 전체 기간으로 확장 검색했습니다]\n\n`
+        : '';
 
-    const answerBodyTokens = [
-      answerIntro,
-      '## 1. 핵심 아키텍처 및 동작 원리\n\n',
-      `**FastMCP**[1]는 파이썬 데코레이터 문법 기반으로 초경량 Model Context Protocol[S1] 서버를 구축할 수 있도록 설계된 차세대 에이전트 인터페이스 프레임워크입니다.\n`,
-      '기존의 복잡한 gRPC나 수동 입출력 파싱 대신 표준 입출력(stdio)과 비동기 Server-Sent Events(SSE) 전송 계층을 추상화하여, Claude Desktop 및 임의의 AI 에이전트 클라이언트와 양방향 툴 바인딩을 지원합니다[1].\n\n',
-      '## 2. 주요 기능 및 코드 구현 예시\n\n',
-      '데코레이터를 사용하여 초간결하게 툴과 리소스를 노출할 수 있습니다:\n\n',
-      '```python\nfrom fastmcp import FastMCP\n\n# FastMCP 서버 인스턴스 초기화\nmcp = FastMCP("AgentLens-Demo", dependencies=["httpx"])\n\n@mcp.tool()\ndef inspect_agent_system(domain: str) -> str:\n    """에이전트 시스템 헬스체크 및 요약 리포트를 생성합니다."""\n    return f"Domain {domain} is fully operational."\n\nif __name__ == "__main__":\n    mcp.run(transport="stdio")\n```\n\n',
-      '## 3. 기존 기술 대비 차별점 및 벤치마크\n\n',
-      '1. **보일러플레이트 코드 85% 감축**: 단 5줄의 코드로 검증 가능한 JSON-RPC 2.0 프로토콜 엔드포인트를 완성합니다[S1].\n',
-      '2. **초당 3,400+ 동시 호출 처리량**: 비동기 AsyncIO 네이티브 이벤트 루프를 채택하여 기존 동기식 Flask/FastAPI 래퍼 대비 3.8배 높은 동시성 처리 성능을 발휘합니다.\n\n',
-      '## 4. 실무 도입 시 고려사항 및 튜닝 파라미터\n\n',
-      '• **프로덕션 런타임 분리**: 로컬 데스크톱 연동 시 stdio 전송을, 분산 클라우드 환경에서는 ASGI Uvicorn 워커 기반의 SSE 전송 모드를 채택해야 합니다.\n',
-      '• **타임아웃 및 버퍼 제어**: 긴 작업을 수행하는 툴의 경우 `timeout_seconds=30` 옵션을 명시하여 에이전트 연결 유실을 방어하십시오.',
-    ];
+      answerBodyTokens = [
+        answerIntro,
+        '## 1. 핵심 아키텍처 및 동작 원리\n\n',
+        `**FastMCP**[1]는 파이썬 데코레이터 문법 기반으로 초경량 Model Context Protocol[S1] 서버를 구축할 수 있도록 설계된 차세대 에이전트 인터페이스 프레임워크입니다.\n`,
+        '기존의 복잡한 gRPC나 수동 입출력 파싱 대신 표준 입출력(stdio)과 비동기 Server-Sent Events(SSE) 전송 계층을 추상화하여, Claude Desktop 및 임의의 AI 에이전트 클라이언트와 양방향 툴 바인딩을 지원합니다[1].\n\n',
+        '## 2. 주요 기능 및 코드 구현 예시\n\n',
+        '데코레이터를 사용하여 초간결하게 툴과 리소스를 노출할 수 있습니다:\n\n',
+        '```python\nfrom fastmcp import FastMCP\n\n# FastMCP 서버 인스턴스 초기화\nmcp = FastMCP("AgentLens-Demo", dependencies=["httpx"])\n\n@mcp.tool()\ndef inspect_agent_system(domain: str) -> str:\n    """에이전트 시스템 헬스체크 및 요약 리포트를 생성합니다."""\n    return f"Domain {domain} is fully operational."\n\nif __name__ == "__main__":\n    mcp.run(transport="stdio")\n```\n\n',
+        '## 3. 기존 기술 대비 차별점 및 벤치마크\n\n',
+        '1. **보일러플레이트 코드 85% 감축**: 단 5줄의 코드로 검증 가능한 JSON-RPC 2.0 프로토콜 엔드포인트를 완성합니다[S1].\n',
+        '2. **초당 3,400+ 동시 호출 처리량**: 비동기 AsyncIO 네이티브 이벤트 루프를 채택하여 기존 동기식 Flask/FastAPI 래퍼 대비 3.8배 높은 동시성 처리 성능을 발휘합니다.\n\n',
+        '## 4. 실무 도입 시 고려사항 및 튜닝 파라미터\n\n',
+        '• **프로덕션 런타임 분리**: 로컬 데스크톱 연동 시 stdio 전송을, 분산 클라우드 환경에서는 ASGI Uvicorn 워커 기반의 SSE 전송 모드를 채택해야 합니다.\n',
+        '• **타임아웃 및 버퍼 제어**: 긴 작업을 수행하는 툴의 경우 `timeout_seconds=30` 옵션을 명시하여 에이전트 연결 유실을 방어하십시오.',
+      ];
+    }
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

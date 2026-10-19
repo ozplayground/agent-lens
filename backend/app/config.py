@@ -38,7 +38,7 @@ _json_data = load_json_config()
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = _json_data.get("app", {}).get("project_name", "AgentLens")
-    VERSION: str = _json_data.get("app", {}).get("version", "0.2.0")
+    VERSION: str = _json_data.get("app", {}).get("version", "0.2.1")
     DATABASE_URL: str = _json_data.get("app", {}).get("database_url", "sqlite+aiosqlite:///./agentlens.db")
     CRAWL_SCHEDULE_HOURS: str = ",".join(str(h) for h in _json_data.get("scheduler", {}).get("crawl_hours", [0, 6, 12, 18]))
     CRAWL_TIMEZONE: str = _json_data.get("scheduler", {}).get("timezone", "UTC")
@@ -57,7 +57,6 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = _json_data.get("llm", {}).get("openai_model", "gpt-4o-mini")
     OLLAMA_BASE_URL: str = _json_data.get("llm", {}).get("ollama_base_url", "http://localhost:11434")
     OLLAMA_MODEL: str = _json_data.get("llm", {}).get("ollama_model", "llama3.2:latest")
-    ALLOW_MOCK_FALLBACK: bool = bool(_json_data.get("llm", {}).get("allow_mock_fallback", True))
     TESTING: bool = False
     QUALITY_CUTOFF_SCORE: float = float(_json_data.get("llm", {}).get("quality_cutoff_score", 5.0))
     HIGH_SIGNAL_THRESHOLD: float = float(_json_data.get("llm", {}).get("high_signal_threshold", 7.8))
@@ -120,10 +119,6 @@ class Settings(BaseSettings):
             self.GEMINI_MODEL = llm.get("gemini_model") or os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
         if not self.OPENAI_API_KEY:
             self.OPENAI_API_KEY = llm.get("openai_api_key") or os.environ.get("OPENAI_API_KEY", "")
-        if "ALLOW_MOCK_FALLBACK" in os.environ:
-            self.ALLOW_MOCK_FALLBACK = os.environ.get("ALLOW_MOCK_FALLBACK", "").lower() in ("true", "1", "yes")
-        elif "allow_mock_fallback" in llm:
-            self.ALLOW_MOCK_FALLBACK = bool(llm.get("allow_mock_fallback"))
         if "TESTING" in os.environ:
             self.TESTING = os.environ.get("TESTING", "").lower() in ("true", "1", "yes")
         if not self.SLACK_WEBHOOK_URL and _json_data.get("webhooks", {}).get("slack_webhook_url"):

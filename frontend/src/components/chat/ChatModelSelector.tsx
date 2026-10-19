@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronDown, Check, Sparkles } from 'lucide-react';
+import { ChevronDown, Check } from 'lucide-react';
 import { ModelTier, ChatModelSelectorProps } from '@/types/chat';
 import { TIER_META } from './ModelTierBadge';
 
@@ -170,17 +170,8 @@ export default function ChatModelSelector({
               : 'bottom-full left-0 mb-2 slide-in-from-bottom-2'
           } w-72 sm:w-80 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-2 z-50 focus:outline-hidden animate-in fade-in duration-150`}
         >
-          {/* Popover Header */}
-          <div className="flex items-center justify-between px-2.5 py-1.5 pb-2 border-b border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-            <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              Claude 3-Tier Multi-Model
-            </span>
-            <span>맥락 100% 보존</span>
-          </div>
-
           {/* Radio Items */}
-          <div className="space-y-1 mt-1.5">
+          <div className="space-y-1">
             {TIERS.map((tier, idx) => {
               const meta = TIER_META[tier];
               const isSelected = selectedTier === tier;

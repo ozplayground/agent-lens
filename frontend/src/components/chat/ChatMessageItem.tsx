@@ -40,9 +40,8 @@ export default function ChatMessageItem({
   const isError = message.status === 'error';
   const sourcesMap = new Map((message.sources || []).map((s) => [String(s.index), s]));
 
-  // Anti-Gemini Policy & Format Safe Display Model Name (POL-LLM-005, REQ-LLM-002)
-  const resolvedTier: ModelTier = sanitizeModelTier(message.model_tier || message.model_used);
-  const displayModelName = formatModelDisplayName(message.model_tier || message.model_used);
+  const resolvedTier = sanitizeModelTier(message.model_tier || message.model_used);
+  const displayModelName = formatModelDisplayName(message.model_used || message.model_tier);
 
   useEffect(() => {
     return () => {

@@ -145,7 +145,7 @@ describe('ChatModelSelector Component (v4.0 TDD)', () => {
 });
 
 describe('ModelChangeDivider Component (v4.0 TDD)', () => {
-  it('renders separator with accessible role and context preservation notice', () => {
+  it('renders separator with accessible role and concise model change label', () => {
     render(
       <ModelChangeDivider
         previousTier="haiku"
@@ -157,7 +157,6 @@ describe('ModelChangeDivider Component (v4.0 TDD)', () => {
     const separator = screen.getByRole('separator');
     expect(separator).toBeInTheDocument();
     expect(separator).toHaveTextContent(/Claude Sonnet 5.5로 모델 변경됨/i);
-    expect(separator).toHaveTextContent(/맥락 100% 보존/i);
     expect(separator).toHaveTextContent(/Haiku 5.5/i);
   });
 
