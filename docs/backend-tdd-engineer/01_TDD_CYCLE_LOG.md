@@ -294,7 +294,7 @@ backend/tests/test_anthropic_provider.py ..........                       [100%]
 
 ### 4.2 전체 백엔드 통합 회귀 테스트 결과
 - **테스트 대상 파일**: **14개 파일 전체**
-  1. `backend/tests/test_anthropic_provider.py` (**15 passed** - Anti-Gemini 격리 5건 신설)
+  1. `backend/tests/test_anthropic_provider.py` (**16 passed** - 5.5 공식 모델 ID 및 설정 기본값 검증 신설)
   2. `backend/tests/test_llm_processor.py` (14 passed)
   3. `backend/tests/test_chat_sessions.py` (18 passed)
   4. `backend/tests/test_chat.py` (34 passed)
@@ -308,19 +308,52 @@ backend/tests/test_anthropic_provider.py ..........                       [100%]
   12. `backend/tests/test_scheduler.py` (1 passed)
   13. `backend/tests/test_sources_and_research.py` (6 passed)
   14. `backend/tests/test_trends_and_webhook.py` (5 passed)
-- **전체 테스트 결과**: **141 passed in 13.81s (100% 전원 PASS, 실패 0건, 회귀 결함 0건)**
+- **전체 테스트 결과**: **142 passed in 13.78s (100% 전원 PASS, 실패 0건, 회귀 결함 0건)**
 
 ---
 
-## 5. 결론 및 Stage 3a 완료 선언
+## 5. [Cycle 12] Anthropic 실제 공식 모델 ID(`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`) 적용 및 3.5 잔재 완전 박멸 (긴급 버그 수정)
 
-1. **Anti-Gemini & Claude-Only 파이프라인 완비 (`POL-LLM-005`, `REQ-LLM-002`, ADR-012)**:
-   - Google Gemini 호출 경로(`_call_gemini`, Google GenAI SDK 스트리밍)를 백엔드 런타임에서 전면 영구 퇴역(Decommission) 처리 완료.
-   - Claude API 장애 또는 키 미등록 시 저가형 외부 모델로의 사일런트 다운그레이드를 100% 차단하고 `MockLLMProvider`로 안전 격리.
-   - 응답 생성 및 메타데이터 적재 경로 전반에 `sanitize_model_identifier()`를 강제 적용하여 응답 내 `Google gemini-*` 노출률 0%를 영구 보장.
-2. **Anthropic Claude 3-Tier 멀티모델 라우팅 및 프롬프트 캐싱 완비 (`FUNC-CHAT-013`, `BR-COLL-005-1`, ADR-011)**:
-   - 외부 무거운 SDK 없이 순수 `httpx` 비동기 REST 엔진으로 Haiku / Sonnet / Opus 3-Tier 동적 라우팅 및 2,500토큰 이상의 시스템 프롬프트 캐싱(`cache_control: {"type": "ephemeral"}`) 완비.
-   - 스트리밍 `event: done` 및 동기 응답에 `model_tier`와 `usage` 메타데이터를 정량 주입하고 SQLite WAL에 무손실 영속화.
-3. **v0.2.0 표준 규격 동기화 및 100% Green 회귀 보존**:
-   - `config.json`, `backend/app/config.py`, 테스트 단언문 전반의 버전을 `0.2.0`으로 공식 동기화.
-   - 신규 5건의 Anti-Gemini 테스트를 포함하여 총 141건 전체 백엔드 회귀 테스트 100% Pass를 달성함으로써 Stage 3a 백엔드 TDD 완료를 공식 선언합니다.
+### 1. RED Phase (실패하는 테스트 작성)
+- **배경**:
+  - Anthropic Live API 실제 공식 모델 식별자 확인:
+    - Sonnet 5.5: `claude-sonnet-5-5`
+    - Haiku 5.5: `claude-haiku-5-5`
+    - Opus 5.5: `claude-opus-5-5`
+  - 이전 가짜 3.5 식별자(`claude-3-5-...`) 잔재를 전면 제거하고 실제 공식 ID로 교체 검증하는 테스트 작성.
+- **실행 결과**:
+  - `pytest backend/tests/test_anthropic_provider.py` 실행 시 3건 FAIL (RED 확인: `AssertionError: assert 'claude-3-5-haiku-20241022' == 'claude-haiku-5-5'`, `AssertionError: assert 'claude-3-5-sonnet-latest' == 'claude-sonnet-5-5'`, `AssertionError: assert 'claude-3-5-sonnet-20241022' == 'claude-sonnet-5-5'`).
+
+### 2. GREEN Phase (기능 구현 및 단언 통과)
+- **수정 내역**:
+  - `backend/app/services/llm_providers/anthropic_provider.py`:
+    - `MODEL_TIER_MAPPING`에서 `claude-3-5-...` 식별자를 전면 제거하고 `claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`로 매핑.
+    - `DEFAULT_MODEL`을 `claude-sonnet-5-5`로 변경.
+    - `generate_structured_summary` 내 모델 기본값을 `claude-sonnet-5-5`로 수정.
+  - `backend/app/config.py`:
+    - `Settings`에 `ANTHROPIC_COLLECTION_MODEL="claude-sonnet-5-5"`, `ANTHROPIC_DEFAULT_CHAT_MODEL="claude-sonnet-5-5"` 기본값 추가 및 `ANTHROPIC_MODEL="claude-sonnet-5-5"`로 정규화.
+  - `backend/app/schemas/chat.py`:
+    - `ChatModel` Literal에 `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5` 추가.
+    - `ChatStreamRequest`, `ChatQueryRequest`, `DonePayload`, `ChatQueryResponse` 기본값을 `claude-sonnet-5-5`로 정규화.
+  - `backend/app/services/llm_processor.py`:
+    - `sanitize_model_identifier`의 정규화 모델을 `claude-sonnet-5-5`로 변경.
+    - `KNOWN_TECH_STACK`에 Claude 5.5 모델군 추가.
+  - `.env`, `backend/.env`, `.env.example`:
+    - `ANTHROPIC_COLLECTION_MODEL="claude-sonnet-5-5"`, `ANTHROPIC_DEFAULT_CHAT_MODEL="claude-sonnet-5-5"`로 업데이트.
+- **실행 결과**:
+  - `pytest backend/tests/test_anthropic_provider.py`: 16 passed (GREEN).
+  - 전체 백엔드 테스트: 142 passed (100% GREEN).
+
+### 3. REFACTOR Phase
+- 불필요한 레거시 식별자 정리, 주석 및 타입 힌트 점검 완료.
+
+---
+
+## 6. 결론 및 Stage 3a 완료 선언
+
+1. **Anthropic 실제 공식 모델 ID 완전 정착**:
+   - `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`가 백엔드 런타임 및 환경설정, 스키마, 테스트에 단일 소스로 일관되게 적용됨.
+2. **Anti-Gemini & Claude-Only 파이프라인 완비**:
+   - Google Gemini 호출 경로 영구 퇴역 및 비인가 모델명 살균 시 `claude-sonnet-5-5`로 일관되게 정규화.
+3. **100% Green 회귀 보존**:
+   - 총 14개 테스트 파일, 142개 전원 PASS 달성. 회귀 결함 0건.

@@ -48,6 +48,8 @@ import {
   ChatTimelineItem,
   ChatHeaderProps,
   sanitizeModelTier,
+  formatModelDisplayName,
+  getModelLabel,
 } from '@/types/chat';
 import {
   NewsItemSchema,
@@ -831,6 +833,9 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
     });
 
     it('validates ChatModelSchema for official Claude models and rejects unsupported strings', () => {
+      expect(ChatModelSchema.parse('claude-sonnet-5-5')).toBe('claude-sonnet-5-5');
+      expect(ChatModelSchema.parse('claude-haiku-5-5')).toBe('claude-haiku-5-5');
+      expect(ChatModelSchema.parse('claude-opus-5-5')).toBe('claude-opus-5-5');
       expect(ChatModelSchema.parse('claude-3-5-haiku')).toBe('claude-3-5-haiku');
       expect(ChatModelSchema.parse('claude-3-5-sonnet')).toBe('claude-3-5-sonnet');
       expect(ChatModelSchema.parse('claude-3-5-opus')).toBe('claude-3-5-opus');
@@ -839,15 +844,18 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
     });
 
     it('verifies Claude model constants and bidirectional mappings', () => {
-      expect(DEFAULT_CHAT_MODEL).toBe('claude-3-5-sonnet-latest');
+      expect(DEFAULT_CHAT_MODEL).toBe('claude-sonnet-5-5');
       expect(DEFAULT_MODEL_TIER).toBe('sonnet');
       expect(Object.keys(CLAUDE_MODELS).length).toBe(3);
-      expect(CLAUDE_MODELS.haiku).toBe('claude-3-5-haiku-latest');
-      expect(CLAUDE_MODELS.sonnet).toBe('claude-3-5-sonnet-latest');
-      expect(CLAUDE_MODELS.opus).toBe('claude-3-5-opus-latest');
-      expect(TIER_TO_MODEL.haiku).toBe('claude-3-5-haiku-latest');
-      expect(TIER_TO_MODEL.sonnet).toBe('claude-3-5-sonnet-latest');
-      expect(TIER_TO_MODEL.opus).toBe('claude-3-5-opus-latest');
+      expect(CLAUDE_MODELS.haiku).toBe('claude-haiku-5-5');
+      expect(CLAUDE_MODELS.sonnet).toBe('claude-sonnet-5-5');
+      expect(CLAUDE_MODELS.opus).toBe('claude-opus-5-5');
+      expect(TIER_TO_MODEL.haiku).toBe('claude-haiku-5-5');
+      expect(TIER_TO_MODEL.sonnet).toBe('claude-sonnet-5-5');
+      expect(TIER_TO_MODEL.opus).toBe('claude-opus-5-5');
+      expect(MODEL_TO_TIER['claude-sonnet-5-5']).toBe('sonnet');
+      expect(MODEL_TO_TIER['claude-haiku-5-5']).toBe('haiku');
+      expect(MODEL_TO_TIER['claude-opus-5-5']).toBe('opus');
       expect(MODEL_TO_TIER['claude-3-5-haiku']).toBe('haiku');
       expect(MODEL_TO_TIER['claude-3-5-sonnet']).toBe('sonnet');
       expect(MODEL_TO_TIER['claude-3-5-opus']).toBe('opus');
@@ -860,6 +868,9 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(sanitizeModelTier('gemini-2.5-flash')).toBe('sonnet');
       expect(sanitizeModelTier('Google gemini-3.5-flash-lite')).toBe('sonnet');
       expect(sanitizeModelTier('gemini-ultra')).toBe('sonnet');
+      expect(sanitizeModelTier('claude-sonnet-5-5')).toBe('sonnet');
+      expect(sanitizeModelTier('claude-haiku-5-5')).toBe('haiku');
+      expect(sanitizeModelTier('claude-opus-5-5')).toBe('opus');
       expect(sanitizeModelTier('claude-3-5-haiku')).toBe('haiku');
       expect(sanitizeModelTier('claude-3-5-haiku-latest')).toBe('haiku');
       expect(sanitizeModelTier('haiku')).toBe('haiku');
@@ -872,6 +883,32 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(sanitizeModelTier(undefined)).toBe('sonnet');
       expect(sanitizeModelTier(null)).toBe('sonnet');
       expect(sanitizeModelTier('unknown')).toBe('sonnet');
+    });
+
+    it('verifies formatModelDisplayName and getModelLabel masks raw IDs with clean 5.5 brand names', () => {
+      // Default nameOnly
+      expect(formatModelDisplayName()).toBe('Claude Sonnet 5.5');
+      expect(formatModelDisplayName('claude-sonnet-5-5')).toBe('Claude Sonnet 5.5');
+      expect(formatModelDisplayName('claude-haiku-5-5')).toBe('Claude Haiku 5.5');
+      expect(formatModelDisplayName('claude-opus-5-5')).toBe('Claude Opus 5.5');
+      expect(formatModelDisplayName('gemini-2.5-flash')).toBe('Claude Sonnet 5.5');
+
+      // Full with icon
+      expect(formatModelDisplayName('claude-sonnet-5-5', { withIcon: true })).toBe('🎯 Claude Sonnet 5.5');
+      expect(formatModelDisplayName('claude-haiku-5-5', { withIcon: true })).toBe('⚡ Claude Haiku 5.5');
+      expect(formatModelDisplayName('claude-opus-5-5', { withIcon: true })).toBe('🧠 Claude Opus 5.5');
+
+      // Short with icon
+      expect(formatModelDisplayName('sonnet', { withIcon: true, short: true })).toBe('🎯 Sonnet 5.5');
+      expect(formatModelDisplayName('haiku', { withIcon: true, short: true })).toBe('⚡ Haiku 5.5');
+      expect(formatModelDisplayName('opus', { withIcon: true, short: true })).toBe('🧠 Opus 5.5');
+
+      // Short nameOnly
+      expect(formatModelDisplayName('sonnet', { short: true })).toBe('Sonnet 5.5');
+
+      // Alias getModelLabel
+      expect(getModelLabel('claude-sonnet-5-5')).toBe('Claude Sonnet 5.5');
+      expect(getModelLabel('claude-haiku-5-5', { withIcon: true })).toBe('⚡ Claude Haiku 5.5');
     });
 
     it('validates TokenUsageMetaSchema with prompt caching fields', () => {
@@ -900,16 +937,16 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
 
     it('validates ChatStreamRequestSchema with optional model and model_tier defaults', () => {
       const minimal = ChatStreamRequestSchema.parse({ question: 'Hello Claude' });
-      expect(minimal.model).toBe('claude-3-5-sonnet-latest');
+      expect(minimal.model).toBe('claude-sonnet-5-5');
       expect(minimal.model_tier).toBeUndefined();
 
       const explicit = ChatStreamRequestSchema.parse({
         question: 'Benchmark prompt',
         model_tier: 'haiku',
-        model: 'claude-3-5-haiku',
+        model: 'claude-haiku-5-5',
       });
       expect(explicit.model_tier).toBe('haiku');
-      expect(explicit.model).toBe('claude-3-5-haiku');
+      expect(explicit.model).toBe('claude-haiku-5-5');
     });
 
     it('validates ChatDonePayloadSchema with model_tier and token usage meta', () => {
@@ -1054,7 +1091,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(res.status).toBe(200);
       const text = await res.text();
       expect(text).toContain('event: done');
-      expect(text).toContain('"model":"claude-3-5-haiku-latest"');
+      expect(text).toContain('"model":"claude-haiku-5-5"');
       expect(text).toContain('"model_tier":"haiku"');
       expect(text).toContain('"latency_ms":180');
       expect(text).toContain('"cache_read_input_tokens":2500');
@@ -1070,7 +1107,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(res.status).toBe(200);
       const text = await res.text();
       expect(text).toContain('event: done');
-      expect(text).toContain('"model":"claude-3-5-opus-latest"');
+      expect(text).toContain('"model":"claude-opus-5-5"');
       expect(text).toContain('"model_tier":"opus"');
       expect(text).toContain('"latency_ms":1780');
       expect(text).toContain('"input_tokens":2100');
@@ -1085,7 +1122,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
 
       expect(res.status).toBe(200);
       const text = await res.text();
-      expect(text).toContain('"model":"claude-3-5-sonnet-latest"');
+      expect(text).toContain('"model":"claude-sonnet-5-5"');
       expect(text).toContain('"model_tier":"sonnet"');
       expect(text).toContain('"latency_ms":642');
     });
@@ -1154,7 +1191,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(res.status).toBe(200);
       const data = await res.json();
       const parsed = ChatQueryResponseSchema.parse(data);
-      expect(parsed.model).toBe('claude-3-5-haiku-latest');
+      expect(parsed.model).toBe('claude-haiku-5-5');
       expect(parsed.model_tier).toBe('haiku');
       expect(parsed.latency_ms).toBe(180);
       expect(parsed.usage?.input_tokens).toBe(650);
@@ -1165,7 +1202,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       const res = await fetch('/api/chat/stream?question=FastMCP_Opus_Test&model_tier=opus');
       expect(res.status).toBe(200);
       const text = await res.text();
-      expect(text).toContain('"model":"claude-3-5-opus-latest"');
+      expect(text).toContain('"model":"claude-opus-5-5"');
       expect(text).toContain('"model_tier":"opus"');
       expect(text).toContain('"latency_ms":1780');
       expect(text).toContain('"cache_read_input_tokens":2500');

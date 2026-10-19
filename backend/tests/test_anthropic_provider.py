@@ -44,33 +44,33 @@ async def test_anthropic_provider_interface_and_model_resolution():
     # 3-tier model resolution
     # Haiku
     m_id, tier = resolve_model_and_tier("haiku")
-    assert "haiku" in m_id
+    assert m_id == "claude-haiku-5-5"
     assert tier == "haiku"
 
-    m_id, tier = resolve_model_and_tier("claude-3-5-haiku")
-    assert "haiku" in m_id
+    m_id, tier = resolve_model_and_tier("claude-haiku-5-5")
+    assert m_id == "claude-haiku-5-5"
     assert tier == "haiku"
 
     # Sonnet (default)
     m_id, tier = resolve_model_and_tier("sonnet")
-    assert "sonnet" in m_id
+    assert m_id == "claude-sonnet-5-5"
     assert tier == "sonnet"
 
-    m_id, tier = resolve_model_and_tier("claude-3-5-sonnet")
-    assert "sonnet" in m_id
+    m_id, tier = resolve_model_and_tier("claude-sonnet-5-5")
+    assert m_id == "claude-sonnet-5-5"
     assert tier == "sonnet"
 
     m_id, tier = resolve_model_and_tier(None)
-    assert "sonnet" in m_id
+    assert m_id == "claude-sonnet-5-5"
     assert tier == "sonnet"
 
     # Opus
     m_id, tier = resolve_model_and_tier("opus")
-    assert "opus" in m_id
+    assert m_id == "claude-opus-5-5"
     assert tier == "opus"
 
-    m_id, tier = resolve_model_and_tier("claude-3-5-opus")
-    assert "opus" in m_id
+    m_id, tier = resolve_model_and_tier("claude-opus-5-5")
+    assert m_id == "claude-opus-5-5"
     assert tier == "opus"
 
 
@@ -86,7 +86,7 @@ async def test_anthropic_generate_text_mocked_http():
         "type": "message",
         "role": "assistant",
         "content": [{"type": "text", "text": "Anthropic Claude generated answer."}],
-        "model": "claude-3-5-sonnet-20241022",
+        "model": "claude-sonnet-5-5",
         "stop_reason": "end_turn",
         "usage": {
             "input_tokens": 1500,
@@ -107,7 +107,7 @@ async def test_anthropic_generate_text_mocked_http():
 
         text, model, usage = await provider.generate_text_with_usage(
             prompt="Hello Claude",
-            model="claude-3-5-sonnet",
+            model="claude-sonnet-5-5",
         )
 
         assert text == "Anthropic Claude generated answer."
@@ -134,7 +134,7 @@ async def test_anthropic_stream_chat_mocked_sse():
 
     sse_lines = [
         b'event: message_start\r\n',
-        b'data: {"type": "message_start", "message": {"id": "msg_1", "role": "assistant", "model": "claude-3-5-haiku-20241022", "usage": {"input_tokens": 50, "output_tokens": 1}}}\r\n\r\n',
+        b'data: {"type": "message_start", "message": {"id": "msg_1", "role": "assistant", "model": "claude-haiku-5-5", "usage": {"input_tokens": 50, "output_tokens": 1}}}\r\n\r\n',
         b'event: content_block_delta\r\n',
         b'data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Rapid "}}\r\n\r\n',
         b'event: content_block_delta\r\n',
@@ -165,7 +165,7 @@ async def test_anthropic_stream_chat_mocked_sse():
     with patch("httpx.AsyncClient.stream", return_value=MockStreamResponse()):
         tokens = []
         models = []
-        async for chunk, m in provider.stream_chat(prompt="Test", model="claude-3-5-haiku"):
+        async for chunk, m in provider.stream_chat(prompt="Test", model="claude-haiku-5-5"):
             tokens.append(chunk)
             models.append(m)
 
@@ -212,7 +212,7 @@ async def test_anthropic_generate_structured_summary_with_caching():
                 "tech_stack": ["SWE-bench", "Docker", "Python"],
             }),
         }],
-        "model": "claude-3-5-sonnet-20241022",
+        "model": "claude-sonnet-5-5",
         "usage": {
             "input_tokens": 2800,
             "output_tokens": 180,
@@ -292,7 +292,7 @@ async def test_llm_processor_anthropic_priority_and_routing():
     mock_provider.is_available.return_value = True
 
     async def mock_gen(prompt, **kwargs):
-        return "Anthropic Response", "claude-3-5-haiku-20241022", {"input_tokens": 100, "output_tokens": 50}
+        return "Anthropic Response", "claude-haiku-5-5", {"input_tokens": 100, "output_tokens": 50}
 
     mock_provider.generate_text_with_usage = AsyncMock(side_effect=mock_gen)
 
@@ -310,7 +310,7 @@ async def test_chat_stream_3tier_model_routing():
         req_body = {
             "question": "3-Tier Multi-Model routing test",
             "scope": "global",
-            "model": "claude-3-5-haiku",
+            "model": "claude-haiku-5-5",
             "model_tier": "haiku",
         }
         res = await ac.post("/api/chat/stream", json=req_body)
@@ -332,7 +332,7 @@ async def test_chat_query_3tier_model_routing():
         req_body = {
             "question": "3-Tier query routing test",
             "scope": "global",
-            "model": "claude-3-5-opus",
+            "model": "claude-opus-5-5",
             "model_tier": "opus",
         }
         res = await ac.post("/api/chat/query", json=req_body)
@@ -353,7 +353,7 @@ async def test_chat_session_persistence_with_model_tier_and_usage():
             session_id=session_id,
             user_content="멀티모델 영속화 테스트",
             assistant_content="Opus 5.5로 생성된 답변입니다.",
-            model="claude-3-5-opus-latest",
+            model="claude-opus-5-5",
             model_tier="opus",
             usage={
                 "input_tokens": 1200,
@@ -365,7 +365,7 @@ async def test_chat_session_persistence_with_model_tier_and_usage():
         )
 
         assert assistant_msg.model_tier == "opus"
-        assert "claude-3-5-opus" in assistant_msg.model
+        assert assistant_msg.model == "claude-opus-5-5"
 
         # Hydrate via get_session_detail
         detail = await service.get_session_detail(session_id)
@@ -406,24 +406,47 @@ async def test_anti_gemini_has_live_provider_ignores_gemini_key():
 
 
 def test_anti_gemini_model_sanitization():
-    """POL-LLM-005: sanitize_model_identifier converts any live Gemini model string to claude-3-5-sonnet-latest."""
+    """POL-LLM-005: sanitize_model_identifier converts any live Gemini model string to claude-sonnet-5-5."""
     from app.services.llm_processor import sanitize_model_identifier
 
-    # Live Gemini model names must be sanitized
-    assert sanitize_model_identifier("Google gemini-2.0-flash") == "claude-3-5-sonnet-latest"
-    assert sanitize_model_identifier("Google gemini-3.5-flash-lite") == "claude-3-5-sonnet-latest"
-    assert sanitize_model_identifier("gemini-3.5-flash") == "claude-3-5-sonnet-latest"
-    assert sanitize_model_identifier("Google Gemini 1.5 Pro") == "claude-3-5-sonnet-latest"
-    assert sanitize_model_identifier("gemini-2.5-flash") == "claude-3-5-sonnet-latest"
+    # Live Gemini model names must be sanitized to claude-sonnet-5-5
+    assert sanitize_model_identifier("Google gemini-2.0-flash") == "claude-sonnet-5-5"
+    assert sanitize_model_identifier("Google gemini-3.5-flash-lite") == "claude-sonnet-5-5"
+    assert sanitize_model_identifier("gemini-3.5-flash") == "claude-sonnet-5-5"
+    assert sanitize_model_identifier("Google Gemini 1.5 Pro") == "claude-sonnet-5-5"
+    assert sanitize_model_identifier("gemini-2.5-flash") == "claude-sonnet-5-5"
 
     # Valid Claude models remain intact
-    assert sanitize_model_identifier("claude-3-5-sonnet-20241022") == "claude-3-5-sonnet-20241022"
-    assert sanitize_model_identifier("claude-3-5-haiku-20241022") == "claude-3-5-haiku-20241022"
-    assert sanitize_model_identifier("claude-3-5-opus-latest") == "claude-3-5-opus-latest"
+    assert sanitize_model_identifier("claude-sonnet-5-5") == "claude-sonnet-5-5"
+    assert sanitize_model_identifier("claude-haiku-5-5") == "claude-haiku-5-5"
+    assert sanitize_model_identifier("claude-opus-5-5") == "claude-opus-5-5"
 
     # Test mocks are preserved
     assert sanitize_model_identifier("Mock Gemini") == "Mock Gemini"
     assert sanitize_model_identifier("MockLLMProvider") == "MockLLMProvider"
+
+
+def test_anthropic_config_and_schema_defaults():
+    """Verify settings defaults and chat schema defaults use claude-sonnet-5-5."""
+    from app.services.llm_providers.anthropic_provider import DEFAULT_MODEL
+    from app.schemas.chat import ChatStreamRequest, ChatQueryRequest, DonePayload, ChatQueryResponse
+    from app.config import settings
+
+    assert DEFAULT_MODEL == "claude-sonnet-5-5"
+    assert settings.ANTHROPIC_COLLECTION_MODEL == "claude-sonnet-5-5"
+    assert settings.ANTHROPIC_DEFAULT_CHAT_MODEL == "claude-sonnet-5-5"
+
+    stream_req = ChatStreamRequest(question="test")
+    assert stream_req.model == "claude-sonnet-5-5"
+
+    query_req = ChatQueryRequest(question="test")
+    assert query_req.model == "claude-sonnet-5-5"
+
+    done = DonePayload(session_id="test", sources_count=0, latency_ms=10)
+    assert done.model == "claude-sonnet-5-5"
+
+    query_res = ChatQueryResponse(answer="ok", sources=[], session_id="s1", scope="global", latency_ms=10)
+    assert query_res.model == "claude-sonnet-5-5"
 
 
 @pytest.mark.asyncio

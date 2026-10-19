@@ -166,6 +166,9 @@ export const chatHandlers = [
     if (
       model &&
       ![
+        'claude-sonnet-5-5',
+        'claude-haiku-5-5',
+        'claude-opus-5-5',
         'claude-3-5-haiku',
         'claude-3-5-sonnet',
         'claude-3-5-opus',
@@ -553,6 +556,9 @@ export const chatHandlers = [
     if (
       body.model &&
       ![
+        'claude-sonnet-5-5',
+        'claude-haiku-5-5',
+        'claude-opus-5-5',
         'claude-3-5-haiku',
         'claude-3-5-sonnet',
         'claude-3-5-opus',

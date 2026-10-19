@@ -367,7 +367,7 @@ export const newsHandlers = [
       news_id: newsId,
       question: body.question,
       answer: `[AI 분석 결과]: "${item.title}" 관련 질의("${body.question}")에 대해 FastMCP 및 고신호 아키텍처 관점에서 분석한 답변입니다.`,
-      model_used: 'claude-3-5-sonnet-latest',
+      model_used: 'claude-sonnet-5-5',
     };
 
     return HttpResponse.json(response, { status: 200 });
@@ -391,7 +391,7 @@ export const newsHandlers = [
     const stream = new ReadableStream({
       async start(controller) {
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ event: 'meta', model: 'claude-3-5-sonnet-latest' })}\n\n`)
+          encoder.encode(`data: ${JSON.stringify({ event: 'meta', model: 'claude-sonnet-5-5' })}\n\n`)
         );
         await delay(30);
 

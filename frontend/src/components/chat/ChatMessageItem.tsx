@@ -11,6 +11,7 @@ import {
   MODEL_TO_TIER,
   TIER_TO_MODEL,
   sanitizeModelTier,
+  formatModelDisplayName,
 } from '@/types/chat';
 import CitationBadge from './CitationBadge';
 import WorkflowStepTracker from './WorkflowStepTracker';
@@ -39,12 +40,9 @@ export default function ChatMessageItem({
   const isError = message.status === 'error';
   const sourcesMap = new Map((message.sources || []).map((s) => [String(s.index), s]));
 
-  // Anti-Gemini Policy & Sanitize Model Tier (POL-LLM-005, REQ-LLM-002)
+  // Anti-Gemini Policy & Format Safe Display Model Name (POL-LLM-005, REQ-LLM-002)
   const resolvedTier: ModelTier = sanitizeModelTier(message.model_tier || message.model_used);
-  const displayModelName =
-    message.model_used && !message.model_used.toLowerCase().includes('gemini')
-      ? message.model_used
-      : TIER_TO_MODEL[resolvedTier] || 'claude-3-5-sonnet-latest';
+  const displayModelName = formatModelDisplayName(message.model_tier || message.model_used);
 
   useEffect(() => {
     return () => {

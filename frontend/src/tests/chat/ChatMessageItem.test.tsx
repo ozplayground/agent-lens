@@ -64,10 +64,12 @@ describe('ChatMessageItem Component', () => {
     expect(screen.getByText('FastMCP와 LangGraph의 차이점은 무엇인가요?')).toBeInTheDocument();
   });
 
-  it('sanitizes legacy gemini model_used and renders Claude 3.5 Sonnet without any gemini output (POL-LLM-005, REQ-LLM-002)', () => {
+  it('sanitizes legacy gemini model_used and renders formatted Claude Sonnet 5.5 without any raw model ID or gemini output (POL-LLM-005, REQ-LLM-002)', () => {
     render(<ChatMessageItem message={assistantMessage} />);
 
-    expect(screen.getByText(/claude-3-5-sonnet-latest/i)).toBeInTheDocument();
+    expect(screen.getByText('Claude Sonnet 5.5')).toBeInTheDocument();
+    expect(screen.queryByText(/claude-3-5/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/claude-sonnet-5-5/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/gemini/i)).not.toBeInTheDocument();
     // Inline citations [1] and [2] are rendered as buttons
     const badge1 = screen.getByRole('button', { name: /출처 1번/i });
@@ -75,6 +77,29 @@ describe('ChatMessageItem Component', () => {
 
     expect(badge1).toBeInTheDocument();
     expect(badge2).toBeInTheDocument();
+  });
+
+  it('formats Haiku and Opus model names without exposing raw model IDs', () => {
+    const haikuMsg: ChatMessage = {
+      ...assistantMessage,
+      id: 'msg-haiku-1',
+      model_tier: 'haiku',
+      model_used: 'claude-haiku-5-5',
+    };
+    const { unmount } = render(<ChatMessageItem message={haikuMsg} />);
+    expect(screen.getByText('Claude Haiku 5.5')).toBeInTheDocument();
+    expect(screen.queryByText(/claude-haiku-5-5/i)).not.toBeInTheDocument();
+    unmount();
+
+    const opusMsg: ChatMessage = {
+      ...assistantMessage,
+      id: 'msg-opus-1',
+      model_tier: 'opus',
+      model_used: 'claude-opus-5-5',
+    };
+    render(<ChatMessageItem message={opusMsg} />);
+    expect(screen.getByText('Claude Opus 5.5')).toBeInTheDocument();
+    expect(screen.queryByText(/claude-opus-5-5/i)).not.toBeInTheDocument();
   });
 
   it('handles copy action when copy button is clicked', async () => {

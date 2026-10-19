@@ -40,6 +40,10 @@ class LLMStreamFailedException(Exception):
 # Tech stack dictionary for high-precision entity extraction
 KNOWN_TECH_STACK = {
     # Models
+    "claude 5.5": "Claude 5.5",
+    "claude-sonnet-5-5": "Claude 5.5 Sonnet",
+    "claude-haiku-5-5": "Claude 5.5 Haiku",
+    "claude-opus-5-5": "Claude 5.5 Opus",
     "claude 3.7": "Claude 3.7",
     "claude 3.5": "Claude 3.5",
     "gpt-4.5": "GPT-4.5",
@@ -90,11 +94,11 @@ def sanitize_model_identifier(model_name: Optional[str]) -> str:
     """
     Sanitizes model identifier according to POL-LLM-005, REQ-LLM-002, and ADR-012 (Anti-Gemini policy).
     Prevents any 'Google gemini-*' or 'gemini-*' live strings from leaking into response metadata.
-    Normalizes unauthorized or live Gemini model strings to 'claude-3-5-sonnet-latest'.
+    Normalizes unauthorized or live Gemini model strings to 'claude-sonnet-5-5'.
     Preserves explicit test mock identifiers ('Mock Gemini', 'MockLLMProvider').
     """
     if not model_name:
-        return "claude-3-5-sonnet-latest"
+        return "claude-sonnet-5-5"
     name_clean = model_name.strip()
     name_lower = name_clean.lower()
     # Preserve test mock identifiers
@@ -103,9 +107,9 @@ def sanitize_model_identifier(model_name: Optional[str]) -> str:
     # Strict Anti-Gemini check: block any live Google Gemini string
     if name_lower.startswith("google gemini") or name_lower.startswith("gemini") or "gemini" in name_lower:
         logger.warning(
-            f"POL-LLM-005: Unauthorized Gemini model identifier rejected: {model_name}. Normalized to claude-3-5-sonnet-latest."
+            f"POL-LLM-005: Unauthorized Gemini model identifier rejected: {model_name}. Normalized to claude-sonnet-5-5."
         )
-        return "claude-3-5-sonnet-latest"
+        return "claude-sonnet-5-5"
     return name_clean
 
 

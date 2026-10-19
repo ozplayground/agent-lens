@@ -28,23 +28,17 @@ class AnthropicOverloadedException(Exception):
 
 MODEL_TIER_MAPPING: Dict[str, Tuple[str, str]] = {
     # Haiku
-    "haiku": ("claude-3-5-haiku-20241022", "haiku"),
-    "claude-3-5-haiku": ("claude-3-5-haiku-20241022", "haiku"),
-    "claude-3-5-haiku-latest": ("claude-3-5-haiku-20241022", "haiku"),
-    "claude-3-5-haiku-20241022": ("claude-3-5-haiku-20241022", "haiku"),
+    "haiku": ("claude-haiku-5-5", "haiku"),
+    "claude-haiku-5-5": ("claude-haiku-5-5", "haiku"),
     # Sonnet (default)
-    "sonnet": ("claude-3-5-sonnet-20241022", "sonnet"),
-    "claude-3-5-sonnet": ("claude-3-5-sonnet-20241022", "sonnet"),
-    "claude-3-5-sonnet-latest": ("claude-3-5-sonnet-20241022", "sonnet"),
-    "claude-3-5-sonnet-20241022": ("claude-3-5-sonnet-20241022", "sonnet"),
+    "sonnet": ("claude-sonnet-5-5", "sonnet"),
+    "claude-sonnet-5-5": ("claude-sonnet-5-5", "sonnet"),
     # Opus
-    "opus": ("claude-3-5-opus-latest", "opus"),
-    "claude-3-5-opus": ("claude-3-5-opus-latest", "opus"),
-    "claude-3-5-opus-latest": ("claude-3-5-opus-latest", "opus"),
-    "claude-3-opus-20240229": ("claude-3-opus-20240229", "opus"),
+    "opus": ("claude-opus-5-5", "opus"),
+    "claude-opus-5-5": ("claude-opus-5-5", "opus"),
 }
 
-DEFAULT_MODEL = "claude-3-5-sonnet-20241022"
+DEFAULT_MODEL = "claude-sonnet-5-5"
 DEFAULT_TIER = "sonnet"
 
 
@@ -292,7 +286,7 @@ class AnthropicLLMProvider(BaseLLMProvider):
 
         text, model, usage = await self.generate_text_with_usage(
             prompt=user_prompt,
-            model="claude-3-5-sonnet",
+            model="claude-sonnet-5-5",
             system_blocks=system_blocks,
             max_tokens=1500,
             temperature=0.2,

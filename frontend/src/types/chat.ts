@@ -111,6 +111,9 @@ export const ModelTierSchema = z.enum(['haiku', 'sonnet', 'opus']);
 export type ModelTier = z.infer<typeof ModelTierSchema>;
 
 export const ChatModelSchema = z.enum([
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
+  'claude-opus-5-5',
   'claude-3-5-haiku',
   'claude-3-5-sonnet',
   'claude-3-5-opus',
@@ -120,22 +123,25 @@ export const ChatModelSchema = z.enum([
 ]);
 export type ChatModel = z.infer<typeof ChatModelSchema>;
 
-export const DEFAULT_CHAT_MODEL: ChatModel = 'claude-3-5-sonnet-latest';
+export const DEFAULT_CHAT_MODEL: ChatModel = 'claude-sonnet-5-5';
 export const DEFAULT_MODEL_TIER: ModelTier = 'sonnet';
 
 export const CLAUDE_MODELS = {
-  haiku: 'claude-3-5-haiku-latest',
-  sonnet: 'claude-3-5-sonnet-latest',
-  opus: 'claude-3-5-opus-latest',
+  haiku: 'claude-haiku-5-5',
+  sonnet: 'claude-sonnet-5-5',
+  opus: 'claude-opus-5-5',
 } as const;
 
 export const TIER_TO_MODEL: Record<ModelTier, ChatModel> = {
-  haiku: 'claude-3-5-haiku-latest',
-  sonnet: 'claude-3-5-sonnet-latest',
-  opus: 'claude-3-5-opus-latest',
+  haiku: 'claude-haiku-5-5',
+  sonnet: 'claude-sonnet-5-5',
+  opus: 'claude-opus-5-5',
 };
 
 export const MODEL_TO_TIER: Record<string, ModelTier> = {
+  'claude-sonnet-5-5': 'sonnet',
+  'claude-haiku-5-5': 'haiku',
+  'claude-opus-5-5': 'opus',
   'claude-3-5-haiku': 'haiku',
   'claude-3-5-sonnet': 'sonnet',
   'claude-3-5-opus': 'opus',
@@ -157,6 +163,39 @@ export function sanitizeModelTier(rawModel: string | undefined | null): ModelTie
   if (normalized === 'opus' || normalized.includes('opus')) return 'opus';
   return 'sonnet'; // 기본 안전 폴백
 }
+
+export interface ModelDisplayFormatOptions {
+  /** 아이콘(🎯, ⚡, 🧠) 포함 여부 (기본값: false) */
+  withIcon?: boolean;
+  /** 'Claude ' 접두사 생략 여부 (기본값: false) */
+  short?: boolean;
+}
+
+/**
+ * Anthropic Claude 모델 식별자/티어를 화면 표시 규격 레이블로 안전하게 변환
+ * 내부 날것의 모델 ID(claude-sonnet-5-5 등)나 비인가 모델(Gemini 등)의 UI 노출을 원천 차단
+ * 
+ * - formatModelDisplayName() => "Claude Sonnet 5.5"
+ * - formatModelDisplayName("claude-haiku-5-5", { withIcon: true }) => "⚡ Claude Haiku 5.5"
+ * - formatModelDisplayName("sonnet", { withIcon: true, short: true }) => "🎯 Sonnet 5.5"
+ */
+export function formatModelDisplayName(
+  rawModel?: string | null,
+  options?: ModelDisplayFormatOptions
+): string {
+  const tier = sanitizeModelTier(rawModel);
+  const icon = tier === 'haiku' ? '⚡' : tier === 'opus' ? '🧠' : '🎯';
+  const shortName = tier === 'haiku' ? 'Haiku 5.5' : tier === 'opus' ? 'Opus 5.5' : 'Sonnet 5.5';
+  const prefix = options?.short ? '' : 'Claude ';
+  const baseLabel = `${prefix}${shortName}`;
+
+  if (options?.withIcon) {
+    return `${icon} ${baseLabel}`;
+  }
+  return baseLabel;
+}
+
+export const getModelLabel = formatModelDisplayName;
 
 export const TokenUsageMetaSchema = z.object({
   input_tokens: z.number().int().nonnegative(),
@@ -308,7 +347,7 @@ export const ChatStreamRequestSchema = z.object({
     .string()
     .min(1, '질문을 입력해주세요.')
     .max(2000, '질문은 최대 2,000자까지 입력 가능합니다.'),
-  model: ChatModelSchema.optional().default('claude-3-5-sonnet-latest'),
+  model: ChatModelSchema.optional().default('claude-sonnet-5-5'),
   model_tier: ModelTierSchema.optional(),
   scope: ScopeModeSchema.default('global'),
   source_id: z.number().int().positive().nullable().optional(),
@@ -324,7 +363,7 @@ export const ChatQueryRequestSchema = z.object({
     .string()
     .min(1, '질문을 입력해주세요.')
     .max(2000, '질문은 최대 2,000자까지 입력 가능합니다.'),
-  model: ChatModelSchema.optional().default('claude-3-5-sonnet-latest'),
+  model: ChatModelSchema.optional().default('claude-sonnet-5-5'),
   model_tier: ModelTierSchema.optional(),
   scope: ScopeModeSchema.default('global'),
   source_id: z.number().int().positive().nullable().optional(),

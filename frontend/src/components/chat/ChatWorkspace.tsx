@@ -390,7 +390,7 @@ export default function ChatWorkspace({
                       ? {
                           ...msg,
                           status: 'completed' as const,
-                          model_used: data.model || TIER_TO_MODEL[selectedTier] || 'gemini-2.5-flash',
+                          model_used: data.model || TIER_TO_MODEL[selectedTier] || 'claude-sonnet-5-5',
                           model_tier: data.model_tier || selectedTier,
                           latency_ms: data.latency_ms,
                           usage: data.usage,

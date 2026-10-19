@@ -48,7 +48,9 @@ class Settings(BaseSettings):
     # LLM Settings from config.json or environment
     LLM_PROVIDER: str = _json_data.get("llm", {}).get("provider", "auto")
     ANTHROPIC_API_KEY: str = _json_data.get("llm", {}).get("anthropic_api_key", "")
-    ANTHROPIC_MODEL: str = _json_data.get("llm", {}).get("anthropic_model", "claude-3-5-sonnet-20241022")
+    ANTHROPIC_MODEL: str = _json_data.get("llm", {}).get("anthropic_model", "claude-sonnet-5-5")
+    ANTHROPIC_COLLECTION_MODEL: str = _json_data.get("llm", {}).get("anthropic_collection_model", "claude-sonnet-5-5")
+    ANTHROPIC_DEFAULT_CHAT_MODEL: str = _json_data.get("llm", {}).get("anthropic_default_chat_model", "claude-sonnet-5-5")
     GEMINI_API_KEY: str = _json_data.get("llm", {}).get("gemini_api_key", "")
     GEMINI_MODEL: str = _json_data.get("llm", {}).get("gemini_model", "gemini-3.5-flash-lite")
     OPENAI_API_KEY: str = _json_data.get("llm", {}).get("openai_api_key", "")
@@ -107,7 +109,11 @@ class Settings(BaseSettings):
         if not self.ANTHROPIC_API_KEY:
             self.ANTHROPIC_API_KEY = llm.get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY", "")
         if not self.ANTHROPIC_MODEL:
-            self.ANTHROPIC_MODEL = llm.get("anthropic_model") or os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+            self.ANTHROPIC_MODEL = llm.get("anthropic_model") or os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5-5")
+        if not self.ANTHROPIC_COLLECTION_MODEL:
+            self.ANTHROPIC_COLLECTION_MODEL = llm.get("anthropic_collection_model") or os.environ.get("ANTHROPIC_COLLECTION_MODEL", "claude-sonnet-5-5")
+        if not self.ANTHROPIC_DEFAULT_CHAT_MODEL:
+            self.ANTHROPIC_DEFAULT_CHAT_MODEL = llm.get("anthropic_default_chat_model") or os.environ.get("ANTHROPIC_DEFAULT_CHAT_MODEL", "claude-sonnet-5-5")
         if not self.GEMINI_API_KEY:
             self.GEMINI_API_KEY = llm.get("gemini_api_key") or os.environ.get("GEMINI_API_KEY", "")
         if (not self.GEMINI_MODEL or self.GEMINI_MODEL in ["", "gemini-2.0-flash", "gemini-flash-latest"]):

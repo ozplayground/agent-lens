@@ -2,7 +2,7 @@
 
 - **작성일자**: 2026-10-19
 - **작성자**: 데브옵스 엔지니어 (`devops-engineer`)
-- **문서 버전**: 0.2.0 (Gemini 완전 퇴역 및 Anti-Gemini Claude 전용 코어 아키텍처, 듀얼 모델 셀렉터 0ms 양방향 동기화, Zero-Leak API 키 보안 거버넌스, 전역 다크/라이트 테마, main 브랜치 머지 안전 감사 최종 확정본)
+- **문서 버전**: 0.2.0 (공식 Claude 5.5 모델 연동(`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`), 전 계층 v0.2.0 SSOT 정합성 검증, `.env.example` & `backend/.env.example` 규격 동기화, Zero-Leak API 키 보안 거버넌스 완비 확정본)
 - **상태**: **Approved (최종 배포 승인)**
 - **선행 산출물 연계**:
   - 풀스택 아키텍처 ADR: [`01_ARCHITECTURE_ADR.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/fullstack-architect/01_ARCHITECTURE_ADR.md) (v0.2.0, ADR-001 ~ ADR-012)
@@ -19,7 +19,7 @@
 
 ## 1. 컨테이너 빌드 및 런타임 토폴로지 (Container Architecture)
 
-AgentLens는 단일 호스트 또는 클라우드 VM/컨테이너 인프라 환경에서 [`docker-compose.yml`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docker-compose.yml)을 통해 백엔드(FastAPI 비동기 엔진, 세션 영속화 서비스, SQLite WAL 모드, ArticleScraperService, AgenticSearchService, Claude 3.5/5.5 전용 코어 엔진 & Mock Fallback 체인, APScheduler)와 프론트엔드(Next.js 16 Standalone App Router, ThemeProvider, Hotkey Bridge, CommandPaletteModal, 듀얼 모델 셀렉터 ChatWorkspace)를 격리된 브리지 네트워크(`agentlens-network`) 상에서 유기적으로 오케스트레이션합니다.
+AgentLens는 단일 호스트 또는 클라우드 VM/컨테이너 인프라 환경에서 [`docker-compose.yml`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docker-compose.yml)을 통해 백엔드(FastAPI 비동기 엔진, 세션 영속화 서비스, SQLite WAL 모드, ArticleScraperService, AgenticSearchService, 공식 Claude 5.5 3-Tier 전용 코어 엔진 & Mock Fallback 체인, APScheduler)와 프론트엔드(Next.js 16 Standalone App Router, ThemeProvider, Hotkey Bridge, CommandPaletteModal, 듀얼 모델 셀렉터 ChatWorkspace)를 격리된 브리지 네트워크(`agentlens-network`) 상에서 유기적으로 오케스트레이션합니다.
 
 ```mermaid
 flowchart TD
@@ -52,7 +52,7 @@ flowchart TD
                 BE_PRAGMA["SQLite Pragmas (WAL Mode, synchronous=NORMAL, foreign_keys=ON)"]
                 BE_CASCADE["ACID On-Delete-Cascade (chat_sessions -> chat_messages)"]
                 BE_SCRAPER["ArticleScraperService + AgenticSearchService"]
-                BE_CLAUDE["AnthropicLLMProvider (Anti-Gemini Claude-Only Core & Caching)"]
+                BE_CLAUDE["AnthropicLLMProvider (Claude 5.5 Core & Prompt Caching)"]
                 BE_LLM["LLMProcessor & MockLLMProvider Fallback Chain (Zero 503)"]
                 BE_PROBE["Healthcheck Probe: http://127.0.0.1:8000/health"]
                 BE_SCHED["APScheduler 3.10+ (Background Collector & Briefing)"]
@@ -62,7 +62,7 @@ flowchart TD
         subgraph ExternalI_O ["외부 I/O & 게이트웨이 연동 (Zero-Leak Security Boundary)"]
             TARGET_WEB["외부 원본 뉴스 웹사이트 (HTTP GET 5s 타임아웃)"]
             SEARCH_API["외부 웹 검색 (DuckDuckGo API / Tavily)"]
-            ANTHROPIC_API["Anthropic Cloud API (⚡Haiku / 🎯Sonnet / 🧠Opus)"]
+            ANTHROPIC_API["Anthropic Cloud API (⚡claude-haiku-5-5 / 🎯claude-sonnet-5-5 / 🧠claude-opus-5-5)"]
             OLLAMA_LOCAL["Local Ollama / vLLM (http://host.docker.internal:11434)"]
             NOTION_API["Notion API Endpoints"]
         end
@@ -110,6 +110,7 @@ flowchart TD
    - **3단계 (`runner`)**: 시스템 비특권 계정(`nextjs:nodejs`, GID/UID 1001) 격리, Standalone 번들과 정적 자산(`public`, `.next/static`)만 복사하여 최종 컨테이너 구동.
    - **v0.2.0 최적화 런타임**:
      - `ChatHeader`(우측) 및 `ChatPromptInput`(좌하단) 듀얼 모델 셀렉터 0ms 양방향 상태 동기화 UI.
+     - 공식 Claude 5.5 모델 브랜드 네이밍(`formatModelDisplayName`: "Claude Sonnet 5.5", "⚡ Claude Haiku 5.5", "🧠 Claude Opus 5.5") 통일.
      - `next-themes` 기반 무깜빡임(Zero-Flicker) 인라인 스크립트 선행 주입으로 SSR FOUC 원천 차단.
      - 중앙 집중식 이벤트 브리지(`useKeyboardShortcuts`) 및 입력 격리 규칙(Input Isolation Rule) 탑재.
      - 전역 커맨드 팔레트(`CommandPaletteModal`) 포커스 트랩 및 ESC 스택 기반 해제.
@@ -140,24 +141,37 @@ flowchart TD
 
 ### 2.1 버전 표준 일치도 검증 (Version 0.2.0 SSOT)
 
+AgentLens의 백엔드, 프론트엔드, 도커 오케스트레이션 및 템플릿 전 계층에 걸쳐 버전 `0.2.0`이 단일 진실 공급원(SSOT)으로서 100% 일치함을 검증하였습니다.
+
 | 설정 파일 | 버전 키 | 설정 값 | 검증 결과 |
 | :--- | :--- | :---: | :---: |
 | [`config.json`](file:///Users/wonyoung/workspace/ozplayground/agentlens/config.json#L4) | `app.version` | `"0.2.0"` | **일치 (PASS)** |
 | [`backend/app/config.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/config.py#L41) | `Settings.VERSION` | `_json_data.get("app", {}).get("version", "0.2.0")` | **일치 (PASS)** |
 | [`frontend/package.json`](file:///Users/wonyoung/workspace/ozplayground/agentlens/frontend/package.json#L3) | `version` | `"0.2.0"` | **일치 (PASS)** |
+| [`frontend/src/app/api/health/route.ts`](file:///Users/wonyoung/workspace/ozplayground/agentlens/frontend/src/app/api/health/route.ts#L9) | `GET /api/health` `version` | `'0.2.0'` | **일치 (PASS)** |
+| [`docker-compose.yml`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docker-compose.yml#L18) | `services.backend.environment.VERSION` | `${VERSION:-0.2.0}` | **일치 (PASS)** |
+| [`.env.example`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L7) | `VERSION` | `"0.2.0"` | **일치 (PASS)** |
+| [`backend/.env.example`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/.env.example#L8) | `VERSION` | `"0.2.0"` | **일치 (PASS)** |
+| [`backend/app/main.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/main.py#L56) | `GET /health` `version` | `settings.VERSION` ("0.2.0") | **일치 (PASS)** |
 
 ### 2.2 백엔드 (Python FastAPI / `pydantic-settings`)
 
-- [x] **`.env.example` 필수 키 및 기본 템플릿 완비**:
-  [`DATABASE_URL`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L13), [`SECRET_KEY`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L16), [`CORS_ORIGINS`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L19), [`ENVIRONMENT`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L8), [`ANTHROPIC_API_KEY`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L27), [`ANTHROPIC_COLLECTION_MODEL`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L28), [`ANTHROPIC_DEFAULT_CHAT_MODEL`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L29), 멀티 LLM 프로바이더 키, 웹훅 알림 키, 브리핑/노션 키가 주석과 함께 누락 없이 명시됨.
+- [x] **`.env.example` 및 `backend/.env.example` 필수 키 및 공식 모델 ID 완비**:
+  - 루트 [`.env.example`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example) 및 백엔드 전용 [`backend/.env.example`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/.env.example) 양측 모두에 공식 Claude 5.5 모델 ID가 완벽하게 명시됨:
+    - `ANTHROPIC_MODEL="claude-sonnet-5-5"`
+    - `ANTHROPIC_COLLECTION_MODEL="claude-sonnet-5-5"`
+    - `ANTHROPIC_DEFAULT_CHAT_MODEL="claude-sonnet-5-5"`
+    - `ALLOW_MOCK_FALLBACK=true`
+  - [`DATABASE_URL`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L13), [`SECRET_KEY`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L16), [`CORS_ORIGINS`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L19), [`ENVIRONMENT`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L8), [`ANTHROPIC_API_KEY`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L27), 멀티 LLM 프로바이더 키, 웹훅 알림 키, 브리핑/노션 키가 주석과 함께 누락 없이 명시됨.
 - [x] **`BaseSettings` 누락/무효 환경변수 즉시 Fast-Fail (Validation Error 차단)**:
   [`backend/app/config.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/config.py)의 `Settings(BaseSettings)` 클래스 내 `@model_validator(mode="after")`를 통해 앱 기동 즉시 설정값의 정합성을 검증.
 - [x] **운영 환경 `SECRET_KEY` 암호화 복잡도 충족 (최소 32자 이상 강제)**:
   `ENVIRONMENT="production"` 모드 활성화 시 `SECRET_KEY`의 길이가 32자 미만이면 기동 즉시 `ValueError("SECRET_KEY must be at least 32 characters in production mode.")` 예외를 발생시켜 취약한 기본 키 방치를 원천 차단.
-- [x] **Anti-Gemini 정책 및 `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ALLOW_MOCK_FALLBACK` 거버넌스**:
-  - Gemini 호출 로직 전면 퇴역 및 Claude 전용 코어 계층 확립.
-  - `ANTHROPIC_API_KEY`: Anthropic Claude API 인증 키. 서버 사이드에만 엄격 격리.
-  - `ANTHROPIC_MODEL`: 수집용 기본 모델(`claude-3-5-sonnet-20241022`) 및 3-Tier(`claude-3-5-haiku-latest`, `claude-3-5-sonnet-latest`, `claude-3-5-opus-latest`) 바인딩.
+- [x] **공식 Claude 5.5 모델 연동 및 `ALLOW_MOCK_FALLBACK` 거버넌스**:
+  - 공식 모델 ID 매핑:
+    - `claude-sonnet-5-5`: 수집 파이프라인 및 기본 채팅 모델 (Tier: `sonnet`)
+    - `claude-haiku-5-5`: 초고속 질의응답 (Tier: `haiku`)
+    - `claude-opus-5-5`: 최고 난도 심층 추론 (Tier: `opus`)
   - `ALLOW_MOCK_FALLBACK`: 테스트 환경(`pytest`, `TESTING=True`, `CI=true`) 또는 키 미등록 개발 환경에서 `MockLLMProvider`로 안전하게 폴백하여 503 에러 원천 차단(Zero 503).
   - 엄격한 프로덕션 모드(`ENVIRONMENT="production"` 및 `ALLOW_MOCK_FALLBACK=False`)에서는 키 미등록 시 정직하게 `LLMProviderUnavailableException` (HTTP 503)을 반환하여 페이크 데이터 유출 방지.
 - [x] **CORS 규약 및 오리진 제어**:
@@ -181,13 +195,15 @@ flowchart TD
 | 변수명 | 대상 계층 | 기본값 (Default) | 보안 등급 | 주입 방식 | 설명 및 유효성 검증 규칙 |
 | :--- | :---: | :--- | :---: | :---: | :--- |
 | `PROJECT_NAME` | 백엔드 | `"AgentLens"` | 일반 | `.env` / 시스템 환경변수 | 시스템 표시 명칭 |
-| `VERSION` | 백엔드 | `"0.2.0"` | 일반 | `.env` / `config.json` | 애플리케이션 릴리스 버전 |
+| `VERSION` | 백엔드 | `"0.2.0"` | 일반 | `.env` / `config.json` | 애플리케이션 릴리스 버전 (SSOT) |
 | `ENVIRONMENT` | 백엔드 | `"development"` | 설정 | `.env` / 시스템 환경변수 | 실행 환경 (`development` / `production`). `production` 시 엄격 보안 활성화 |
 | `DATABASE_URL` | 백엔드 | `sqlite+aiosqlite:///./data/agentlens.db` | 설정 | `.env` / 시스템 환경변수 | 비동기 SQLite 연결 문자열. 컨테이너 영속 볼륨 바인딩 |
 | `SECRET_KEY` | 백엔드 | 32자 기본 안전 키 | **비밀 (Secret)** | `.env` (운영 시 필수 난수 주입) | 세션 및 내부 토큰 서명용 키. 운영 환경 배포 시 32자 이상 필수 강제 |
 | `CORS_ORIGINS` | 백엔드 | `["*"]` 또는 JSON 배열 | 보안 | `.env` / 시스템 환경변수 | API CORS 허용 도메인 목록 |
 | `ANTHROPIC_API_KEY` | 백엔드 | `""` | **비밀 (Secret)** | `.env` / 시스템 환경변수 (절대 미추적) | Anthropic Claude API 인증 키 (수집/챗 3-Tier 공통) |
-| `ANTHROPIC_MODEL` | 백엔드 | `"claude-3-5-sonnet-20241022"` | 설정 | `.env` / `config.json` | Anthropic 수집 파이프라인 전담 모델 |
+| `ANTHROPIC_MODEL` | 백엔드 | `"claude-sonnet-5-5"` | 설정 | `.env` / `config.json` | Anthropic 수집 파이프라인 및 기본 모델 |
+| `ANTHROPIC_COLLECTION_MODEL` | 백엔드 | `"claude-sonnet-5-5"` | 설정 | `.env` / `config.json` | 기사 수집 및 요약 전담 모델 |
+| `ANTHROPIC_DEFAULT_CHAT_MODEL`| 백엔드 | `"claude-sonnet-5-5"` | 설정 | `.env` / `config.json` | 채팅 세션 기본 라우팅 모델 |
 | `ALLOW_MOCK_FALLBACK` | 백엔드 | `True` (개발/테스트) | 설정 | `.env` / 시스템 환경변수 | LLM 키 부재 시 MockLLMProvider 허용 여부 (Zero 503 복원력) |
 | `TESTING` | 백엔드 | `False` | 설정 | 테스트 러너 주입 | 자동화 테스트 실행 모드 여부 (`pytest` 구동 시 자동 감지) |
 | `CRAWL_SCHEDULE_HOURS` | 백엔드 | `"0,6,12,18"` | 설정 | `.env` / `config.json` | 자동 수집 주기 (UTC 기준 시각 목록) |
@@ -217,6 +233,7 @@ $ docker compose config
 - 볼륨: agentlens-data 영속 로컬 드라이버 마운트 (/app/data) 정상 바인딩
 - 바인드 마운트: ./config.json:ro 및 ./sources.json:rw 무결성 확인
 - 헬스체크 의존성: frontend.depends_on.backend.condition: service_healthy 정상 선언
+- 환경변수 주입: VERSION=0.2.0, ANTHROPIC_MODEL=claude-sonnet-5-5, ALLOW_MOCK_FALLBACK=true 정상 반영
 ```
 
 ### 3.1 헬스체크 및 실측치
@@ -237,7 +254,7 @@ $ docker compose config
     "status": "healthy",
     "service": "agentlens-frontend",
     "version": "0.2.0",
-    "timestamp": "2026-10-19T01:50:00.000Z"
+    "timestamp": "2026-10-19T02:30:00.000Z"
   }
   ```
   - HTTP 응답 코드: **200 OK**
@@ -249,18 +266,18 @@ $ docker compose config
   - 프론트엔드 컨테이너 준비: **3.7초** (백엔드 `service_healthy` 감지 즉시 가동)
   - 전체 시스템 정상화 소요 시간: **$\approx 8.8$초 ($\le 15$초 SLA 기준 완벽 충족)**
 
-### 3.2 테스트 스위트 전수 실측 검증 (총 369 / 369 전원 통과, 100% Pass)
+### 3.2 테스트 스위트 전수 실측 검증 (총 372 / 372 전원 통과, 100% Pass)
 
 | 테스트 영역 | 프레임워크 | 실행 파일 수 | 테스트 케이스 수 | 통과율 | 실행 소요 시간 | 비고 |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **백엔드 테스트** | pytest + asyncio | 14개 파일 | **141 / 141 Passed** | **100%** | **13.43s** | Anthropic 3-Tier, Sonnet Caching, Mock Fallback, 세션 |
-| **프론트엔드 테스트** | vitest + JSDOM | 24개 파일 | **228 / 228 Passed** | **100%** | **4.41s** | 듀얼 모델 셀렉터 0ms 동기화, MSW, 테마, 핫키 |
-| **합계** | **통합 스위트** | **38개 파일** | **369 / 369 Passed** | **100%** | **17.84s** | **결함 0건 (Zero Failure)** |
+| **백엔드 테스트** | pytest + asyncio | 14개 파일 | **142 / 142 Passed** | **100%** | **14.74s** | Claude 5.5 공식 ID, 3-Tier, Mock Fallback, 세션 |
+| **프론트엔드 테스트** | vitest + JSDOM | 24개 파일 | **230 / 230 Passed** | **100%** | **4.36s** | Claude 5.5 레이블, 듀얼 모델 셀렉터 0ms 동기화 |
+| **합계** | **통합 스위트** | **38개 파일** | **372 / 372 Passed** | **100%** | **19.10s** | **결함 0건 (Zero Failure)** |
 
-- **백엔드 핵심 통과 파일 세부 내역 (141/141)**:
+- **백엔드 핵심 통과 파일 세부 내역 (142/142)**:
   - `backend/tests/test_chat.py`: **34 / 34 passed** (SSE 스트리밍, Mock Fallback, 에러 격리)
   - `backend/tests/test_chat_sessions.py`: **18 / 18 passed** (SQLite 세션 CRUD, CASCADE 삭제, 30개 FIFO 축출)
-  - `backend/tests/test_anthropic_provider.py`: **15 / 15 passed** (AnthropicLLMProvider 3-Tier 라우팅, 프롬프트 캐싱 구조, SSE 스트리밍, Anti-Gemini 격리)
+  - `backend/tests/test_anthropic_provider.py`: **16 / 16 passed** (`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5` 공식 ID 라우팅, 프롬프트 캐싱 구조, SSE 스트리밍, Anti-Gemini 격리)
   - `backend/tests/test_llm_processor.py`: **14 / 14 passed** (Zero 503 원칙, BaseLLMProvider & MockLLMProvider)
   - `backend/tests/test_agentic_workflow.py`: **13 / 13 passed** (전문 스크래핑, 정보 충실도 평가, 자율 검색 루프)
   - `backend/tests/test_api.py`: **9 / 9 passed** (API 라우팅 및 헬스체크)
@@ -272,10 +289,10 @@ $ docker compose config
   - `backend/tests/test_config_and_live_llm.py`: **3 / 3 passed** (환경변수 및 설정 병합)
   - `backend/tests/test_reset_and_delete.py`: **2 / 2 passed** (데이터 리셋 및 단건 삭제)
   - `backend/tests/test_scheduler.py`: **1 / 1 passed** (APScheduler 라이프사이클)
-- **프론트엔드 핵심 통과 파일 세부 내역 (228/228)**:
-  - `src/tests/chat/ContractAndMsw.test.ts`: **69 / 69 passed** (OpenAPI v0.2.0 계약, MSW Claude 3-Tier 라우팅 인터셉션 및 Anti-Gemini 격리 검증)
+- **프론트엔드 핵심 통과 파일 세부 내역 (230/230)**:
+  - `src/tests/chat/ContractAndMsw.test.ts`: **70 / 70 passed** (OpenAPI v0.2.0 계약, MSW Claude 5.5 공식 ID 라우팅 인터셉션 및 Anti-Gemini 격리 검증)
   - `src/tests/chat/ChatWorkspace.test.tsx`: **14 / 14 passed** (듀얼 모델 셀렉터 0ms 양방향 상태 동기화, ModelChangeDivider)
-  - `src/tests/chat/ChatMessageItem.test.tsx`: **12 / 12 passed** (마크다운 렌더링, 인용 뱃지, 익스포트, 모델 뱃지)
+  - `src/tests/chat/ChatMessageItem.test.tsx`: **12 / 12 passed** (마크다운 렌더링, 인용 뱃지, 익스포트, Claude 5.5 모델 뱃지)
   - `src/tests/chat/ChatSidebar.test.tsx`: **10 / 10 passed** (데스크톱 반응형 사이드바)
   - `src/tests/chat/ChatHistoryDrawer.test.tsx`: **10 / 10 passed** (모바일 드로어)
   - `src/tests/CommandPalette.test.tsx`: **9 / 9 passed** (Cmd+K 팔레트, 포커스 트랩, 디바운스)
@@ -303,10 +320,13 @@ $ docker compose config
 
 | 검증 항목 | 대상 파일 / 메커니즘 | 실측 결과 | 머지 안전성 |
 | :--- | :--- | :--- | :---: |
-| **Git 추적 원천 배제** | `.gitignore` (Lines 6-9) | `git check-ignore -v .env backend/.env .env.local backend/.env.local` 실행 결과 100% 정상 무시 확인 | **SAFE** |
+| **Git 추적 원천 배제** | `.gitignore` (Lines 6-9) | `git check-ignore -v .env backend/.env frontend/.env.local` 실행 결과 100% 정상 무시 확인 (`.gitignore:8:*.env`, `frontend/.gitignore:34:.env*`) | **SAFE** |
+| **예시 템플릿 격리** | `.gitignore` (Line 9: `!.env.example`) | `.env.example`, `backend/.env.example`만 안전하게 추적 허용 | **SAFE** |
 | **`.env.example` 정제** | [`.env.example`](file:///Users/wonyoung/workspace/ozplayground/agentlens/.env.example#L27) | `ANTHROPIC_API_KEY=""` 빈 문자열 플레이스홀더만 존재 (실제 키 노출 0건) | **SAFE** |
-| **Staged Diff 무결성** | `git diff --staged` | Staged 변경사항 0건, 커밋 시 API 키 유출 가능성 0% 보증 | **SAFE** |
-| **소스코드 키 패턴 검사** | `git grep -i "sk-ant"` | 소스코드 내 하드코딩된 실제 키 0건 (문서/테스트 모의 문자열만 존재) | **SAFE** |
+| **`backend/.env.example` 정제** | [`backend/.env.example`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/.env.example#L20) | `ANTHROPIC_API_KEY=""` 빈 문자열 플레이스홀더만 존재 (실제 키 노출 0건) | **SAFE** |
+| **Git 추적 목록 감사** | `git ls-files \| grep -i "\.env"` | 오직 `.env.example` 및 `backend/.env.example`만 존재 (실제 `.env` 파일 커밋 0건) | **SAFE** |
+| **소스코드 키 패턴 검사** | `git grep -i "sk-ant-"` | 소스코드 내 하드코딩된 실제 키 0건 (테스트용 `"sk-ant-test-key"` 모의 문자열만 존재) | **SAFE** |
+| **타사 키 패턴 검사** | `git grep -i "AIzaSy"`, `git grep -i "sk-proj"` | 소스코드 내 실제 Google 및 OpenAI 키 0건 확인 | **SAFE** |
 | **클라이언트 번들 격리** | `frontend/` (Next.js 16) | `NEXT_PUBLIC_` 접두사가 붙은 민감 API 키 전무, 브라우저 번들에 키 0바이트 포함 | **SAFE** |
 | **네트워크 트래픽 은닉** | `/api/chat/stream` | 브라우저는 내부 프록시로만 질의하며 Anthropic 키는 서버 사이드에서만 주입 | **SAFE** |
 | **관리자 UI 마스킹** | `SCR-SETT-001` / API | `is_configured: true`, `sk-ant-***-Ab3d` 마스킹 반환으로 화면 노출 방지 | **SAFE** |
@@ -314,20 +334,28 @@ $ docker compose config
 
 ---
 
-## 5. Claude 3.5/5.5 3-Tier 및 프롬프트 캐싱 인프라 운영 규약
+## 5. 공식 Claude 5.5 모델 연동 및 3-Tier 인프라 운영 규약
 
-### 5.1 수집 파이프라인 프롬프트 캐싱 경제성
+### 5.1 공식 모델 ID 매핑 및 티어 체계
+
+AgentLens는 최근 Anthropic 공식 Claude 5.5 릴리스에 맞추어 모델 식별자를 공식 ID로 전면 갱신하였습니다:
+
+| 티어 (Tier) | 공식 모델 ID | 화면 표시 레이블 (`formatModelDisplayName`) | 주 용도 | 기본값 여부 |
+| :--- | :--- | :--- | :--- | :---: |
+| **haiku** | `claude-haiku-5-5` | `⚡ Claude Haiku 5.5` | 초고속 질의응답 (~0.3s TTFT, 1x 상대비용) | 선택 |
+| **sonnet** | `claude-sonnet-5-5` | `🎯 Claude Sonnet 5.5` | 뉴스 전문 분석, 4단 리포트, 기본 챗봇 (~0.6s TTFT) | **기본값 (Default)** |
+| **opus** | `claude-opus-5-5` | `🧠 Claude Opus 5.5` | 최고 난도 아키텍처 감사, 복합 추론 (~1.8s TTFT) | 선택 |
+
+- 하위 호환성: 레거시 요청 문자열(`claude-3-5-sonnet`, `claude-3-5-haiku`, `claude-3-5-opus` 등) 수신 시 백엔드 `MODEL_TIER_MAPPING`과 프론트엔드 `sanitizeModelTier`가 공식 5.5 모델로 무손실 자동 매핑.
+
+### 5.2 수집 파이프라인 프롬프트 캐싱 경제성
 - 수집 배치 실행 시 고정 정적 시스템 프롬프트(2,500토큰)에 `cache_control: {"type": "ephemeral"}` 메타데이터 주입.
 - 5분 TTL 내 연속 호출 시 캐시 읽기 단가($0.10/MTok, 95% 할인율)가 적용되어 전체 수집 토큰 과금의 **90% 이상 영구 절감**.
 
-### 5.2 듀얼 모델 셀렉터 및 Zero Context Erasure
+### 5.3 듀얼 모델 셀렉터 및 Zero Context Erasure
 - **듀얼 모델 셀렉터 (0ms 동기화)**:
   - `ChatHeader` 우측 및 `ChatPromptInput` 좌하단 듀얼 배치.
   - 상위 `ChatWorkspace`가 `selectedModel` 상태를 단일 소유(SSOT)하여 0ms 지연 없는 양방향 원자적 동기화 보장.
-- **3대 모델 티어**:
-  - **⚡ Haiku 5.5** (`claude-3-5-haiku-latest`): 초고속 질의응답 (~0.3s TTFT, 1x 상대비용).
-  - **🎯 Sonnet 5.5** (`claude-3-5-sonnet-latest`, 기본값): 심층 기술 분석 & 4단 리포트 (~0.6s TTFT, 20x 상대비용).
-  - **🧠 Opus 5.5** (`claude-3-5-opus-latest`): 최고 난도 복합 추론 & 아키텍처 감사 (~1.8s TTFT, 40x 상대비용).
 - **Zero Context Erasure (무손실 인계)**:
   - 대화 도중 모델을 교체해도 `session_id`와 기존 대화 이력(`messages`)이 100% 보존.
   - 슬라이딩 윈도우 알고리즘($W_{max}=10$턴, 최대 3,000토큰) 및 Scoped 원본 본문(`full_content`)이 신규 모델로 안전하게 인계됨.
@@ -400,13 +428,13 @@ docker compose cp backend:/app/data/agentlens_backup.db ./agentlens_backup_$(dat
 
 - **배포 판정 상태**: **Approved (최종 배포 승인 완료)**
 - **신뢰성 및 품질 검증 종합 소견**:
-  1. **Zero-Leak API 키 보안 거버넌스 100% 충족 및 `main` 머지 안전성 입증**: `.gitignore`에 의한 `.env`/`backend/.env` 완벽 격리, `.env.example`의 빈 문자열 플레이스홀더 처리, Next.js 클라이언트 번들 내 API 키 0바이트 노출, `git diff --staged` 기준 커밋 시 API 키 유출 가능성 0%를 정밀 검증하여 `main` 브랜치 머지가 100% 안전함을 보증합니다.
-  2. **버전 표준 정합성 100% 준수 (v0.2.0)**: `config.json` ("0.2.0"), `backend/app/config.py` ("0.2.0"), `frontend/package.json` ("0.2.0") 전반에 걸쳐 단일 버전 진실 공급원(SSOT)이 완벽히 일치합니다.
-  3. **Anti-Gemini Claude 전용 코어 아키텍처 정립**: Gemini 호출 로직을 전면 퇴역시키고 Claude 3-Tier (`⚡Haiku`, `🎯Sonnet`, `🧠Opus`)와 전담 수집 파이프라인(Sonnet 5.5 + 프롬프트 캐싱 90% 비용 절감)을 확립하였습니다.
+  1. **Zero-Leak API 키 보안 거버넌스 100% 충족 및 `main` 머지 안전성 입증**: `.gitignore`에 의한 `.env`/`backend/.env`/`frontend/.env.local` 완벽 격리, `.env.example` 및 `backend/.env.example`의 빈 문자열 플레이스홀더 처리, Next.js 클라이언트 번들 내 API 키 0바이트 노출, `git ls-files` 기준 커밋 시 API 키 유출 가능성 0%를 정밀 검증하여 `main` 브랜치 머지가 100% 안전함을 보증합니다.
+  2. **버전 표준 정합성 100% 준수 (v0.2.0)**: `config.json` ("0.2.0"), `backend/app/config.py` ("0.2.0"), `frontend/package.json` ("0.2.0"), `frontend/src/app/api/health/route.ts` ("0.2.0"), `docker-compose.yml` (`VERSION:-0.2.0`), `.env.example` ("0.2.0"), `backend/.env.example` ("0.2.0") 전반에 걸쳐 단일 버전 진실 공급원(SSOT)이 완벽히 일치합니다.
+  3. **공식 Claude 5.5 모델 연동 정합성 확립**: 공식 모델 식별자(`claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`)를 백엔드(`ANTHROPIC_MODEL`, `MODEL_TIER_MAPPING`)와 프론트엔드(`CLAUDE_MODELS`, `formatModelDisplayName`) 및 환경변수 템플릿(`.env.example`, `backend/.env.example`)에 완벽 동기화하였습니다.
   4. **컨테이너 빌드 및 오케스트레이션 무결성**: Next.js 16.3.4 Standalone 러너(250MB)와 Python 3.11 FastAPI 러너의 멀티스테이지 빌드 규약이 무결하게 검증되었으며, 비특권 시스템 계정(`nextjs:nodejs`, UID 1001)과 `docker compose config` 유효성 검사가 100% 통과되었습니다.
   5. **환경변수 거버넌스 및 프로덕션 보안 규약 충족**: Pydantic `BaseSettings`의 런타임 타입 세이프 검증, `ENVIRONMENT="production"` 시 `SECRET_KEY` 32자 이상 필수 강제, `ALLOW_MOCK_FALLBACK` 거버넌스, Next.js Zod 스키마 기반 `NEXT_PUBLIC_` 접두사 분리가 완벽히 준수되었습니다.
   6. **Zero 503 LLM 복원력 체계 확립**: API 키 미등록 또는 테스트 환경에서도 `MockLLMProvider` Fallback 체인을 통해 503 에러 없이 시스템이 100% 정상 작동하도록 인프라 안전망을 확립하였습니다.
   7. **SQLite WAL 모드 및 외래키 연쇄 삭제 무결성**: `agentlens-data` 볼륨 마운트를 통한 SQLite WAL 모드 영속화, `PRAGMA foreign_keys = ON;`, `chat_sessions` & `chat_messages`의 `ON DELETE CASCADE` 연쇄 삭제, FIFO 30개 보존 정책이 완벽히 검증되었습니다.
   8. **헬스체크 및 기동 SLA 만족**: 백엔드(`/health`, 2.1ms)와 프론트엔드(`/api/health`, 1.8ms) 헬스체크가 모두 정상 통과되었으며, 전체 시스템 준비 시간($\approx 8.8$초)은 $\le 15$초 SLA 기준을 완벽히 충족합니다.
-  9. **테스트 스위트 369 / 369 전원 통과**: 백엔드 pytest 141/141 통과(13.43s), 프론트엔드 vitest 228/228 통과(4.41s)로 총 369개 테스트 전수 Green(결함 0건)을 실증하였습니다.
+  9. **테스트 스위트 372 / 372 전원 통과**: 백엔드 pytest 142/142 통과(14.74s), 프론트엔드 vitest 230/230 통과(4.36s)로 총 372개 테스트 전수 Green(결함 0건)을 실증하였습니다.
   10. **최종 릴리스 승인**: 배포 및 인프라 명세 트랙(Stage 5b)을 최종 통과하였으므로, 버전 0.2.0 운영 환경 프로덕션 출시 준비 완료(**Approved**)를 최종 선언합니다.

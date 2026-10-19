@@ -3,6 +3,9 @@ from pydantic import BaseModel, Field, ConfigDict
 
 ModelTier = Literal["haiku", "sonnet", "opus"]
 ChatModel = Literal[
+    "claude-sonnet-5-5",
+    "claude-haiku-5-5",
+    "claude-opus-5-5",
     "claude-3-5-haiku",
     "claude-3-5-sonnet",
     "claude-3-5-opus",
@@ -29,7 +32,7 @@ class ChatFocusFilter(BaseModel):
 
 class ChatStreamRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
-    model: Optional[str] = "claude-3-5-sonnet"
+    model: Optional[str] = "claude-sonnet-5-5"
     model_tier: Optional[ModelTier] = None
     scope: Literal["scoped", "global"] = "global"
     source_id: Optional[int] = None
@@ -40,7 +43,7 @@ class ChatStreamRequest(BaseModel):
 
 class ChatQueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
-    model: Optional[str] = "claude-3-5-sonnet"
+    model: Optional[str] = "claude-sonnet-5-5"
     model_tier: Optional[ModelTier] = None
     scope: Literal["scoped", "global"] = "global"
     source_id: Optional[int] = None
@@ -108,7 +111,7 @@ class StreamErrorPayload(BaseModel):
 class DonePayload(BaseModel):
     done: bool = True
     session_id: str
-    model: Optional[str] = "claude-3-5-sonnet"
+    model: Optional[str] = "claude-sonnet-5-5"
     model_tier: Optional[ModelTier] = "sonnet"
     sources_count: int
     primary_count: Optional[int] = None
@@ -120,7 +123,7 @@ class ChatQueryResponse(BaseModel):
     answer: str
     sources: List[ChatSourceItem]
     session_id: str
-    model: Optional[str] = "claude-3-5-sonnet"
+    model: Optional[str] = "claude-sonnet-5-5"
     model_tier: Optional[ModelTier] = "sonnet"
     scope: Literal["scoped", "global"]
     applied_filters: Optional[ChatFocusFilter] = None
