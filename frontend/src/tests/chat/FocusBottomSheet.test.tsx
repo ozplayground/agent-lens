@@ -186,4 +186,19 @@ describe('FocusBottomSheet Component', () => {
 
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
+
+  it('does not display matching count badge or alert when targetCount is undefined (initial clean state)', () => {
+    render(
+      <FocusBottomSheet
+        isOpen={true}
+        onClose={vi.fn()}
+        filters={DEFAULT_FOCUS_FILTERS}
+        onApplyFilters={vi.fn()}
+        onResetFilters={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText(/매칭 소식/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/선택 조건의 소식이 없습니다/i)).not.toBeInTheDocument();
+  });
 });

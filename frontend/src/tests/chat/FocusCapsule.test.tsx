@@ -126,4 +126,19 @@ describe('FocusCapsule Component', () => {
 
     expect(screen.getByText(/FastMCP Framework/i)).toBeInTheDocument();
   });
+
+  it('does not display fake count badges and renders clean label in initial state', () => {
+    render(
+      <FocusCapsule
+        filters={DEFAULT_FOCUS_FILTERS}
+        onClick={vi.fn()}
+        onReset={vi.fn()}
+        isOpen={false}
+      />
+    );
+
+    expect(screen.getByText('Focus: 전체 소식')).toBeInTheDocument();
+    expect(screen.queryByText(/5건/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/매칭/)).not.toBeInTheDocument();
+  });
 });

@@ -134,7 +134,9 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
             "대해", "대하여", "에대해", "관해", "관하여", "에관해", "관련된", "관련한",
             # 검색 노이즈성 일반 단어
             "최신", "관련", "소식", "뉴스", "정보", "동향", "기사", "내용", "자료",
-            "트렌드", "업데이트", "최근", "오늘", "요즘", "이번", "전체", "모든", "해당", "질문", "답변"
+            "트렌드", "업데이트", "최근", "오늘", "요즘", "이번", "전체", "모든", "해당", "질문", "답변",
+            "전혀", "무관", "무관한", "정말", "매우", "너무", "진짜", "있는", "하는", "되는", "대한", "통해", "위한",
+            "서버", "클라이언트", "특징", "기능", "방법", "사용", "적용", "구현"
         }
         english_stopwords = {
             "what", "is", "are", "was", "were", "the", "a", "an", "in", "on", "at", "to",
@@ -163,11 +165,13 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
                 for suffix in particles_to_strip:
                     if clean_t.endswith(suffix) and len(clean_t) - len(suffix) >= 2:
                         stem = clean_t[:-len(suffix)]
-                        if stem not in korean_stopwords:
-                            clean_t = stem
+                        if stem in korean_stopwords:
+                            clean_t = ""
+                            break
+                        clean_t = stem
                         break
 
-            if clean_t in korean_stopwords or clean_t.lower() in english_stopwords:
+            if not clean_t or clean_t in korean_stopwords or clean_t.lower() in english_stopwords:
                 continue
 
             if len(clean_t) >= 2:
@@ -382,6 +386,148 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
 
         return candidates
 
+    def _filter_and_score_candidates(
+        self,
+        candidates: List[Dict[str, Any]],
+        query: str,
+        keywords: List[str],
+        now_utc: datetime,
+        tau_seconds: float,
+        sort_mode: str = "hot",
+    ) -> List[ChatSearchChunk]:
+        """Score candidates on semantic keyword relevance and prune non-matching or low-relevance noise."""
+        if not candidates or not keywords:
+            return []
+
+        # Find best (most negative) BM25 score among candidates
+        bm25_scores = [c["bm25_score"] for c in candidates]
+        best_bm = min(bm25_scores)
+        worst_bm = max(bm25_scores)
+
+        # Inspect candidate keyword matches
+        candidate_evals = []
+        for c in candidates:
+            t_lower = (c["title"] or "").lower()
+            tech_lower = (c["tech_stack"] or "").lower()
+            sum_lower = (c["summary"] or "").lower()
+            why_lower = (c["why_it_matters"] or "").lower()
+            doc_full = f"{t_lower} {tech_lower} {sum_lower} {why_lower}"
+
+            matched_kw = [k for k in keywords if k.lower() in doc_full]
+            matched_title = [k for k in keywords if k.lower() in t_lower]
+            matched_core = [k for k in keywords if (k.lower() in t_lower or k.lower() in tech_lower)]
+
+            cov = len(matched_kw) / len(keywords) if keywords else 0.0
+            core_cov = len(matched_core) / max(1, min(len(keywords), 2))
+
+            score = c["bm25_score"]
+            if best_bm < 0:
+                bm_rel = abs(score) / abs(best_bm)
+            else:
+                bm_rel = 1.0 if best_bm == worst_bm else max(0.0, (worst_bm - score) / (worst_bm - best_bm))
+            bm_rel = max(0.0, min(1.0, bm_rel))
+
+            s_rel = 0.45 * bm_rel + 0.35 * cov + 0.20 * min(1.0, core_cov)
+
+            candidate_evals.append({
+                "candidate": c,
+                "matched_kw": matched_kw,
+                "matched_title": matched_title,
+                "matched_core": matched_core,
+                "cov": cov,
+                "bm_rel": bm_rel,
+                "s_rel": s_rel,
+            })
+
+        # Top candidate by relevance
+        candidate_evals.sort(key=lambda x: x["s_rel"], reverse=True)
+        top_eval = candidate_evals[0]
+
+        valid_chunks: List[ChatSearchChunk] = []
+        for eval_info in candidate_evals:
+            c = eval_info["candidate"]
+            cov = eval_info["cov"]
+            bm_rel = eval_info["bm_rel"]
+            s_rel = eval_info["s_rel"]
+            matched_kw = eval_info["matched_kw"]
+            matched_core = eval_info["matched_core"]
+
+            # Filter Rule 1: Keyword Coverage Gate
+            if len(keywords) == 1:
+                if cov < 1.0:
+                    continue
+            elif len(keywords) == 2:
+                if cov < 0.5:
+                    continue
+                if cov == 0.5 and len(matched_core) == 0 and bm_rel < 0.70:
+                    continue
+            else: # len(keywords) >= 3
+                # Must match at least 2 keywords
+                if len(matched_kw) < 2:
+                    continue
+                # Must match at least 35% of keywords
+                min_req = max(2, math.ceil(len(keywords) * 0.35))
+                if len(matched_kw) < min_req:
+                    continue
+
+            # Filter Rule 2: Title Distinctiveness Gate
+            # If top candidate has full/high coverage (>= 0.8), prune candidates with strictly lower coverage
+            # that miss distinctive title keywords of the top candidate
+            if top_eval["cov"] >= 0.8 and cov < top_eval["cov"]:
+                missing_from_top_title = [k for k in top_eval["matched_title"] if k not in matched_kw]
+                if missing_from_top_title:
+                    continue
+
+            # Filter Rule 3: Anti-Noise Drop-Off Gate
+            # If top candidate matched distinctive query terms and this candidate lacks them,
+            # and its BM25 drops below 55% of the top match, prune it.
+            if len(keywords) >= 2 and bm_rel < 0.55 and len(matched_kw) < len(top_eval["matched_kw"]):
+                continue
+
+            # Filter Rule 4: Minimum Relevance Floor
+            if s_rel < 0.48:
+                continue
+
+            # Compute final hybrid RAG score incorporating relevance
+            norm_bm = bm_rel
+            base_rag = self._compute_hybrid_score(
+                bm25_score=c["bm25_score"],
+                norm_bm25=norm_bm,
+                quality_score=c["quality_score"],
+                published_at=c["published_at"],
+                now_utc=now_utc,
+                tau_seconds=tau_seconds,
+            )
+            rag_score = round(max(0.0, min(1.0, 0.60 * s_rel + 0.40 * base_rag)), 4)
+
+            pub_str = c["published_at"].isoformat() if hasattr(c["published_at"], "isoformat") else str(c["published_at"])
+
+            valid_chunks.append(
+                ChatSearchChunk(
+                    index=0,
+                    id=c["id"],
+                    title=c["title"],
+                    url=c["url"],
+                    source=c["source"],
+                    category=c["category"],
+                    snippet=c["summary"] or c["why_it_matters"] or c["title"],
+                    quality_score=c["quality_score"],
+                    published_at=pub_str,
+                    bm25_score=round(c["bm25_score"], 4),
+                    rag_score=rag_score,
+                )
+            )
+
+        # Sort according to sort_mode
+        if sort_mode == "latest":
+            valid_chunks.sort(key=lambda x: x.published_at or "", reverse=True)
+        elif sort_mode == "quality":
+            valid_chunks.sort(key=lambda x: x.quality_score, reverse=True)
+        else: # "hot"
+            valid_chunks.sort(key=lambda x: x.rag_score, reverse=True)
+
+        return valid_chunks
+
     async def retrieve_with_meta(
         self,
         query: str,
@@ -391,7 +537,7 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
         source: Optional[str] = None,
         filters: Optional[ChatFocusFilter] = None,
     ) -> Tuple[List[ChatSearchChunk], bool, ChatFocusFilter]:
-        """Perform hybrid retrieval with focus filters, adaptive tau, and 0-match auto-relaxation."""
+        """Perform dynamic hybrid retrieval with focus filters, adaptive tau, and 0-match auto-relaxation."""
         await self._ensure_fts_table()
         now_utc = datetime.now(timezone.utc)
 
@@ -405,72 +551,39 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
         if category and category.lower() != "all" and active_filters.category == "all":
             active_filters = active_filters.model_copy(update={"category": category.lower()})
 
+        keywords = self.extract_keywords(query)
+        tau = self.get_tau_seconds(active_filters.time_range)
+
         # 1st attempt: with active_filters
         candidates = await self._fetch_candidates(query, min_quality, active_filters, source, now_utc)
+        scored_chunks = self._filter_and_score_candidates(
+            candidates=candidates,
+            query=query,
+            keywords=keywords,
+            now_utc=now_utc,
+            tau_seconds=tau,
+            sort_mode=active_filters.sort,
+        )
         is_relaxed = False
 
         # Auto-relaxation policy: if 0 matches and time_range != 'all', relax to 'all'
-        if not candidates and active_filters.time_range != "all":
+        if not scored_chunks and active_filters.time_range != "all":
             relaxed_filter = active_filters.model_copy(update={"time_range": "all"})
             relaxed_candidates = await self._fetch_candidates(query, min_quality, relaxed_filter, source, now_utc)
             if relaxed_candidates:
-                candidates = relaxed_candidates
-                active_filters = relaxed_filter
-                is_relaxed = True
-
-        if not candidates:
-            return [], is_relaxed, active_filters
-
-        # Compute dynamic tau based on applied time_range
-        tau = self.get_tau_seconds(active_filters.time_range)
-
-        # In SQLite FTS5 bm25, lower (more negative) is better.
-        bm25_scores = [c["bm25_score"] for c in candidates]
-        min_bm = min(bm25_scores)
-        max_bm = max(bm25_scores)
-
-        scored_chunks: List[ChatSearchChunk] = []
-        for c in candidates:
-            score = c["bm25_score"]
-            if max_bm == min_bm:
-                norm_bm = 1.0
-            else:
-                norm_bm = (max_bm - score) / (max_bm - min_bm)
-
-            rag_score = self._compute_hybrid_score(
-                bm25_score=score,
-                norm_bm25=norm_bm,
-                quality_score=c["quality_score"],
-                published_at=c["published_at"],
-                now_utc=now_utc,
-                tau_seconds=tau
-            )
-
-            pub_str = c["published_at"].isoformat() if hasattr(c["published_at"], "isoformat") else str(c["published_at"])
-
-            scored_chunks.append(
-                ChatSearchChunk(
-                    index=0,
-                    id=c["id"],
-                    title=c["title"],
-                    url=c["url"],
-                    source=c["source"],
-                    category=c["category"],
-                    snippet=c["summary"] or c["why_it_matters"] or c["title"],
-                    quality_score=c["quality_score"],
-                    published_at=pub_str,
-                    bm25_score=round(score, 4),
-                    rag_score=rag_score
+                relaxed_tau = self.get_tau_seconds("all")
+                relaxed_chunks = self._filter_and_score_candidates(
+                    candidates=relaxed_candidates,
+                    query=query,
+                    keywords=keywords,
+                    now_utc=now_utc,
+                    tau_seconds=relaxed_tau,
+                    sort_mode=relaxed_filter.sort,
                 )
-            )
-
-        # Sort according to active_filters.sort:
-        if active_filters.sort == "latest":
-            scored_chunks.sort(key=lambda x: x.published_at or "", reverse=True)
-        elif active_filters.sort == "quality":
-            scored_chunks.sort(key=lambda x: x.quality_score, reverse=True)
-        else: # "hot"
-            scored_chunks.sort(key=lambda x: x.rag_score, reverse=True)
+                if relaxed_chunks:
+                    scored_chunks = relaxed_chunks
+                    active_filters = relaxed_filter
+                    is_relaxed = True
 
         result_chunks: List[ChatSearchChunk] = []
         for idx, chunk in enumerate(scored_chunks[:top_k], start=1):

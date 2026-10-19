@@ -130,25 +130,33 @@ export default function ChatMessageItem({
                 <Sparkles className="w-3 h-3 text-blue-600" />
                 {displayModelName}
               </span>
-              {message.sources && message.sources.length > 0 && (
-                <div className="flex items-center gap-1 flex-wrap">
-                  {message.primary_count !== undefined && message.primary_count !== null && message.primary_count > 0 && (
-                    <span className="px-1.5 py-0.2 rounded font-mono bg-blue-50 text-blue-700 border border-blue-200">
-                      원문 {message.primary_count}건
-                    </span>
-                  )}
-                  {message.supplementary_count !== undefined && message.supplementary_count !== null && message.supplementary_count > 0 && (
-                    <span className="px-1.5 py-0.2 rounded font-mono bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      보충 {message.supplementary_count}건
-                    </span>
-                  )}
-                  {message.primary_count === undefined && (
-                    <span className="px-1.5 py-0.2 rounded font-mono bg-blue-50 text-blue-700 border border-blue-200">
-                      출처 {message.sources.length}건 인용
-                    </span>
-                  )}
-                </div>
-              )}
+              {Boolean(message.content && message.content.trim().length > 0) && message.sources && message.sources.length > 0 && (() => {
+                const primaryCount =
+                  message.primary_count !== undefined && message.primary_count !== null
+                    ? message.primary_count
+                    : message.sources.filter((s) => s.type === 'primary' || !s.type).length;
+                const supplementaryCount =
+                  message.supplementary_count !== undefined && message.supplementary_count !== null
+                    ? message.supplementary_count
+                    : message.sources.filter((s) => s.type === 'supplementary').length;
+
+                if (primaryCount === 0 && supplementaryCount === 0) return null;
+
+                return (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {primaryCount > 0 && (
+                      <span className="px-1.5 py-0.2 rounded font-mono bg-blue-50 text-blue-700 border border-blue-200">
+                        원문 {primaryCount}건
+                      </span>
+                    )}
+                    {supplementaryCount > 0 && (
+                      <span className="px-1.5 py-0.2 rounded font-mono bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        보충 {supplementaryCount}건
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Actions: Copy */}

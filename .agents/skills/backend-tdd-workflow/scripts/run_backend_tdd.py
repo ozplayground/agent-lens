@@ -18,9 +18,10 @@ def detect_backend_test_command():
     
     # Check venv pytest
     for venv_name in [".venv", "venv"]:
-        vp = cwd / "backend" / venv_name / "bin" / "pytest"
-        if vp.exists():
-            return [str(vp), "backend/tests", "-v"]
+        for base_dir in [cwd / "backend", cwd]:
+            vp = base_dir / venv_name / "bin" / "pytest"
+            if vp.exists():
+                return [str(vp), "backend/tests", "-v"]
         
     return ["python3", "-m", "unittest", "discover"]
 

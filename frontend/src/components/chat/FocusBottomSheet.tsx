@@ -16,7 +16,7 @@ export interface FocusBottomSheetProps {
   filters: FocusFilters;
   onApplyFilters: (nextFilters: FocusFilters) => void;
   onResetFilters: () => void;
-  targetCount: number;
+  targetCount?: number;
   totalCount?: number;
 }
 
@@ -261,22 +261,24 @@ export default function FocusBottomSheet({
             </div>
           </div>
 
-          {/* Real-time Matching Count Badge or 0-count Alert */}
-          <div className="pt-2">
-            {targetCount === 0 ? (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium animate-in fade-in duration-150">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>
-                  선택 조건의 소식이 없습니다. 기간을 [최근 30일] 또는 [전체 기간]으로 넓혀보세요.
-                </span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span>약 {targetCount}건 매칭 소식</span>
-              </div>
-            )}
-          </div>
+          {/* Real-time Matching Count Badge or 0-count Alert (Only rendered when targetCount is provided) */}
+          {targetCount !== undefined && (
+            <div className="pt-2">
+              {targetCount === 0 ? (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium animate-in fade-in duration-150">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    선택 조건의 소식이 없습니다. 기간을 [최근 30일] 또는 [전체 기간]으로 넓혀보세요.
+                  </span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>약 {targetCount}건 매칭 소식</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}

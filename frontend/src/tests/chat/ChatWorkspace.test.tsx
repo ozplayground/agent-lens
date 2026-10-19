@@ -380,6 +380,44 @@ describe('ChatWorkspace Container', () => {
     expect(screen.getAllByText(/LangGraph v0.2/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/durable state persistence/i)).toBeInTheDocument();
   });
+
+  it('does not display fake hardcoded 5-count badge upon entering chat, and reflects true backend sources', async () => {
+    render(<ChatWorkspace />);
+
+    // 1. Initial entrance: Open FocusBottomSheet
+    const capsule = screen.getByRole('button', { name: /지식 검색 포커스 필터/i });
+    fireEvent.click(capsule);
+
+    // Verify dialog opened
+    const dialog = await screen.findByRole('dialog', { name: /수집 소식 타깃팅 포커스 필터/i });
+    expect(dialog).toBeInTheDocument();
+
+    // Verify fake "5건 매칭" badge is completely absent in initial state
+    expect(within(dialog).queryByText(/5건 매칭/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/매칭 소식/i)).not.toBeInTheDocument();
+
+    // Close bottom sheet
+    const closeBtn = within(dialog).getByRole('button', { name: /필터 닫기/i });
+    fireEvent.click(closeBtn);
+
+    // 2. Submit question that retrieves FastMCP and check real source count is reflected
+    const textarea = screen.getByRole('textbox', { name: /질문 입력/i });
+    const sendButton = screen.getByRole('button', { name: /질문 전송/i });
+
+    fireEvent.change(textarea, { target: { value: 'FastMCP의 장점은?' } });
+    fireEvent.click(sendButton);
+
+    await waitFor(
+      () => {
+        expect(screen.getByRole('button', { name: /심층 분석 과정.*단계 완료/i })).toBeInTheDocument();
+      },
+      { timeout: 5000 }
+    );
+
+    // Check message header source chip has honest backend counts (not hardcoded 5)
+    expect(screen.getByText(/원문 1건/i)).toBeInTheDocument();
+    expect(screen.queryByText('원문 5건')).not.toBeInTheDocument();
+  });
 });
 
 

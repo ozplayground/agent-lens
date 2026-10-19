@@ -60,6 +60,36 @@ async def seed_distinct_rag_articles():
                 "published_at": datetime.now(timezone.utc) - timedelta(hours=3),
                 "dedup_hash": "hash_benchmark_9003",
             },
+            {
+                "id": 9004,
+                "title": "WinDbg Model Context Protocol Debugging Extension",
+                "url": "https://github.com/example/mcp-windbg",
+                "source": "github",
+                "category": "mcp_plugins_skills",
+                "summary": "A specialized WinDbg MCP integration for Windows native kernel and user-mode memory dump analysis.",
+                "why_it_matters": "Enables AI agents to inspect crash dumps via WinDbg commands.",
+                "tech_stack": "WinDbg, MCP, C++, Windows",
+                "tags": "windbg, mcp, debugging, crash-dump",
+                "quality_score": 9.2,
+                "is_high_signal": True,
+                "published_at": datetime.now(timezone.utc) - timedelta(hours=4),
+                "dedup_hash": "hash_windbg_9004",
+            },
+            {
+                "id": 9005,
+                "title": "Software Engineering Mindset and Architecture",
+                "url": "https://example.com/mindset",
+                "source": "rss",
+                "category": "ai_news",
+                "summary": "우리는 전혀 다른 관점에서 소프트웨어 개발과 품질을 바라보아야 합니다.",
+                "why_it_matters": "개발자 마인드셋 향상",
+                "tech_stack": "Architecture",
+                "tags": "mindset, architecture",
+                "quality_score": 6.0,
+                "is_high_signal": False,
+                "published_at": datetime.now(timezone.utc) - timedelta(hours=5),
+                "dedup_hash": "hash_mindset_9005",
+            },
         ]
 
         for item_data in test_items:
@@ -232,5 +262,63 @@ def test_version_0_2_2_consistency():
     with open(cfg_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     assert data.get("app", {}).get("version") == "0.2.2"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_retrieval_returns_only_relevant_articles_without_stuffing_top_k():
+    """Verify retriever dynamically returns only truly relevant articles without force-filling top_k."""
+    async with AsyncSessionLocal() as session:
+        retriever = SqliteFtsRetriever(session)
+        await retriever._ensure_fts_table()
+
+        # Query targeting WinDbg MCP server: only item 9004 is relevant.
+        # Unrelated MCP spec (9002) which only shares generic term 'MCP' must be pruned.
+        windbg_results = await retriever.retrieve("WinDbg MCP 서버", top_k=5)
+        
+        # Must return ONLY the single truly relevant item (9004), NOT 9002 or force-filling
+        assert len(windbg_results) == 1, f"Expected exactly 1 article for WinDbg specific query, got {len(windbg_results)}"
+        assert windbg_results[0].id == 9004
+        assert "windbg" in windbg_results[0].title.lower()
+
+
+@pytest.mark.asyncio
+async def test_dynamic_retrieval_returns_empty_when_no_relevant_articles_exist():
+    """Verify retriever returns empty list (0 articles) when query has no relevant matches in corpus."""
+    async with AsyncSessionLocal() as session:
+        retriever = SqliteFtsRetriever(session)
+        await retriever._ensure_fts_table()
+
+        # Query with completely unrelated domain/topic
+        unrelated_results = await retriever.retrieve("전혀 무관한 화성 외계인 우주선 탐사선", top_k=5)
+        assert len(unrelated_results) == 0, f"Expected 0 articles for unrelated query, got {len(unrelated_results)}"
+
+
+@pytest.mark.asyncio
+async def test_chat_service_global_rag_returns_dynamic_source_count():
+    """Verify ChatService._resolve_sources dynamically returns matching sources count instead of fixed 5."""
+    from app.services.chat_service import ChatService
+
+    async with AsyncSessionLocal() as session:
+        chat_service = ChatService(session)
+
+        # 1. Single relevant match (must prune 9002 and return only 9004)
+        sources_single, is_relaxed, _ = await chat_service._resolve_sources(
+            scope="global",
+            source_id=None,
+            query="WinDbg MCP 서버",
+            top_k=5,
+        )
+        assert len(sources_single) == 1, f"Expected 1 source item, got {len(sources_single)}"
+        assert sources_single[0].id == 9004
+
+        # 2. Zero matches (completely unrelated)
+        sources_zero, _, _ = await chat_service._resolve_sources(
+            scope="global",
+            source_id=None,
+            query="외계인 우주선 화성 탐사선",
+            top_k=5,
+        )
+        assert len(sources_zero) == 0, f"Expected 0 sources for unrelated query, got {len(sources_zero)}"
+
 
 

@@ -57,6 +57,9 @@ class ChatQueryRequest(BaseModel):
 # ============================================================================
 
 ChatStatusStep = Literal[
+    "thinking",
+    "tool_calling",
+    "observing",
     "extracting_source",
     "evaluating_sufficiency",
     "agentic_searching",

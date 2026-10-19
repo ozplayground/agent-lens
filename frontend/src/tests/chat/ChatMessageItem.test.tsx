@@ -323,4 +323,35 @@ describe('ChatMessageItem Component', () => {
     expect(bq?.className).toContain('break-words');
     expect(bq?.className).toContain('[overflow-wrap:anywhere]');
   });
+
+  it('accurately displays true backend source counts (e.g., 1 or 3) and never hardcodes 5 items', () => {
+    // 1 source test
+    const singleSourceMsg: ChatMessage = {
+      ...assistantMessage,
+      id: 'msg-single-1',
+      sources: [assistantMessage.sources![0]],
+      primary_count: 1,
+      supplementary_count: 0,
+    };
+    const { unmount } = render(<ChatMessageItem message={singleSourceMsg} />);
+    expect(screen.getByText('원문 1건')).toBeInTheDocument();
+    expect(screen.queryByText(/5건/)).not.toBeInTheDocument();
+    unmount();
+
+    // 3 sources test without primary_count explicitly passed
+    const threeSourcesMsg: ChatMessage = {
+      ...assistantMessage,
+      id: 'msg-triple-1',
+      primary_count: undefined,
+      supplementary_count: undefined,
+      sources: [
+        { ...assistantMessage.sources![0], index: 1, type: 'primary' },
+        { ...assistantMessage.sources![1], index: 2, type: 'primary' },
+        { ...assistantMessage.sources![0], id: 103, index: 3, type: 'primary', title: 'Third Article' },
+      ],
+    };
+    render(<ChatMessageItem message={threeSourcesMsg} />);
+    expect(screen.getByText('원문 3건')).toBeInTheDocument();
+    expect(screen.queryByText(/5건/)).not.toBeInTheDocument();
+  });
 });

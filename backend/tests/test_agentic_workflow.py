@@ -241,14 +241,13 @@ async def test_agentic_search_relevance_filtering():
 @pytest.mark.asyncio
 async def test_chat_scoped_sse_agentic_lifecycle(db_session: AsyncSession, sample_article_scoped: NewsItem):
     """
-    Test ChatService.stream_chat in Scoped mode emits the complete v2.4 SSE protocol:
-    1. event: status (extracting_source, 20%)
-    2. event: status (evaluating_sufficiency, 45%)
-    3. event: status (agentic_searching, 65%)
-    4. event: status (synthesizing, 85%)
-    5. event: sources (primary [1] + supplementary [S1], primary_count: 1, supplementary_count: >= 1)
-    6. event: token (streamed tokens with 4 mandatory engineering sections)
-    7. event: done (done: true, primary_count, supplementary_count)
+    Test ChatService.stream_chat in Scoped mode emits fixed single-article SSE protocol:
+    1. event: status (extracting_source, 30%)
+    2. event: status (synthesizing, 85%)
+    3. event: sources (single primary [1] only, primary_count: 1, supplementary_count: 0)
+    4. event: token (streamed tokens)
+    5. event: done (done: true, primary_count: 1, supplementary_count: 0)
+    No evaluating_sufficiency or agentic_searching is triggered in Scoped mode.
     """
     chat_service = ChatService(db_session)
 
@@ -258,24 +257,11 @@ async def test_chat_scoped_sse_agentic_lifecycle(db_session: AsyncSession, sampl
         source_id=sample_article_scoped.id,
     )
 
-    # Mock scraper & agentic search
     mock_scraped_text = (
         "## LangGraph Architecture\n"
         "LangGraph models agent execution as a state machine where nodes represent compute steps and edges represent transitions. "
         * 15
     )
-    mock_supp = [
-        ChatSourceItem(
-            index="S1",
-            type="supplementary",
-            title="LangGraph Installation Docs",
-            url="https://python.langchain.com/langgraph/install",
-            source="web_search",
-            snippet="pip install -U langgraph",
-            domain="python.langchain.com",
-            relevance_score=0.88,
-        )
-    ]
 
     with patch("app.services.scraper.ArticleScraperService.get_article_content", new_callable=AsyncMock) as mock_scrape, \
          patch("app.services.agentic_search.AgenticSearchService.evaluate_and_search", new_callable=AsyncMock) as mock_eval_search, \
@@ -283,15 +269,10 @@ async def test_chat_scoped_sse_agentic_lifecycle(db_session: AsyncSession, sampl
          patch("app.services.llm_processor.llm_processor.stream_tokens") as mock_stream_tokens:
 
         mock_scrape.return_value = mock_scraped_text
-        mock_eval_search.return_value = (
-            False,
-            ["LangGraph v0.3 pip install official"],
-            mock_supp
-        )
 
         async def fake_tokens(prompt: str):
             yield "## 1. 핵심 아키텍처 및 동작 원리\nLangGraph는 상태 머신 기반입니다[1].\n", "mock-gemini"
-            yield "## 2. 주요 기능 및 코드 구현 예시\n```python\npip install langgraph\n```[S1]\n", "mock-gemini"
+            yield "## 2. 주요 기능 및 코드 구현 예시\n```python\npip install langgraph\n```[1]\n", "mock-gemini"
             yield "## 3. 기존 기술 대비 차별점 및 벤치마크\n2배 빠릅니다[1].\n", "mock-gemini"
             yield "## 4. 실무 도입 시 고려사항 및 튜닝 파라미터\n체크포인터 설정에 주의하세요.\n", "mock-gemini"
 
@@ -304,15 +285,16 @@ async def test_chat_scoped_sse_agentic_lifecycle(db_session: AsyncSession, sampl
         full_stream = "".join(events)
         assert "event: status" in full_stream
         assert "extracting_source" in full_stream
-        assert "evaluating_sufficiency" in full_stream
-        assert "agentic_searching" in full_stream
+        assert "evaluating_sufficiency" not in full_stream
+        assert "agentic_searching" not in full_stream
         assert "synthesizing" in full_stream
+        assert mock_eval_search.call_count == 0
 
         assert "event: sources" in full_stream
         assert '"primary_count": 1' in full_stream
-        assert '"supplementary_count": 1' in full_stream
+        assert '"supplementary_count": 0' in full_stream
         assert '"index": 1' in full_stream
-        assert '"index": "S1"' in full_stream
+        assert '"index": "S1"' not in full_stream
 
         assert "event: token" in full_stream
         assert "## 1. 핵심 아키텍처 및 동작 원리" in full_stream
@@ -320,7 +302,7 @@ async def test_chat_scoped_sse_agentic_lifecycle(db_session: AsyncSession, sampl
         assert "event: done" in full_stream
         assert '"done": true' in full_stream
         assert '"primary_count": 1' in full_stream
-        assert '"supplementary_count": 1' in full_stream
+        assert '"supplementary_count": 0' in full_stream
 
 
 @pytest.mark.asyncio
@@ -448,36 +430,24 @@ async def test_chat_query_scoped_with_agentic_workflow_success(db_session: Async
     )
 
     mock_content = "LangGraph v0.3 comprehensive guide. " * 30
-    mock_supp = [
-        ChatSourceItem(
-            index="S1",
-            type="supplementary",
-            title="LangGraph Quickstart",
-            url="https://example.com/quickstart",
-            source="web_search",
-            snippet="pip install langgraph",
-            relevance_score=0.9
-        )
-    ]
 
     with patch("app.services.scraper.ArticleScraperService.get_article_content", new_callable=AsyncMock, return_value=mock_content), \
-         patch("app.services.agentic_search.AgenticSearchService.evaluate_and_search", new_callable=AsyncMock, return_value=(False, ["LangGraph pip install"], mock_supp)), \
+         patch("app.services.agentic_search.AgenticSearchService.evaluate_and_search", new_callable=AsyncMock) as mock_eval_search, \
          patch("app.services.llm_processor.llm_processor.generate_live_answer", new_callable=AsyncMock) as mock_gen:
 
         mock_gen.return_value = (
-            "## 1. 핵심 아키텍처 및 동작 원리\n상태 머신[1]\n## 2. 주요 기능 및 코드 구현 예시\n코드[S1]\n## 3. 기존 기술 대비 차별점 및 벤치마크\n차별점\n## 4. 실무 도입 시 고려사항 및 튜닝 파라미터\n주의점",
-            "gemini-2.5-flash"
+            "## 1. 핵심 아키텍처 및 동작 원리\n상태 머신[1]\n## 2. 주요 기능 및 코드 구현 예시\n코드[1]\n## 3. 기존 기술 대비 차별점 및 벤치마크\n차별점\n## 4. 실무 도입 시 고려사항 및 튜닝 파라미터\n주의점",
+            "claude-3-5-sonnet-20241022"
         )
 
         res = await chat_service.query_chat(req)
         assert res.scope == "scoped"
         assert res.primary_count == 1
-        assert res.supplementary_count == 1
-        assert len(res.sources) == 2
+        assert res.supplementary_count == 0
+        assert len(res.sources) == 1
         assert res.sources[0].index == 1
         assert res.sources[0].type == "primary"
-        assert res.sources[1].index == "S1"
-        assert res.sources[1].type == "supplementary"
+        assert mock_eval_search.call_count == 0
         assert "## 1. 핵심 아키텍처 및 동작 원리" in res.answer
 
 
@@ -540,5 +510,66 @@ async def test_agentic_search_web_candidates_and_relevance():
         cands = await searcher._search_web_candidates("LangGraph official")
         assert len(cands) >= 1
         assert any("langgraph" in c["url"].lower() for c in cands)
+
+
+@pytest.mark.asyncio
+async def test_chat_global_react_search_tool_lifecycle(db_session: AsyncSession, sample_article_scoped: NewsItem):
+    """
+    Verify Global Mode ReAct flow when user asks a technical question:
+    Emits thinking -> tool_calling (search_news_corpus) -> observing -> sources -> token -> done.
+    """
+    chat_service = ChatService(db_session)
+    req = ChatStreamRequest(
+        question="LangGraph Multi-Agent Workflows v0.3",
+        scope="global",
+        top_k=5,
+    )
+
+    async def fake_tokens(prompt: str, **kwargs):
+        yield "LangGraph v0.3 관련 분석 답변입니다[1].", "claude-3-5-sonnet-20241022"
+
+    with patch("app.services.llm_processor.llm_processor.stream_tokens", side_effect=fake_tokens):
+        events = []
+        async for chunk in chat_service.stream_chat(req):
+            events.append(chunk)
+
+        full_stream = "".join(events)
+        assert '"step": "thinking"' in full_stream
+        assert '"step": "tool_calling"' in full_stream
+        assert "search_news_corpus" in full_stream
+        assert '"step": "observing"' in full_stream
+        assert "event: sources" in full_stream
+        assert "event: token" in full_stream
+        assert "event: done" in full_stream
+
+
+@pytest.mark.asyncio
+async def test_chat_global_react_casual_greeting_skips_search_tool(db_session: AsyncSession):
+    """
+    Verify Global Mode ReAct flow when user sends a casual greeting ('안녕하세요'):
+    Emits thinking -> token -> done, skipping tool_calling, observing, and sources!
+    """
+    chat_service = ChatService(db_session)
+    req = ChatStreamRequest(
+        question="안녕하세요!",
+        scope="global",
+        top_k=5,
+    )
+
+    async def fake_tokens(prompt: str, **kwargs):
+        yield "안녕하세요! 무엇을 도와드릴까요?", "claude-3-5-sonnet-20241022"
+
+    with patch("app.services.llm_processor.llm_processor.stream_tokens", side_effect=fake_tokens):
+        events = []
+        async for chunk in chat_service.stream_chat(req):
+            events.append(chunk)
+
+        full_stream = "".join(events)
+        assert '"step": "thinking"' in full_stream
+        assert '"step": "tool_calling"' not in full_stream
+        assert '"step": "observing"' not in full_stream
+        assert "event: sources" not in full_stream
+        assert '"sources_count": 0' in full_stream
+        assert '"primary_count": 0' in full_stream
 
 

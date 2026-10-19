@@ -587,7 +587,7 @@ async def test_chat_stream_sources_event_includes_focus_filter_metadata():
     assert res.status_code == 200
     body = res.text
     assert "event: sources" in body
-    sources_data_line = [line for line in body.split("\n") if line.startswith("data: ")][0]
+    sources_data_line = [line for line in body.split("\n") if line.startswith("data: ") and '"applied_filters"' in line][0]
     sources_json = json.loads(sources_data_line[6:])
     assert "applied_filters" in sources_json
     assert sources_json["applied_filters"]["category"] == "agent_tech"

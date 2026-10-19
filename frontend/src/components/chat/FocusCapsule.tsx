@@ -11,6 +11,7 @@ export interface FocusCapsuleProps {
   onClick: () => void;
   onReset: () => void;
   isOpen: boolean;
+  matchedCount?: number;
   className?: string;
 }
 
@@ -35,6 +36,7 @@ export default function FocusCapsule({
   onClick,
   onReset,
   isOpen,
+  matchedCount,
   className = '',
 }: FocusCapsuleProps) {
   const isDefault =

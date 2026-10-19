@@ -2,8 +2,8 @@
 
 - **작성일자**: 2026-10-19
 - **작성자**: 프론트엔드 TDD 엔지니어 (`frontend-tdd-engineer`)
-- **문서 버전**: v0.2.2 (Stage 3b: Dynamic News Sources MSW Matching, Fixed Slice Elimination, Version Bump to 0.2.2, 24개 테스트 파일 234개 테스트 100% PASS)
-- **상태**: Approved (24개 테스트 스위트, 234개 테스트 100% 통과, TypeScript Type Check Exit 0)
+- **문서 버전**: v0.2.3 (Stage 3b: Elimination of Fake Hardcoded 5-Count Logic & Real Backend Sources Reflection, 24개 테스트 파일 238개 테스트 100% PASS)
+- **상태**: Approved (24개 테스트 스위트, 238개 테스트 100% 통과, TypeScript Type Check Exit 0)
 - **선행 계약 및 설계 문서**:
   - [`01_COMPONENT_SPEC.md`](../ui-system-designer/01_COMPONENT_SPEC.md) (Stage 2c 컴포넌트 인터랙션 및 상태 명세)
   - [`01_CONTRACT_AND_MSW_SPEC.md`](../contract-integrator/01_CONTRACT_AND_MSW_SPEC.md) (Stage 2d Contract Lock v4.0)
@@ -26,6 +26,7 @@
 | **`POL-LLM-005`**<br/>**`REQ-LLM-002`** | `src/components/chat/ChatMessageItem.tsx`<br/>`src/types/chat.ts` (`sanitizeModelTier`) | `src/tests/chat/ChatMessageItem.test.tsx` | Anti-Gemini UI 살균 방어: 신규 질의 기본 Claude 3.5 Sonnet 강제<br/>UI 내 신규 모델 표출 시 Claude 3-Tier 무결성 보장 |
 | **`FUNC-CHAT-014`**<br/>**`BUG-CHAT-001`**<br/>**`POL-PROD-001`** | `src/components/chat/ChatWorkspace.tsx`<br/>`src/types/chat.ts`<br/>`src/components/chat/ChatModelSelector.tsx`<br/>`src/components/chat/ModelChangeDivider.tsx` | `src/tests/chat/ChatWorkspace.test.tsx`<br/>`src/tests/chat/ContractAndMsw.test.ts`<br/>`src/tests/chat/ChatMessageItem.test.tsx`<br/>`src/tests/chat/ChatModelSelector.test.tsx` | 기사 포커스 핸드오버 비동기 레이스 해결 (`scope: 'scoped'`, `source_id: number` 직렬화)<br/>프로덕션 코드 내 MSW Mock 완전 격리 (0-Mock Import Rule)<br/>과거 세션 모델 정직 렌더링 (Gemini/GPT 변조 금지, 신규 질의만 Sonnet 기본)<br/>팝오버 헤더 및 디바이더 문구 제거 (UI 경량화) |
 | **`FUNC-CHAT-015`**<br/>**`REQ-CHAT-015`** | `src/mocks/handlers/chat.ts`<br/>`src/components/chat/ChatWorkspace.tsx` | `src/tests/chat/ChatWorkspace.test.tsx`<br/>`src/tests/chat/ContractAndMsw.test.ts` | 질문 키워드 기반 동적 뉴스 소스 검색/필터링 (`filterChunksByQuestion`)<br/>고정 5개 슬라이스 제거 및 맞춤형 출처 수 반환 (`primary_count`)<br/>실시간 소스 칩("원문 1건") 및 인라인 인용([1]) 매칭 렌더링 검증 |
+| **`FUNC-CHAT-016`**<br/>**`BUG-CHAT-002`** | `src/components/chat/ChatWorkspace.tsx`<br/>`src/components/chat/FocusBottomSheet.tsx`<br/>`src/components/chat/FocusCapsule.tsx`<br/>`src/components/chat/ChatMessageItem.tsx` | `src/tests/chat/ChatWorkspace.test.tsx`<br/>`src/tests/chat/FocusBottomSheet.test.tsx`<br/>`src/tests/chat/FocusCapsule.test.tsx`<br/>`src/tests/chat/ChatMessageItem.test.tsx` | 하드코딩된 5건 예측 가짜 로직 완전 제거 (`count = 5` baseline 배제)<br/>초기 진입 시 가짜 카운트 뱃지 노출 방지 (`targetCount?: number` optional화)<br/>실제 백엔드 API로부터 검색된 결과 소스 개수(`sources.length`)만 정직하게 표출 |
 
 ---
 
@@ -663,6 +664,33 @@ FAIL src/tests/chat/ChatWorkspace.test.tsx: TestingLibraryElementError: Unable t
 
 ---
 
+### [Cycle 11] 가짜 5건 카운트 하드코딩 로직 완전 제거 및 실데이터 기반 출처 반영 (`ChatWorkspace`, `FocusBottomSheet`, `ChatMessageItem`)
+- **목표 기능**: AI 챗 진입 시 "약 5건 매칭 소식" 등이 기본 선택된 것처럼 보이는 가짜 UI 결함 제거, `ChatWorkspace` 내 `count = 5` 기반 가짜 예측 로직 완전 배제, 백엔드 실제 검색 결과 소스 개수(`sources.length`)만 정직하게 반영.
+- **대응 기능 ID**: `FUNC-CHAT-016` / `BUG-CHAT-002`
+
+#### 1. RED Phase (실패하는 테스트 케이스 작성)
+- `src/tests/chat/ChatWorkspace.test.tsx`: AI 챗 진입 초기 상태에서 `FocusBottomSheet`를 열었을 때 가짜 `약 5건 매칭 소식` 뱃지가 존재하지 않음을 단언하는 테스트 작성.
+- `src/tests/chat/FocusBottomSheet.test.tsx`: `targetCount`가 `undefined`일 때 매칭 카운트 뱃지 및 경고가 렌더링되지 않음을 단언하는 테스트 작성.
+- `src/tests/chat/ChatMessageItem.test.tsx`: 1건, 3건 등 다양한 출처 개수에 대해 고정 5건이 아닌 실제 백엔드 소스 개수가 정직하게 표출됨을 단언하는 테스트 작성.
+- `src/tests/chat/FocusCapsule.test.tsx`: 초기 상태에서 5건 등의 가짜 카운트 뱃지가 렌더링되지 않음을 단언하는 테스트 작성.
+
+#### 2. GREEN Phase (최소 컴포넌트 구현)
+- `src/components/chat/ChatWorkspace.tsx`:
+  - 93번째 줄의 `const targetCount = useMemo(() => { let count = 5; ... })` 가짜 로직을 완전히 제거.
+  - `actualSourceCount`를 수신된 어시스턴트 메시지의 `sources.length`로 정직하게 계산하고, 검색 전 초기 상태는 `undefined`를 유지.
+  - `FocusBottomSheet` 및 `FocusCapsule`에 `actualSourceCount` 전달.
+- `src/components/chat/FocusBottomSheet.tsx`:
+  - `targetCount?: number`를 선택적 prop으로 전환.
+  - `targetCount !== undefined`일 때만 매칭 카운트 뱃지/경고를 조건부 렌더링하도록 수정하여 초기 상태의 가짜 뱃지 노출 방지.
+- `src/components/chat/ChatMessageItem.tsx`:
+  - `primaryCount`, `supplementaryCount`를 `message.sources`와 연동하여 획일적인 5건이 아닌 실제 백엔드 소스 개수만 정확히 표출.
+
+#### 3. REFACTOR & HARD QUALITY GATE Phase
+- `npx tsc --noEmit` 전체 타입 체크 0 오류 통과.
+- 전체 24개 테스트 파일, 238개 테스트 100% 통과 (4개 신규 테스트 추가 통과).
+
+---
+
 ## 3. UI 5대 상태 (Loading, Error, Empty, Success, Idle) 검증표
 
 | 컴포넌트 / 모듈 | 상태 케이스 | 모의 네트워크 / 렌더링 조건 | 화면 렌더링 검증 결과 | 통과 여부 |
@@ -698,6 +726,8 @@ FAIL src/tests/chat/ChatWorkspace.test.tsx: TestingLibraryElementError: Unable t
 | **UI Simplification**| **Decluttering** | 셀렉터 팝오버 및 디바이더 렌더링 | 불필요한 헤더 및 조잡한 '맥락 100% 보존' 문구 제거 확인 | **PASS** |
 | **Dynamic Sources**  | **Keyword Match**   | 글로벌 모드에서 'LangGraph' 질의   | 고정 5개 슬라이스 배제, `primary_count: 1`, '원문 1건' 및 [1] 표출 | **PASS** |
 |                      | **Inline Popover**  | [1] 인라인 출처 뱃지 클릭          | 대상 기사 메타데이터(제목, 스니펫, URL) 팝오버 실시간 정상 노출 | **PASS** |
+| **Truthful Sources** | **Initial Entrance**| AI 챗 워크스페이스 최초 진입       | "약 5건 매칭" 등 가짜 카운트 뱃지 0건 노출 및 깨끗한 필터 UI | **PASS** |
+|                      | **True API Count**  | 실 백엔드 검색 결과 수신 시        | 백엔드 `sources.length`와 정확히 1:1 일치하는 출처 수 표출 | **PASS** |
 
 ---
 
@@ -708,39 +738,39 @@ $ npm test
 
  RUN  v5.0.0 /Users/wonyoung/workspace/ozplayground/agentlens/frontend
 
- ✓ src/tests/CommandPalette.test.tsx (9 tests) 130ms
- ✓ src/tests/chat/ChatHeader.test.tsx (7 tests) 138ms
- ✓ src/tests/chat/FocusBottomSheet.test.tsx (7 tests) 179ms
- ✓ src/tests/chat/ChatModelSelector.test.tsx (15 tests) 159ms
- ✓ src/tests/chat/ChatSidebar.test.tsx (10 tests) 161ms
- ✓ src/tests/chat/HandoverIntegration.test.tsx (5 tests) 154ms
- ✓ src/tests/chat/ChatMessageItem.test.tsx (13 tests) 195ms
- ✓ src/tests/chat/ExportToolbar.test.tsx (5 tests) 424ms
- ✓ src/tests/chat/ChatSessionWorkflow.test.tsx (5 tests) 726ms
- ✓ src/tests/chat/CitationBadge.test.tsx (6 tests) 98ms
- ✓ src/tests/NewsCard.test.tsx (5 tests) 98ms
- ✓ src/tests/chat/ChatHistoryDrawer.test.tsx (10 tests) 131ms
- ✓ src/tests/chat/ChatPromptInput.test.tsx (7 tests) 144ms
- ✓ src/tests/chat/FocusCapsule.test.tsx (5 tests) 123ms
- ✓ src/tests/chat/MobileViewport.test.tsx (5 tests) 129ms
- ✓ src/tests/chat/WorkflowStepTracker.test.tsx (5 tests) 131ms
- ✓ src/tests/chat/ChatMessageList.test.tsx (3 tests) 64ms
- ✓ src/tests/chat/ActiveSourceChip.test.tsx (4 tests) 59ms
- ✓ src/tests/ThemeSystem.test.tsx (5 tests) 62ms
- ✓ src/tests/HotkeyListener.test.tsx (8 tests) 19ms
- ✓ src/tests/ResponsiveLayout.test.tsx (4 tests) 45ms
- ✓ src/tests/AskAiPanel.test.tsx (3 tests) 38ms
- ✓ src/tests/chat/ChatWorkspace.test.tsx (16 tests) 3414ms
-   ✓ ChatWorkspace Container (16)
-     ✓ dynamically displays question-specific sources chip and inline citations for global mode questions (v0.2.2) 577ms
- ✓ src/tests/chat/ContractAndMsw.test.ts (72 tests) 4612ms
+ ✓ src/tests/CommandPalette.test.tsx (9 tests)
+ ✓ src/tests/chat/ChatHeader.test.tsx (7 tests)
+ ✓ src/tests/chat/FocusBottomSheet.test.tsx (8 tests)
+ ✓ src/tests/chat/ChatModelSelector.test.tsx (15 tests)
+ ✓ src/tests/chat/ChatSidebar.test.tsx (10 tests)
+ ✓ src/tests/chat/HandoverIntegration.test.tsx (5 tests)
+ ✓ src/tests/chat/ChatMessageItem.test.tsx (14 tests)
+ ✓ src/tests/chat/ExportToolbar.test.tsx (5 tests)
+ ✓ src/tests/chat/ChatSessionWorkflow.test.tsx (5 tests)
+ ✓ src/tests/chat/CitationBadge.test.tsx (6 tests)
+ ✓ src/tests/NewsCard.test.tsx (5 tests)
+ ✓ src/tests/chat/ChatHistoryDrawer.test.tsx (10 tests)
+ ✓ src/tests/chat/ChatPromptInput.test.tsx (7 tests)
+ ✓ src/tests/chat/FocusCapsule.test.tsx (6 tests)
+ ✓ src/tests/chat/MobileViewport.test.tsx (5 tests)
+ ✓ src/tests/chat/WorkflowStepTracker.test.tsx (5 tests)
+ ✓ src/tests/chat/ChatMessageList.test.tsx (3 tests)
+ ✓ src/tests/chat/ActiveSourceChip.test.tsx (4 tests)
+ ✓ src/tests/ThemeSystem.test.tsx (5 tests)
+ ✓ src/tests/HotkeyListener.test.tsx (8 tests)
+ ✓ src/tests/ResponsiveLayout.test.tsx (4 tests)
+ ✓ src/tests/AskAiPanel.test.tsx (3 tests)
+ ✓ src/tests/chat/ChatWorkspace.test.tsx (17 tests)
+   ✓ ChatWorkspace Container (17)
+     ✓ dynamically displays question-specific sources chip and inline citations for global mode questions (v0.2.2) 584ms
+     ✓ does not display fake hardcoded 5-count badge upon entering chat, and reflects true backend sources 590ms
+ ✓ src/tests/chat/ContractAndMsw.test.ts (72 tests)
    ✓ Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6) (72)
-     ✓ returns dynamically filtered, keyword-matched sources for global chat stream (v0.2.2) 1070ms
+     ✓ returns dynamically filtered, keyword-matched sources for global chat stream (v0.2.2) 1072ms
 
  Test Files  24 passed (24)
-      Tests  234 passed (234)
-   Start at  16:53:28
-   Duration  5.73s
+      Tests  238 passed (238)
+   Duration  5.71s
 ```
 
 ```bash
@@ -749,9 +779,9 @@ $ npx tsc --noEmit
 ```
 
 - **테스트 파일 총수**: 24개 스위트
-- **단위/통합 테스트 총수**: 234개 테스트 (+2 신규 테스트 추가)
+- **단위/통합 테스트 총수**: 238개 테스트 (+4 신규 테스트 추가)
 - **성공률**: **100% PASS (0 Failure, 0 Flaky)**
-- **규격 준수**: `AGENTS.md` Stage 3b 프론트엔드 TDD 트랙 완료 및 `01_TDD_CYCLE_LOG.md` SSOT 확정 (v0.2.2)
+- **규격 준수**: `AGENTS.md` Stage 3b 프론트엔드 TDD 트랙 완료 및 `01_TDD_CYCLE_LOG.md` SSOT 확정 (v0.2.3)
 
 
 

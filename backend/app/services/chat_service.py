@@ -289,6 +289,31 @@ class ChatService:
         prompt_parts.append(f"\n[사용자 질문]\n{question}")
         return "\n".join(prompt_parts)
 
+    def _plan_react_action(self, question: str, scope: str) -> Dict[str, Any]:
+        """ReAct Planner: Decides whether to invoke search_news_corpus tool or answer directly."""
+        if scope == "scoped":
+            return {"action": "none", "search_query": ""}
+
+        from app.services.retriever import SqliteFtsRetriever
+
+        casual_greetings = {
+            "안녕", "안녕하세요", "반가워", "반갑습니다", "고마워", "고맙습니다",
+            "감사", "감사합니다", "ㅎㅎ", "ㅋㅋ", "테스트", "하이", "헬로",
+            "hello", "hi", "hey", "thanks", "thank you", "누구야", "너는 누구야", "뭐해"
+        }
+        q_clean = question.strip().lower().rstrip("?!.~")
+        if q_clean in casual_greetings:
+            return {"action": "none", "search_query": ""}
+
+        keywords = [
+            kw for kw in SqliteFtsRetriever.extract_keywords(question)
+            if kw.lower() not in casual_greetings
+        ]
+        if not keywords:
+            return {"action": "none", "search_query": ""}
+
+        return {"action": "search_news_corpus", "search_query": " ".join(keywords)}
+
     async def query_chat(self, req: ChatQueryRequest) -> ChatQueryResponse:
         """Synchronous query-response handler with live LLM (Anthropic -> OpenAI -> Ollama). No fake fallback."""
         self._validate_request(req.question, req.scope)
@@ -306,18 +331,15 @@ class ChatService:
             if not item:
                 raise HandoverSourceNotFoundException(req.source_id)
 
-            try:
-                full_content = await self.scraper.get_article_content(item)
-            except Exception as e:
-                logger.warning(f"Scoped scraper fallback in query_chat: {e}")
-                full_content = None
+            if item.full_content and len(item.full_content.strip()) > 0:
+                full_content = item.full_content
+            else:
+                try:
+                    full_content = await self.scraper.get_article_content(item)
+                except Exception as e:
+                    logger.warning(f"Scoped scraper fallback in query_chat: {e}")
+                    full_content = None
 
-            content_for_eval = full_content or (item.summary or item.why_it_matters or item.title)
-            _, _, supp_sources = await self.agentic_search.evaluate_and_search(
-                question=req.question,
-                article=item,
-                content=content_for_eval
-            )
             pub_str = item.published_at.isoformat() if hasattr(item.published_at, "isoformat") else str(item.published_at)
             primary_source = ChatSourceItem(
                 index=1,
@@ -332,21 +354,29 @@ class ChatService:
                 full_content=full_content,
                 published_at=pub_str,
             )
-            sources = [primary_source] + supp_sources
+            sources = [primary_source]
             primary_count = 1
-            supplementary_count = len(supp_sources)
+            supplementary_count = 0
             is_relaxed = False
             applied_filters = req.filters or ChatFocusFilter()
         else:
-            sources, is_relaxed, applied_filters = await self._resolve_sources(
-                scope=req.scope,
-                source_id=req.source_id,
-                query=req.question,
-                top_k=req.top_k,
-                filters=req.filters,
-            )
-            primary_count = len(sources)
-            supplementary_count = 0
+            plan = self._plan_react_action(req.question, req.scope)
+            if plan["action"] == "search_news_corpus":
+                sources, is_relaxed, applied_filters = await self._resolve_sources(
+                    scope=req.scope,
+                    source_id=req.source_id,
+                    query=plan["search_query"],
+                    top_k=req.top_k,
+                    filters=req.filters,
+                )
+                primary_count = len(sources)
+                supplementary_count = 0
+            else:
+                sources = []
+                primary_count = 0
+                supplementary_count = 0
+                is_relaxed = False
+                applied_filters = req.filters or ChatFocusFilter()
 
         prompt = self._build_grounding_prompt(req.question, sources, req.scope, req.history, full_content=full_content)
         try:
@@ -406,78 +436,39 @@ class ChatService:
             if not item:
                 raise HandoverSourceNotFoundException(req.source_id)
 
-            # Step 1: extracting_source (20%)
+            # Step 1: extracting_source (30%)
             now_iso = datetime.now(timezone.utc).isoformat()
             status_p1 = json.dumps({
                 "step": "extracting_source",
-                "label": "🌐 원본 소스 본문 추출 중 (Trafilatura)...",
-                "progress": 20,
+                "label": "📄 지정된 단일 뉴스 기사 컨텍스트 로드 중...",
+                "progress": 30,
                 "timestamp": now_iso
             }, ensure_ascii=False)
             yield f"event: status\ndata: {status_p1}\n\n"
             await asyncio.sleep(0.01)
 
             full_content: Optional[str] = None
-            try:
-                full_content = await self.scraper.get_article_content(item)
-            except Exception as e:
-                logger.warning(f"Scraper fallback: {e}")
-                now_iso = datetime.now(timezone.utc).isoformat()
-                fallback_status = json.dumps({
-                    "step": "extracting_source",
-                    "label": "⚠️ 원본 페이지 직접 추출 제한: 기사 요약 및 웹 검색 보충 모드로 전환",
-                    "progress": 25,
-                    "timestamp": now_iso
-                }, ensure_ascii=False)
-                yield f"event: status\ndata: {fallback_status}\n\n"
-                await asyncio.sleep(0.01)
+            if item.full_content and len(item.full_content.strip()) > 0:
+                full_content = item.full_content
+            else:
+                try:
+                    full_content = await self.scraper.get_article_content(item)
+                except Exception as e:
+                    logger.warning(f"Scraper fallback: {e}")
+                    full_content = None
 
-            # Step 2: evaluating_sufficiency (45%)
-            now_iso = datetime.now(timezone.utc).isoformat()
-            status_p2 = json.dumps({
-                "step": "evaluating_sufficiency",
-                "label": "🧠 본문 정보 충실도 자체 평가 중...",
-                "progress": 45,
-                "timestamp": now_iso
-            }, ensure_ascii=False)
-            yield f"event: status\ndata: {status_p2}\n\n"
-            await asyncio.sleep(0.01)
-
-            content_for_search = full_content or (item.summary or item.why_it_matters or item.title)
-            is_sufficient, queries, supp_sources = await self.agentic_search.evaluate_and_search(
-                question=req.question,
-                article=item,
-                content=content_for_search
-            )
-
-            # Step 3: agentic_searching (65%) [if not sufficient]
-            if not is_sufficient:
-                now_iso = datetime.now(timezone.utc).isoformat()
-                first_q = queries[0] if queries else None
-                status_p3 = json.dumps({
-                    "step": "agentic_searching",
-                    "label": "🔍 보충 기술 문서 자율 검색 중...",
-                    "progress": 65,
-                    "timestamp": now_iso,
-                    "query": first_q,
-                    "queries": queries,
-                    "sources_found": len(supp_sources)
-                }, ensure_ascii=False)
-                yield f"event: status\ndata: {status_p3}\n\n"
-                await asyncio.sleep(0.01)
-
-            # Step 4: synthesizing (85%)
+            # Step 2: synthesizing (85%)
             now_iso = datetime.now(timezone.utc).isoformat()
             status_p4 = json.dumps({
                 "step": "synthesizing",
-                "label": "📝 Senior Staff Architect 4단 엔지니어링 리포트 프롬프트 조립...",
+                "label": "📝 Senior Staff Architect 단일 기사 심층 리포트 프롬프트 조립...",
                 "progress": 85,
                 "timestamp": now_iso
             }, ensure_ascii=False)
             yield f"event: status\ndata: {status_p4}\n\n"
             await asyncio.sleep(0.01)
 
-            # Step 5: Dual Sources
+            # Step 3: Single Primary Source Only (supplementary_count = 0)
             pub_str = item.published_at.isoformat() if hasattr(item.published_at, "isoformat") else str(item.published_at)
             primary_source = ChatSourceItem(
                 index=1,
@@ -492,9 +483,9 @@ class ChatService:
                 full_content=full_content,
                 published_at=pub_str,
             )
-            sources = [primary_source] + supp_sources
+            sources = [primary_source]
             primary_count = 1
-            supplementary_count = len(supp_sources)
+            supplementary_count = 0
 
             sources_payload = json.dumps({
                 "sources": [s.model_dump() for s in sources],
@@ -509,28 +500,67 @@ class ChatService:
             prompt = self._build_grounding_prompt(req.question, sources, req.scope, req.history, full_content=full_content)
 
         else:
-            # Global Corpus RAG Mode
-            sources, is_relaxed, applied_filters = await self._resolve_sources(
-                scope=req.scope,
-                source_id=req.source_id,
-                query=req.question,
-                top_k=req.top_k,
-                filters=req.filters,
-            )
-            primary_count = len(sources)
-            supplementary_count = 0
-
-
-
-            sources_payload = json.dumps({
-                "sources": [s.model_dump() for s in sources],
-                "applied_filters": applied_filters.model_dump() if applied_filters else None,
-                "is_relaxed": is_relaxed,
-                "primary_count": primary_count,
-                "supplementary_count": supplementary_count,
+            # Global Mode: ReAct (Thought -> Action -> Observation -> Final Answer)
+            now_iso = datetime.now(timezone.utc).isoformat()
+            think_status = json.dumps({
+                "step": "thinking",
+                "label": "🧠 ReAct 추론: 질문 의도 및 검색 도구 필요성 판단 중...",
+                "progress": 25,
+                "timestamp": now_iso,
             }, ensure_ascii=False)
-            yield f"event: sources\ndata: {sources_payload}\n\n"
+            yield f"event: status\ndata: {think_status}\n\n"
             await asyncio.sleep(0.01)
+
+            plan = self._plan_react_action(req.question, req.scope)
+            if plan["action"] == "search_news_corpus":
+                search_q = plan["search_query"]
+                now_iso = datetime.now(timezone.utc).isoformat()
+                tool_status = json.dumps({
+                    "step": "tool_calling",
+                    "label": f"🛠️ Action: search_news_corpus('{search_q}') 도구 실행 중...",
+                    "progress": 55,
+                    "timestamp": now_iso,
+                    "query": search_q,
+                }, ensure_ascii=False)
+                yield f"event: status\ndata: {tool_status}\n\n"
+                await asyncio.sleep(0.01)
+
+                sources, is_relaxed, applied_filters = await self._resolve_sources(
+                    scope=req.scope,
+                    source_id=req.source_id,
+                    query=search_q,
+                    top_k=req.top_k,
+                    filters=req.filters,
+                )
+                primary_count = len(sources)
+                supplementary_count = 0
+
+                now_iso = datetime.now(timezone.utc).isoformat()
+                obs_status = json.dumps({
+                    "step": "observing",
+                    "label": f"👀 Observation: 관련 뉴스 {primary_count}건 관찰 완료",
+                    "progress": 80,
+                    "timestamp": now_iso,
+                    "sources_found": primary_count,
+                }, ensure_ascii=False)
+                yield f"event: status\ndata: {obs_status}\n\n"
+                await asyncio.sleep(0.01)
+
+                sources_payload = json.dumps({
+                    "sources": [s.model_dump() for s in sources],
+                    "applied_filters": applied_filters.model_dump() if applied_filters else None,
+                    "is_relaxed": is_relaxed,
+                    "primary_count": primary_count,
+                    "supplementary_count": supplementary_count,
+                }, ensure_ascii=False)
+                yield f"event: sources\ndata: {sources_payload}\n\n"
+                await asyncio.sleep(0.01)
+            else:
+                sources = []
+                primary_count = 0
+                supplementary_count = 0
+                is_relaxed = False
+                applied_filters = req.filters or ChatFocusFilter()
 
             prompt = self._build_grounding_prompt(req.question, sources, req.scope, req.history)
 

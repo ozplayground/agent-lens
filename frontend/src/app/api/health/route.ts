@@ -6,7 +6,7 @@ export async function GET() {
   return NextResponse.json({
     status: 'healthy',
     service: 'agentlens-frontend',
-    version: '0.2.2',
+    version: '0.3.0',
     timestamp: new Date().toISOString(),
   });
 }

@@ -1,4 +1,51 @@
-# [Backend] AI 챗 동적 뉴스 검색 결함 해결(SQLite FTS5 & SQL LIKE 랭킹), Gemini 정직한 연동 복원, v0.2.2 릴리즈 및 백엔드 154건 전체 테스트 5-Pillar 코드 품질 감사 및 리뷰 보고서 (Code Review Report)
+# [Backend v0.3.0] ReAct 아키텍처 전환(Global 모드 자율 도구 호출) 및 Scoped 단일 기사 고정 5-Pillar 코드 품질 감사 보고서 (Code Review Report)
+
+- **검토일자**: 2026-10-19
+- **검토자**: 시니어 백엔드 코드 리뷰어 (`backend-code-reviewer`)
+- **검토 대상 PR / 작업**: `backend-tdd-engineer`의 v0.3.0 ReAct 아키텍처 전환(`thinking` $\rightarrow$ `tool_calling` $\rightarrow$ `observing`) 및 Scoped 모드 단일 기사 고정(`primary_count=1`, `supplementary_count=0`) 리팩토링 (Stage 4a)
+- **감사 대상 소스 파일**:
+  1. [`backend/app/schemas/chat.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/schemas/chat.py)
+  2. [`backend/app/services/chat_service.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/app/services/chat_service.py)
+  3. [`backend/tests/test_agentic_workflow.py`](file:///Users/wonyoung/workspace/ozplayground/agentlens/backend/tests/test_agentic_workflow.py)
+- **최종 판정**: **APPROVED (승인)**
+
+---
+
+## [v0.3.0] 1. 5-Pillar 코드 품질 감사 매트릭스 (5-Pillar Audit)
+
+| 감사 필라 (Pillar) | 세부 검토 기준 | 평가 점수 (1~5) | 검토 소견 및 발견 사항 |
+| :--- | :--- | :---: | :--- |
+| **Pillar 1: 아키텍처 정합성** | ReAct 루프 설계 정합성, Scoped vs Global 모드 책임 분리, SSE 이벤트 프로토콜 일관성 | **5 / 5** | `ChatStatusStep`에 `thinking`, `tool_calling`, `observing` 상태를 추가하고 `ChatStatusPayload`에 `query`, `sources_found` 필드를 확장하여 계약 명세와 100% 일치함. Scoped 모드는 지정된 단일 기사(`extracting_source` $\rightarrow$ `synthesizing`, `primary_count=1`, `supplementary_count=0`)에만 집중하고, Global 모드는 `_plan_react_action()`을 통해 `search_news_corpus` 도구 실행 여부를 자율 판단하는 ReAct 루프로 명확히 분리됨. |
+| **Pillar 2: 클린코드 & SOLID** | 단일 책임 원칙(SRP), KISS/YAGNI, 불필요한 분기 제거, 명확한 네이밍 | **5 / 5** | `_plan_react_action(question, scope)` 메서드가 의도 파악(일상 인사말 필터링 및 도메인 키워드 추출) 책임을 단일화하여 `query_chat()`과 `stream_chat()` 양쪽에서 중복 없이 재사용됨. Scoped 모드에서 불필요했던 웹 검색/충분성 평가 결합을 제거하여 코드 응집도와 가독성이 대폭 향상됨. |
+| **Pillar 3: 보안 & 데이터 무결성**| Pydantic 스키마 검증, 입력값 살균, 예외 안전성(Graceful Degradation) | **5 / 5** | `ChatStreamRequest` 및 `ChatQueryRequest`의 길이/스코프 검증(`_validate_request`)이 철저하며, `SqliteFtsRetriever.extract_keywords`와 연동된 검색어 정제를 통해 FTS/SQL 인젝션을 방어함. 스크래핑 실패(403/Timeout) 시에도 스트림 중단 없이 요약본으로 안전하게 폴백(Graceful Degradation)됨. |
+| **Pillar 4: 성능 & 리소스 최적화**| 일상 대화 시 불필요한 DB/FTS 조회 생략(Zero-Overhead), 비동기 스트리밍 | **5 / 5** | Global 모드에서 일상 인사말(`안녕하세요` 등)이나 검색 키워드가 없는 질의의 경우 `action: "none"`을 반환하여 불필요한 FTS5/DB I/O 및 `sources` 이벤트 전송을 완전히 생략함. Scoped 모드에서도 외부 웹 검색 네트워크 오버헤드를 제거하여 응답 지연(Latency)을 최소화함. |
+| **Pillar 5: 테스트 품질 & 커버리지**| TDD Red-Green-Refactor 준수, Scoped/Global ReAct 엣지 케이스 검증 | **5 / 5** | `test_agentic_workflow.py` 내 15개 테스트 케이스가 전원 통과(15 passed in 0.59s). 특히 Scoped 단일 기사 고정 검증(`test_chat_scoped_sse_agentic_lifecycle`, `test_chat_query_scoped_with_agentic_workflow_success`)과 Global ReAct 도구 호출/생략 검증(`test_chat_global_react_search_tool_lifecycle`, `test_chat_global_react_casual_greeting_skips_search_tool`)이 촘촘하게 작성됨. |
+
+---
+
+## [v0.3.0] 2. 핵심 변경사항 상세 감사 결과
+
+### 2.1 `backend/app/schemas/chat.py` — ReAct 상태 스키마 확장 [PASS]
+- `ChatStatusStep` 리터럴에 `"thinking"`, `"tool_calling"`, `"observing"` 단계가 상단에 명확히 정의되었으며 하위 호환성을 위해 기존 스텝 리터럴도 유지됨.
+- `ChatStatusPayload`에 단일 검색어 표시를 위한 `query: Optional[str] = None` 및 관찰 건수 표기를 위한 `sources_found: Optional[int] = None` 필드가 타입 세이프하게 추가됨.
+
+### 2.2 `backend/app/services/chat_service.py` — ReAct 플래너 및 Scoped 단일 기사 고정 [PASS]
+- **`_plan_react_action()`**:
+  - `scope == "scoped"`일 때 즉시 `{"action": "none", "search_query": ""}`를 반환하여 추가 검색을 원천 차단.
+  - `scope == "global"`일 때 일상 인사말(`casual_greetings`)을 즉각 식별하고, `SqliteFtsRetriever.extract_keywords()`로 유의미한 기술 키워드가 추출된 경우에만 `{"action": "search_news_corpus", "search_query": ...}`를 반환.
+- **Scoped 모드 (`query_chat` & `stream_chat`)**:
+  - `extracting_source`(30%) $\rightarrow$ `synthesizing`(85%) $\rightarrow$ `sources`(`primary_count: 1, supplementary_count: 0`) $\rightarrow$ `token` $\rightarrow$ `done` 순서로 단일 기사 컨텍스트만 엄격하게 스트리밍함.
+- **Global 모드 (`query_chat` & `stream_chat`)**:
+  - `thinking`(25%) 단계 후 `search_news_corpus` 실행 시 `tool_calling`(55%) $\rightarrow$ `observing`(80%) $\rightarrow$ `sources` $\rightarrow$ `token` $\rightarrow$ `done`을 방출하며, 일상 대화 시에는 도구 호출과 `sources` 이벤트를 건너뛰고 즉각 `token`을 스트리밍함.
+
+### 2.3 `backend/tests/test_agentic_workflow.py` — TDD 검증 스위트 [PASS]
+- Scoped 모드에서 `evaluating_sufficiency`, `agentic_searching`이 발생하지 않고 `primary_count == 1`, `supplementary_count == 0`임을 단언(Assert)으로 엄격히 검증.
+- Global 모드에서 기술 질문 시 `thinking` $\rightarrow$ `tool_calling` $\rightarrow$ `observing` $\rightarrow$ `sources` 전체 라이프사이클이 실행되고, 일상 인사말(`안녕하세요!`) 시에는 검색 도구 호출 없이 `sources_count: 0`으로 직답하는 시나리오를 완벽히 커버함.
+- **최종 판정**: **APPROVED (승인)**
+
+---
+
+# [이전 이력: v0.2.2] AI 챗 동적 뉴스 검색 결함 해결(SQLite FTS5 & SQL LIKE 랭킹), Gemini 정직한 연동 복원, v0.2.2 릴리즈 및 백엔드 154건 전체 테스트 5-Pillar 코드 품질 감사 및 리뷰 보고서 (Code Review Report)
 
 - **검토일자**: 2026-10-19
 - **검토자**: 시니어 백엔드 코드 리뷰어 (`backend-code-reviewer`)

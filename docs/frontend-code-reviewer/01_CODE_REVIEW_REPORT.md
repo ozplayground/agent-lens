@@ -2,80 +2,64 @@
 
 - **검토일자**: 2026-10-19
 - **검토자**: 프론트엔드 시니어 코드 리뷰어 (`frontend-code-reviewer`)
-- **검토 대상 PR / 브랜치**: `feature/dynamic-sources-matching-and-v0.2.2-alignment` (v0.2.2: 고정 5개 슬라이스 배제 및 질문 키워드 기반 동적 뉴스 소스 인출/표출, ChatWorkspace 소스 칩 및 인라인 인용 연동, v0.2.2 버전 정렬)
+- **검토 버전**: `v0.3.0` (ReAct 스트리밍 뱃지 렌더링 수정사항 및 `ChatStatusStep` 계약 동기화 감사)
+- **검토 대상 파일**:
+  - `frontend/src/components/chat/ChatMessageItem.tsx` (토큰 스트리밍 시작 전 조기 `원문 N건` 뱃지 노출 차단 및 `primaryCount === 0 && supplementaryCount === 0` 시 `null` 반환)
+  - `frontend/src/types/chat.ts` / `frontend/src/types/api.ts` (ReAct `ChatStatusStep` 동기화)
+  - `frontend/src/components/chat/ChatWorkspace.tsx`, `FocusBottomSheet.tsx`, `FocusCapsule.tsx`
 - **최종 판정**: **APPROVED (최종 승인)**
 
 ---
 
-## 1. 5-Pillar 코드 품질 감사 매트릭스 (5-Pillar Audit)
+## 1. 5-Pillar 코드 품질 감사 매트릭스 (5-Pillar Audit - v0.3.0)
 
 | 감사 필라 (Pillar) | 세부 검토 기준 | 평가 점수 (1~5) | 검토 소견 및 발견 사항 |
 | :--- | :--- | :---: | :--- |
-| **Pillar 1: 아키텍처 정합성** | 계층 분리 원칙, Contract Lock v4.0 및 OpenAPI v2.6 준수, 프로덕션 0-Mock Import Rule 유지 | **5 / 5** | • **고정 5개 슬라이스 완전 제거**: MSW 모의 핸들러(`POST /api/chat/stream`, `POST /api/chat/query`)에서 무조건 5개 청크를 잘라 반환하던 `mockSearchChunks.slice(0, 5)` 패턴을 전면 배제하고 질문 키워드 기반 동적 필터링 파이프라인으로 전환함.<br/>• **0-Mock Import Rule 철저 보존**: `ChatWorkspace.tsx`, `ChatMessageItem.tsx` 등 프로덕션 런타임 코드에 일체의 mock fixture import가 없으며, 백엔드/MSW로부터 인입된 `sources` 및 `primary_count` SSE 페이로드를 순수 프레젠테이션 계층으로 투명하게 전달함.<br/>• **맞춤형 4단 기술 리포트 연계**: 동적 매칭된 1순위 소스(`primarySources[0]`)를 기반으로 답변 토큰(`generateArticleScopedAnswerTokens`)이 생성되어 응답 내용과 인라인 인용([1])의 인과 정합성이 완벽함. |
-| **Pillar 2: 클린코드 & 타입 안정성** | 단일 책임 원칙(SRP), 순수 함수 분리, TypeScript Strict Null Check 준수 | **5 / 5** | • **순수 함수 기반 모듈화**: `filterChunksByQuestion`을 독립 함수로 분리하여 스트리밍과 단건 쿼리 핸들러에서 중복 없이 재사용하며, 프레임워크 매핑과 자연어 토큰 스코어링의 책임을 명확히 분리함.<br/>• **엄격한 타입 가드**: `const topPrimaryId = primarySources[0]?.id; if (typeof topPrimaryId === 'number' && mockArticles[topPrimaryId])` 구조를 적용하여 TS2538 및 런타임 `undefined` 키 인덱싱 오류를 원천 차단함.<br/>• **불용어 및 버전 태그 살균**: `v\d+` 버전 접두어 및 한국어 조사/의례적 표현('질문', '알려줘' 등)을 안전하게 정제하여 매칭 정확도 향상. |
-| **Pillar 3: 런타임 안정성 & 예외 방어**| 매칭 실패 시 방어적 폴백, SSE 파싱 예외 처리, 인라인 인용 뱃지 안전성 | **5 / 5** | • **안전한 검색 실패 폴백**: 질문이 비어있거나 일치하는 키워드가 없는 엣지 케이스에서도 원본 청크 및 `applyFocusFilters`로 안전하게 폴백하여 빈 배열로 인한 UI 크래시나 렌더링 중단을 방지함.<br/>• **동적 소스 칩 및 카운트 방어**: `primary_count: 1`일 때 "원문 1건", 보충 소스 존재 시 "보충 n건", 미정의 시 "출처 n건 인용"으로 다단계 방어적 렌더링 구축.<br/>• **인라인 인용 뱃지 결함 방어**: `sourcesMap`에 없는 인덱스가 텍스트에 포함되더라도 `CitationBadge`가 기본 인덱스를 안전하게 렌더링하며 크래시를 유발하지 않음. |
-| **Pillar 4: Web Vitals & 웹 접근성 (a11y)** | 렌더링 블로킹 부재, 0px Universal Zero-Overflow 유지, WAI-ARIA 규격 | **5 / 5** | • **클라이언트 부하 전무**: 키워드 매칭 및 스코어링이 네트워크 응답 레이어(MSW)에서 처리되어 클라이언트 메인 스레드 렌더링 성능에 영향 없음.<br/>• **접근성(a11y) 완벽 보존**: 인라인 출처 뱃지에 `role="button"` 및 `aria-label="출처 1번: {source.title}"`이 적용되어 동적으로 매칭된 기사 제목이 스크린 리더에 정확히 전달됨.<br/>• **가로 스크롤 0px 방어 지속**: `min-w-0 max-w-full break-words [overflow-wrap:anywhere]` 가드가 동적 소스 칩 렌더링 영역에서도 빈틈없이 작동함. |
-| **Pillar 5: 테스트 품질 & 회귀 방어** | 전체 테스트 24개 파일 234건 100% PASS, TDD Red-Green 원칙 준수, `tsc --noEmit` 0 error | **5 / 5** | • **234건 전수 테스트 무결점 통과**: 24개 테스트 스위트, 234개 단위/통합 테스트 전수 통과 (0 Failure, 0 Flaky, 5.71초 소요). 기존 232건 대비 신규 2건(MSW 동적 소스 검증, ChatWorkspace 동적 칩/인용 검증) 안정적 추가.<br/>• **TDD Red-Green 명확한 검증**: 고정 5개 반환 상태에서 실패(AssertionError: expected 5 to be 1)를 확인한 후, 동적 매칭 구현을 통해 Green 전환 완료.<br/>• **회귀 방어**: v0.2.1에서 확립된 기사 핸드오버, 프로덕션 목 격리, 과거 모델명 보존, UI 경량화 테스트가 단 한 건의 결함 없이 100% 통과 유지됨.<br/>• **TypeScript 컴파일 무결점**: `npx tsc --noEmit` Exit Code 0 통과. |
+| **Pillar 1: 아키텍처 정합성** | 계층 분리 원칙, ReAct 스트리밍 라이프사이클 및 `ChatStatusStep` 계약 동기화, 프로덕션 0-Mock Import Rule 유지 | **5 / 5** | • **ReAct 스트리밍 타임라인 정합성**: `ChatMessageItem.tsx`(`L133`)에서 `Boolean(message.content && message.content.trim().length > 0)` 가드를 적용하여, ReAct 탐색 단계(`status` / 조기 `sources` 이벤트) 진행 중 실제 답변 토큰(`event: token`) 스트리밍이 개시되기 전에는 `원문 N건` 뱃지가 조기 노출되지 않도록 완벽히 차단함.<br/>• **`ChatStatusStep` 계약 동기화**: 에이전틱 ReAct 리서치 워크플로우 진행 단계(`ChatStatusStepSchema` 및 `ChatStatusPayloadSchema`)가 SSE 이벤트 파서(`parseChatSseEvent`) 및 `WorkflowStepTracker`와 1:1 정합성을 유지함.<br/>• **가짜 5건 하드코딩 완전 제거 & 0-Mock Rule 보존**: `ChatWorkspace.tsx`의 `actualSourceCount` 실데이터 모델 및 프로덕션 0-Mock Import Rule 완벽 유지. |
+| **Pillar 2: 클린코드 & SOLID** | 단일 책임 원칙(SRP), 방어적 렌더링 가드, TypeScript Strict Null Check 및 타입 안정성 | **5 / 5** | • **TypeScript 컴파일 무결점**: `npx tsc --noEmit` 실행 결과 0 오류 (Exit Code 0) 완벽 통과.<br/>• **빈 카운트 컨테이너 Zero-DOM 가드**: `ChatMessageItem.tsx`(`L143`)에서 `if (primaryCount === 0 && supplementaryCount === 0) return null;` 얼리 리턴을 통해 원문 및 보충 소스가 모두 0건일 때 불필요한 빈 `<div className="flex items-center gap-1 flex-wrap">` DOM 노드가 생성되지 않도록 깔끔하게 처리함.<br/>• **다단계 카운트 폴백 안전성**: `message.primary_count` / `supplementary_count`가 `undefined` 또는 `null`인 경우에도 `message.sources.filter(...)`로 정확히 폴백 계산함. |
+| **Pillar 3: 보안 & 데이터 무결성**| 백엔드 소스 데이터 정직성(Truthfulness), 조기/허위 뱃지 노출 차단, 런타임 Null/Undefined 방어 | **5 / 5** | • **스트리밍 중 데이터 정직성 (Streaming Truthfulness)**: ReAct 에이전트가 도구를 호출하고 문서를 평가하는 도중(`message.content === ''`) 설령 `sources` 배열이 먼저 상태에 도달하더라도, 답변 텍스트가 1글자 이상 렌더링되기 전까지는 출처 뱃지(`원문 N건`, `보충 N건`) 노출을 엄격히 보류하여 사용자 혼선을 원천 방지함.<br/>• **Null/Undefined 및 공백 문자열 방어**: `message.content.trim().length > 0` 조건으로 공백 토큰만 수신된 엣지 케이스까지 안전하게 방어함. |
+| **Pillar 4: 성능 & 렌더링 최적화**| 불필요한 DOM 노드 및 리렌더링 방지, 메모리 누수 방지, 모바일 뷰포트 최적화 | **5 / 5** | • **Zero Empty DOM & 레이아웃 시프트(CLS) 방지**: 토큰 스트리밍 시작 시점에만 출처 뱃지를 마운트하고 0건일 때 `null`을 반환함으로써 불필요한 빈 플렉스 래퍼 렌더링과 헤더 영역의 조기 깜빡임을 방지함.<br/>• **메모이제이션 & 클린업 무결성**: `ChatWorkspace.tsx`의 `useMemo` 기반 `actualSourceCount` 산출 및 `copyTimeoutRef`, `visualViewport` 클린업 로직이 메모리 누수 없이 동작함. |
+| **Pillar 5: 테스트 품질 & 커버리지**| Vitest 전체 테스트 100% PASS, TDD Red-Green 원칙 준수, 회귀 방어 단언 | **5 / 5** | • **단위 및 통합 테스트 무결점 통과**: `ChatMessageItem.test.tsx`(14개 테스트 100% PASS)를 포함한 전체 24개 테스트 스위트 238개 테스트 전수 통과 (0 Failure, 0 Flaky).<br/>• **회귀 방어 검증**: 원문 1건/3건 동적 반영, 가짜 5건 미표출, `WorkflowStepTracker` 스트리밍 상태(콘텐츠 빈 문자열 시 뱃지 미노출) 및 듀얼 인용(`[1]`, `[S1]`) 케이스가 모두 검증됨. |
 
 ---
 
-## 2. 필수 점검 항목 상세 대조 결과 (Mandatory Verification)
+## 2. v0.3.0 감사 중점 항목 상세 대조 및 검증 결과 (Core Verification Checklist)
 
-### 1) MSW 핸들러 및 프론트엔드에서 고정된 5개 슬라이스 대신 질문 키워드에 따른 동적 소스 인출/표출이 구현되었는가?
+### 1) `ChatMessageItem.tsx` — 토큰 스트리밍 시작 전 조기 `원문 N건` 뱃지 노출 차단 및 0건 `null` 반환
+- **검증 결과**: **적합 (100% 충족)**
+- **세부 코드 감사 (`frontend/src/components/chat/ChatMessageItem.tsx:L133-L159`)**:
+  - **조기 노출 차단 가드 (`L133`)**: `Boolean(message.content && message.content.trim().length > 0) && message.sources && message.sources.length > 0` 조건을 통해 ReAct 탐색 진행 중(`content`가 비어 있거나 공백만 있는 상태)에는 `원문 N건` / `보충 N건` 뱃지가 절대 조기 렌더링되지 않음을 확인.
+  - **0건 얼리 리턴 (`L143`)**: `if (primaryCount === 0 && supplementaryCount === 0) return null;` 로직을 통해 `sources` 배열이 존재하더라도 유효 카운트가 모두 `0`이면 `null`을 반환하여 빈 컨테이너 렌더링을 완벽히 차단함.
+  - **정직한 카운트 산출 (`L134-L141`)**: `primary_count`와 `supplementary_count`가 명시된 경우 이를 우선 사용하고, 미지정(`undefined` / `null`) 시 `sources.filter(...)`로 안전하게 계산함.
+
+### 2) ReAct `ChatStatusStep` 및 API 타입 계약 동기화 (`types/chat.ts` / `types/api.ts`)
 - **검증 결과**: **적합 (100% 충족)**
 - **세부 내용**:
-  - `frontend/src/mocks/handlers/chat.ts`에서 기존의 `mockSearchChunks.slice(0, 5)`가 전면 제거됨.
-  - `filterChunksByQuestion` 순수 함수가 신설되어 사용자 `question`을 분석:
-    - 주요 AI 프레임워크(FastMCP, LangGraph, SWE-bench, AutoGen, Claude 등) 키워드 및 토픽 매핑 기반 우선 인출.
-    - 자연어 토큰 스코어링(제목 가중치 10점, 스니펫 5점, 카테고리 3점) 및 RAG 스코어 기준 정렬.
-  - `POST /api/chat/stream`과 `POST /api/chat/query` 모두에 적용되어, 글로벌 모드 질의 시 질문과 관련된 청크만 `primarySources`로 반환됨 (예: LangGraph 질문 시 id 102만 매칭되어 `primary_count: 1` 반환).
-  - `src/tests/chat/ContractAndMsw.test.ts`에서 LangGraph 및 AutoGen 질의 시 각각 1건의 해당 기사 소스만 반환됨을 정밀 검증 통과.
+  - 에이전틱 워크플로우 단계(`ChatStatusStepSchema`) 및 상태 페이로드(`ChatStatusPayloadSchema`: `step`, `label`, `timestamp`, `progress`, `query`, `queries`, `sources_found`)가 Zod 런타임 스키마 및 TypeScript 정적 타입으로 엄격하게 동기화되어 있음.
+  - `WorkflowStepTracker` 컴포넌트에 `currentStatus={message.current_status || null}` 및 `stepHistory={message.step_history || []}`가 결함 없이 전달됨.
 
-### 2) UI 컴포넌트(`ChatWorkspace.tsx`)에서 동적 소스 칩 및 인라인 인용이 질문별로 정상 연동되는가?
-- **검증 결과**: **적합 (100% 충족)**
-- **세부 내용**:
-  - 백엔드/MSW의 SSE `sources` 이벤트로 발행된 동적 출처 메타데이터가 `ChatWorkspace.tsx`의 `setMessages`를 거쳐 `ChatMessageItem.tsx`로 안전하게 전달됨.
-  - 어시스턴트 메시지 헤더에 `message.primary_count`가 반영되어 질문별로 "원문 1건" 등 동적 카운트 뱃지가 정확히 렌더링됨.
-  - 마크다운 본문의 인라인 인용 `[1]`이 `CitationBadge`로 변환되어 매칭된 대상 기사(예: LangGraph v0.2)의 메타데이터와 클릭 인터랙션에 올바르게 연동됨.
-  - `src/tests/chat/ChatWorkspace.test.tsx`의 신규 테스트(`dynamically displays question-specific sources chip and inline citations for global mode questions (v0.2.2)`)를 통해 단언 검증 통과.
-
-### 3) 프로젝트 버전이 `0.2.2`로 갱신되었는가?
-- **검증 결과**: **적합 (v0.2.2 완전 정렬)**
-- **세부 내용**:
-  - `frontend/package.json`: `"version": "0.2.2"`
-  - `frontend/src/app/api/health/route.ts`: `version: "0.2.2"`
-  - `README.md`: `Version-v0.2.2`
-  - `docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md`: `v0.2.2`
-  - 시스템 전반의 버전 불일치 없이 단일 진실 공급원(SSOT) 유지 확인.
-
-### 4) 프론트엔드 전체 테스트 234건이 모두 통과하는가?
-- **검증 결과**: **적합 (234/234 PASS, 100%)**
+### 3) TypeScript 컴파일 무결성 (`npx tsc --noEmit`) 및 Vitest 테스트 검증
+- **검증 결과**: **적합 (0 Errors, Exit Code 0 / 100% PASS)**
 - **실행 결과**:
-  - `npm test -- --run`: **24 Test Files, 234 Tests Passed (0 Failed, 0 Flaky, 5.71s)**
-  - `npx tsc --noEmit`: **0 Errors (Exit Code 0)**
+  - `npx tsc --noEmit`: **Exit Code 0 (타입 에러 0건)**
+  - `npx vitest run src/tests/chat/ChatMessageItem.test.tsx`: **14 passed (14)**
+  - 전체 Vitest 스위트: **24 Test Files, 238 Tests Passed (0 Failed)**
 
 ---
 
 ## 3. 세부 피드백 및 코드 개선 제안 (Action Items)
 
-### 1. [권장 / 테스트 견고성] MSW 다중 토픽 복합 질의 엣지 케이스 확장
-- **위치**: `frontend/src/mocks/handlers/chat.ts:L89-L147`
+### 1. [개선 권장 / 가독성] `ChatMessageItem` 내 소스 카운트 계산 로직 순수 함수 분리
+- **위치**: `frontend/src/components/chat/ChatMessageItem.tsx:L133-L159`
 - **검토 소견**:
-  - 현재 `topicMappings`는 단일 질의에 하나의 핵심 프레임워크가 언급되는 일반적인 케이스에 매우 최적화되어 있습니다.
-  - 향후 사용자가 "LangGraph와 AutoGen의 액터 모델 차이점 비교"와 같이 복수 프레임워크를 동시에 질의할 경우 두 토픽 청크가 모두 primary 소스로 포함될 수 있도록 다중 토픽 수집 루프가 이미 준비되어 있으므로, 복합 질의에 대한 단위 테스트 케이스를 MSW 계약 테스트에 1~2건 추가하면 더욱 견고해질 것입니다.
-
-### 2. [양호 / 아키텍처] 프로덕션 코드와 모의 핸들러의 명확한 경계 유지
-- **위치**: `frontend/src/components/chat/ChatWorkspace.tsx`
-- **검토 소견**:
-  - `ChatWorkspace.tsx`가 모의 데이터에 의존하지 않고 전적으로 서버/MSW 이벤트 규격(`sources`, `primary_count`)에 맞춰 반응하도록 설계되어 있어, 향후 백엔드 RAG 엔진의 알고리즘 변경 시에도 프론트엔드 수정 없이 유연하게 수용할 수 있는 우수한 확장성을 지니고 있습니다.
+  - 현재 어시스턴트 메시지 헤더 뱃지 렌더링 시 인라인 즉시실행함수(IIFE: `(() => { const primaryCount = ...; if (primaryCount === 0 && supplementaryCount === 0) return null; return (...) })()`)를 사용하여 카운트를 계산하고 있습니다.
+  - 기능상 결함이나 성능 문제는 전혀 없으나($M \le 5$), 향후 유지보수 시 컴포넌트 렌더 트리의 가독성을 더욱 높이기 위해 헬퍼 함수(`resolveSourceCounts(message)`)로 분리하는 리팩토링을 선택적으로 고려할 수 있습니다.
 
 ---
 
-## 4. 최종 리뷰 판정 및 출시 승인
+## 4. 최종 리뷰 판정 및 출시 승인 (v0.3.0 Sign-off)
 
 - **판정 결과**: **APPROVED (최종 승인)**
 - **승인 코멘트**:
-  - `frontend-tdd-engineer`가 수행한 v0.2.2 작업은 4대 핵심 감사 사항과 5대 품질 필라를 완벽하게 충족하였습니다.
-  - 고정된 5개 청크 슬라이스 문제를 완전히 해결하여 실제 검색 키워드에 부합하는 동적 소스가 도출되며, UI 상의 소스 칩("원문 1건") 및 인라인 인용([1])이 질문별로 실시간 무결하게 렌더링됩니다.
-  - 버전 표기가 `0.2.2`로 일관되게 동기화되었으며, 24개 테스트 파일 234개 테스트 전수 통과 및 TypeScript 타입 체크 0 오류를 달성하였습니다.
-  - 본 프론트엔드 구현 코드에 대해 최종 **APPROVED** 판정을 내리며, 후속 통합 QA(Stage 5) 트랙 진입을 적극 승인합니다.
+  - v0.3.0 프론트엔드 ReAct 스트리밍 뱃지 렌더링 수정사항(`ChatMessageItem.tsx`의 토큰 스트리밍 개시 전 조기 `원문 N건` 뱃지 노출 차단 및 `primaryCount === 0 && supplementaryCount === 0` 시 `null` 반환)과 `ChatStatusStep` 타입 동기화가 5-Pillar 전 항목에서 무결점(25/25점)으로 검증되었습니다.
+  - TypeScript 컴파일 검사(`npx tsc --noEmit`) 0 에러 및 Vitest 단위/통합 테스트 100% 통과를 확인하였으며, Stage 5 통합 QA 및 배포 트랙 진입을 최종 **APPROVED** 합니다.

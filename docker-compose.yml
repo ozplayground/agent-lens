@@ -15,7 +15,7 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
       - PROJECT_NAME=AgentLens
-      - VERSION=${VERSION:-0.2.2}
+      - VERSION=${VERSION:-0.3.0}
       - HOST=0.0.0.0
       - PORT=8000
       - DATABASE_URL=sqlite+aiosqlite:///./data/agentlens.db

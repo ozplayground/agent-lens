@@ -89,22 +89,16 @@ export default function ChatWorkspace({
   const initialHandoverDoneRef = useRef<boolean>(false);
   const initialSessionLoadedRef = useRef<boolean>(false);
 
-  // Real-time matching target count prediction (estimated baseline)
-  const targetCount = useMemo(() => {
-    let count = 5;
-    if (focusFilters.category !== 'all') {
-      count = focusFilters.category === 'agent_tech' ? 2 : 1;
-    }
-    if (focusFilters.highSignalOnly) {
-      count = Math.max(1, count);
-    }
-    if (focusFilters.timeRange !== 'all') {
-      if (focusFilters.timeRange === '24h' && focusFilters.category === 'harness') {
-        return 0;
+  // Actual backend search result sources count (honestly reflects true sources.length from API)
+  const actualSourceCount = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'assistant' && msg.sources && msg.sources.length > 0) {
+        return msg.sources.length;
       }
     }
-    return count;
-  }, [focusFilters]);
+    return undefined;
+  }, [messages]);
 
   // Track visualViewport for mobile virtual keyboard
   useEffect(() => {
@@ -663,6 +657,7 @@ export default function ChatWorkspace({
                 onClick={() => setIsBottomSheetOpen(true)}
                 onReset={() => setFocusFilters(DEFAULT_FOCUS_FILTERS)}
                 isOpen={isBottomSheetOpen}
+                matchedCount={actualSourceCount}
               />
             </div>
 
@@ -704,7 +699,7 @@ export default function ChatWorkspace({
         filters={focusFilters}
         onApplyFilters={(next) => setFocusFilters(next)}
         onResetFilters={() => setFocusFilters(DEFAULT_FOCUS_FILTERS)}
-        targetCount={targetCount}
+        targetCount={actualSourceCount}
       />
     </div>
   );
