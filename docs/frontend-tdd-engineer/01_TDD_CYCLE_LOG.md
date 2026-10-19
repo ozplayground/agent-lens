@@ -2,8 +2,8 @@
 
 - **작성일자**: 2026-10-19
 - **작성자**: 프론트엔드 TDD 엔지니어 (`frontend-tdd-engineer`)
-- **문서 버전**: v0.2.1 (Stage 3b: Scoped Handover Bug Fix, Zero Mock in Production, Historical Model Name Integrity, UI Simplification, 24개 테스트 파일 232개 테스트 100% PASS)
-- **상태**: Approved (24개 테스트 스위트, 232개 테스트 100% 통과, TypeScript Type Check Exit 0)
+- **문서 버전**: v0.2.2 (Stage 3b: Dynamic News Sources MSW Matching, Fixed Slice Elimination, Version Bump to 0.2.2, 24개 테스트 파일 234개 테스트 100% PASS)
+- **상태**: Approved (24개 테스트 스위트, 234개 테스트 100% 통과, TypeScript Type Check Exit 0)
 - **선행 계약 및 설계 문서**:
   - [`01_COMPONENT_SPEC.md`](../ui-system-designer/01_COMPONENT_SPEC.md) (Stage 2c 컴포넌트 인터랙션 및 상태 명세)
   - [`01_CONTRACT_AND_MSW_SPEC.md`](../contract-integrator/01_CONTRACT_AND_MSW_SPEC.md) (Stage 2d Contract Lock v4.0)
@@ -25,6 +25,7 @@
 | **`FUNC-CHAT-013`**<br/>**`REQ-UI-008`**<br/>**`POL-UI-006`** | `src/components/chat/ChatModelSelector.tsx`<br/>`src/components/chat/ChatHeader.tsx`<br/>`src/components/chat/ChatPromptInput.tsx`<br/>`src/components/chat/ChatWorkspace.tsx`<br/>`src/components/chat/ModelTierBadge.tsx`<br/>`src/components/chat/ModelChangeDivider.tsx` | `src/tests/chat/ChatModelSelector.test.tsx`<br/>`src/tests/chat/ChatHeader.test.tsx`<br/>`src/tests/chat/ChatWorkspace.test.tsx` | Claude 3-Tier (`haiku`, `sonnet`, `opus`) 모델 라우팅<br/>Dual Model Selector (Header + Composer), 0ms 양방향 상태 동기화<br/>Fitts의 법칙 컴포저 인라인 칩, WAI-ARIA RadioGroup, 스트리밍 잠금 |
 | **`POL-LLM-005`**<br/>**`REQ-LLM-002`** | `src/components/chat/ChatMessageItem.tsx`<br/>`src/types/chat.ts` (`sanitizeModelTier`) | `src/tests/chat/ChatMessageItem.test.tsx` | Anti-Gemini UI 살균 방어: 신규 질의 기본 Claude 3.5 Sonnet 강제<br/>UI 내 신규 모델 표출 시 Claude 3-Tier 무결성 보장 |
 | **`FUNC-CHAT-014`**<br/>**`BUG-CHAT-001`**<br/>**`POL-PROD-001`** | `src/components/chat/ChatWorkspace.tsx`<br/>`src/types/chat.ts`<br/>`src/components/chat/ChatModelSelector.tsx`<br/>`src/components/chat/ModelChangeDivider.tsx` | `src/tests/chat/ChatWorkspace.test.tsx`<br/>`src/tests/chat/ContractAndMsw.test.ts`<br/>`src/tests/chat/ChatMessageItem.test.tsx`<br/>`src/tests/chat/ChatModelSelector.test.tsx` | 기사 포커스 핸드오버 비동기 레이스 해결 (`scope: 'scoped'`, `source_id: number` 직렬화)<br/>프로덕션 코드 내 MSW Mock 완전 격리 (0-Mock Import Rule)<br/>과거 세션 모델 정직 렌더링 (Gemini/GPT 변조 금지, 신규 질의만 Sonnet 기본)<br/>팝오버 헤더 및 디바이더 문구 제거 (UI 경량화) |
+| **`FUNC-CHAT-015`**<br/>**`REQ-CHAT-015`** | `src/mocks/handlers/chat.ts`<br/>`src/components/chat/ChatWorkspace.tsx` | `src/tests/chat/ChatWorkspace.test.tsx`<br/>`src/tests/chat/ContractAndMsw.test.ts` | 질문 키워드 기반 동적 뉴스 소스 검색/필터링 (`filterChunksByQuestion`)<br/>고정 5개 슬라이스 제거 및 맞춤형 출처 수 반환 (`primary_count`)<br/>실시간 소스 칩("원문 1건") 및 인라인 인용([1]) 매칭 렌더링 검증 |
 
 ---
 
@@ -599,6 +600,69 @@ Tests       118 passed (118)
 
 ---
 
+### [Cycle 10] 질문 키워드 기반 동적 뉴스 소스 연동 및 MSW 정합성 보장 (v0.2.2)
+- **목표 기능**:
+  1. `frontend/src/mocks/handlers/chat.ts`에서 글로벌 스트림(`POST /api/chat/stream`) 및 단건 질의(`POST /api/chat/query`) 요청 시, 사용자 `question` 텍스트의 키워드 및 의미론적 토픽 매핑에 따라 모의 청크들을 검색/필터링하여 질문별 맞춤형 소스가 반환되도록 수정 (고정된 5개 slice 제거).
+  2. `frontend/src/components/chat/ChatWorkspace.tsx`에서 백엔드/MSW로부터 동적으로 반환된 `sources`가 메시지 상단 소스 칩(`원문 n건`) 및 인라인 인용(`[1]`, `[S1]`)에 실시간 정상 표출되는지 통합 검증.
+  3. 버전 갱신: `frontend/package.json` (`0.2.2`), `frontend/src/app/api/health/route.ts` (`0.2.2`), `README.md` (`v0.2.2`).
+- **대응 기능 ID**: `FUNC-CHAT-015` / `REQ-CHAT-015`
+
+#### 1. RED Phase (실패하는 RTL & MSW Contract 테스트 작성)
+- **작성된 테스트 코드 (`src/tests/chat/ContractAndMsw.test.ts` & `src/tests/chat/ChatWorkspace.test.tsx`)**:
+```typescript
+// src/tests/chat/ContractAndMsw.test.ts
+it('returns dynamically filtered, keyword-matched sources for global chat stream (v0.2.2)', async () => {
+  const resLangGraph = await fetch('/api/chat/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: 'LangGraph v0.2의 분기 제어 및 상태 머신 원리', scope: 'global' }),
+  });
+  const textLangGraph = await resLangGraph.text();
+  const sourcesData = JSON.parse(textLangGraph.split('\n').find((l) => l.startsWith('data: ') && l.includes('"sources"'))!.replace('data: ', ''));
+  expect(sourcesData.primary_count).toBe(1);
+  expect(sourcesData.sources[0].id).toBe(102);
+});
+
+// src/tests/chat/ChatWorkspace.test.tsx
+it('dynamically displays question-specific sources chip and inline citations for global mode questions (v0.2.2)', async () => {
+  render(<ChatWorkspace />);
+  fireEvent.change(screen.getByRole('textbox', { name: /질문 입력/i }), { target: { value: 'LangGraph v0.2 시간 여행 디버깅 원리' } });
+  fireEvent.click(screen.getByRole('button', { name: /질문 전송/i }));
+  await waitFor(() => expect(screen.getByRole('button', { name: /심층 분석 과정.*단계 완료/i })).toBeInTheDocument());
+  expect(screen.getByText('원문 1건')).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: /출처 1번:.*LangGraph/i }).length).toBeGreaterThan(0);
+});
+```
+- **실행 결과 (실패 확인 - RED)**:
+```
+FAIL src/tests/chat/ContractAndMsw.test.ts: AssertionError: expected 5 to be 1
+FAIL src/tests/chat/ChatWorkspace.test.tsx: TestingLibraryElementError: Unable to find an element with the text: 원문 1건 (원문 5건 렌더링됨)
+✅ [PHASE RED ASSERTION PASSED] Tests failed as expected before implementation.
+```
+
+#### 2. GREEN Phase (최소 컴포넌트 및 핸들러 구현)
+- **구현 내용 요약**:
+  - `src/mocks/handlers/chat.ts`:
+    - `filterChunksByQuestion` 헬퍼 함수 구현: `fastmcp`, `langgraph`, `swe-bench`, `autogen`, `claude` 및 관련 한글/영문 키워드 매핑 테이블 기반 청크 우선 매칭 및 불용어/버전 태그 살균.
+    - `POST /api/chat/stream` & `POST /api/chat/query`: 고정 5개 슬라이스(`mockSearchChunks.slice(0, 5)`)를 전면 제거하고 `filterChunksByQuestion` + `applyFocusFilters` 결합 파이프라인 적용.
+    - 매칭된 1순위 소스 기반 동적 4단 마크다운 리포트 생성 (`generateArticleScopedAnswerTokens(mockArticles[primarySources[0].id])`).
+  - 버전 동기화: `frontend/package.json` (`0.2.2`), `frontend/src/app/api/health/route.ts` (`0.2.2`), `README.md` (`v0.2.2`).
+- **실행 결과 (성공 확인 - GREEN)**:
+```
+✓ src/tests/chat/ChatWorkspace.test.tsx (16 tests)
+✓ src/tests/chat/ContractAndMsw.test.ts (72 tests)
+✅ [PHASE GREEN ASSERTION PASSED] All tests passed cleanly.
+```
+
+#### 3. REFACTOR & HARD QUALITY GATE Phase (TypeScript 무결점 및 전체 회귀 검증)
+- **리팩토링 내용**:
+  - TypeScript strict null 체크 보강: `primarySources[0]?.id` 타입 가드 (`typeof topPrimaryId === 'number'`) 적용으로 TS2538 완전 해소.
+  - `npx tsc --noEmit` 전체 타입 체킹 무결점 통과 (0 오류).
+  - 다중 인라인 인용(`[1]`) 렌더링 시 `getAllByRole` 및 고유 키워드(`durable state persistence`) 단언으로 테스트 안정성 극대화.
+- **회귀 검증 결과**: 전체 24개 테스트 파일 234개 테스트 100% 통과 완료 (기존 232개 대비 2개 신규 테스트 추가 통과).
+
+---
+
 ## 3. UI 5대 상태 (Loading, Error, Empty, Success, Idle) 검증표
 
 | 컴포넌트 / 모듈 | 상태 케이스 | 모의 네트워크 / 렌더링 조건 | 화면 렌더링 검증 결과 | 통과 여부 |
@@ -632,43 +696,51 @@ Tests       118 passed (118)
 | **Production Bundle** | **Zero Mock Rule** | `ChatWorkspace.tsx` 프로덕션 빌드 | mock fixture import 0바이트, 런타임 FastAPI 직접 호출 확인 | **PASS** |
 | **Historical Model**| **Truthful Display** | 과거 `gemini-2.5-flash` 세션 조회 | 왜곡 없이 'Gemini 2.5 Flash'로 정직 렌더링 확인 | **PASS** |
 | **UI Simplification**| **Decluttering** | 셀렉터 팝오버 및 디바이더 렌더링 | 불필요한 헤더 및 조잡한 '맥락 100% 보존' 문구 제거 확인 | **PASS** |
+| **Dynamic Sources**  | **Keyword Match**   | 글로벌 모드에서 'LangGraph' 질의   | 고정 5개 슬라이스 배제, `primary_count: 1`, '원문 1건' 및 [1] 표출 | **PASS** |
+|                      | **Inline Popover**  | [1] 인라인 출처 뱃지 클릭          | 대상 기사 메타데이터(제목, 스니펫, URL) 팝오버 실시간 정상 노출 | **PASS** |
 
 ---
 
 ## 4. 최종 Vitest 테스트 실행 및 하드 퀄리티 게이트 검증 결과
 
 ```bash
-$ npm test -- --run
+$ npm test
 
- ✓ src/tests/chat/ChatHeader.test.tsx (7 tests) 128ms
- ✓ src/tests/chat/ChatMessageItem.test.tsx (12 tests) 115ms
- ✓ src/tests/chat/ChatPromptInput.test.tsx (7 tests) 128ms
- ✓ src/tests/chat/ChatSessionWorkflow.test.tsx (5 tests) 740ms
- ✓ src/tests/chat/ChatSidebar.test.tsx (10 tests) 168ms
- ✓ src/tests/chat/ChatWorkspace.test.tsx (15 tests) 2944ms
- ✓ src/tests/chat/CitationBadge.test.tsx (6 tests) 137ms
- ✓ src/tests/chat/ContractAndMsw.test.ts (71 tests) 3661ms
- ✓ src/tests/chat/ExportToolbar.test.tsx (5 tests) 431ms
- ✓ src/tests/chat/FocusBottomSheet.test.tsx (7 tests) 225ms
- ✓ src/tests/chat/FocusCapsule.test.tsx (5 tests) 122ms
- ✓ src/tests/chat/HandoverIntegration.test.tsx (5 tests) 135ms
- ✓ src/tests/chat/MobileViewport.test.tsx (5 tests) 118ms
- ✓ src/tests/chat/WorkflowStepTracker.test.tsx (5 tests) 88ms
- ✓ src/tests/chat/ChatMessageList.test.tsx (3 tests) 65ms
+ RUN  v5.0.0 /Users/wonyoung/workspace/ozplayground/agentlens/frontend
+
+ ✓ src/tests/CommandPalette.test.tsx (9 tests) 130ms
+ ✓ src/tests/chat/ChatHeader.test.tsx (7 tests) 138ms
+ ✓ src/tests/chat/FocusBottomSheet.test.tsx (7 tests) 179ms
+ ✓ src/tests/chat/ChatModelSelector.test.tsx (15 tests) 159ms
+ ✓ src/tests/chat/ChatSidebar.test.tsx (10 tests) 161ms
+ ✓ src/tests/chat/HandoverIntegration.test.tsx (5 tests) 154ms
+ ✓ src/tests/chat/ChatMessageItem.test.tsx (13 tests) 195ms
+ ✓ src/tests/chat/ExportToolbar.test.tsx (5 tests) 424ms
+ ✓ src/tests/chat/ChatSessionWorkflow.test.tsx (5 tests) 726ms
+ ✓ src/tests/chat/CitationBadge.test.tsx (6 tests) 98ms
+ ✓ src/tests/NewsCard.test.tsx (5 tests) 98ms
+ ✓ src/tests/chat/ChatHistoryDrawer.test.tsx (10 tests) 131ms
+ ✓ src/tests/chat/ChatPromptInput.test.tsx (7 tests) 144ms
+ ✓ src/tests/chat/FocusCapsule.test.tsx (5 tests) 123ms
+ ✓ src/tests/chat/MobileViewport.test.tsx (5 tests) 129ms
+ ✓ src/tests/chat/WorkflowStepTracker.test.tsx (5 tests) 131ms
+ ✓ src/tests/chat/ChatMessageList.test.tsx (3 tests) 64ms
  ✓ src/tests/chat/ActiveSourceChip.test.tsx (4 tests) 59ms
- ✓ src/tests/chat/ChatHistoryDrawer.test.tsx (10 tests) 123ms
- ✓ src/tests/chat/ChatModelSelector.test.tsx (15 tests) 111ms
- ✓ src/tests/AskAiPanel.test.tsx (3 tests) 39ms
- ✓ src/tests/NewsCard.test.tsx (5 tests) 141ms
- ✓ src/tests/CommandPalette.test.tsx (9 tests) 176ms
+ ✓ src/tests/ThemeSystem.test.tsx (5 tests) 62ms
  ✓ src/tests/HotkeyListener.test.tsx (8 tests) 19ms
- ✓ src/tests/ThemeSystem.test.tsx (5 tests) 70ms
- ✓ src/tests/ResponsiveLayout.test.tsx (4 tests) 44ms
+ ✓ src/tests/ResponsiveLayout.test.tsx (4 tests) 45ms
+ ✓ src/tests/AskAiPanel.test.tsx (3 tests) 38ms
+ ✓ src/tests/chat/ChatWorkspace.test.tsx (16 tests) 3414ms
+   ✓ ChatWorkspace Container (16)
+     ✓ dynamically displays question-specific sources chip and inline citations for global mode questions (v0.2.2) 577ms
+ ✓ src/tests/chat/ContractAndMsw.test.ts (72 tests) 4612ms
+   ✓ Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6) (72)
+     ✓ returns dynamically filtered, keyword-matched sources for global chat stream (v0.2.2) 1070ms
 
  Test Files  24 passed (24)
-      Tests  232 passed (232)
-   Start at  16:08:49
-   Duration  4.75s
+      Tests  234 passed (234)
+   Start at  16:53:28
+   Duration  5.73s
 ```
 
 ```bash
@@ -677,9 +749,10 @@ $ npx tsc --noEmit
 ```
 
 - **테스트 파일 총수**: 24개 스위트
-- **단위/통합 테스트 총수**: 232개 테스트
+- **단위/통합 테스트 총수**: 234개 테스트 (+2 신규 테스트 추가)
 - **성공률**: **100% PASS (0 Failure, 0 Flaky)**
-- **규격 준수**: `AGENTS.md` Stage 3b 프론트엔드 TDD 트랙 완료 및 `01_TDD_CYCLE_LOG.md` SSOT 확정 (v0.2.1)
+- **규격 준수**: `AGENTS.md` Stage 3b 프론트엔드 TDD 트랙 완료 및 `01_TDD_CYCLE_LOG.md` SSOT 확정 (v0.2.2)
+
 
 
 

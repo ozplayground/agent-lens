@@ -5,9 +5,10 @@ from app.config import settings
 from app.services.llm_providers.anthropic_provider import AnthropicLLMProvider
 from app.services.llm_processor import llm_processor, LLMUpstreamException, LLMProviderUnavailableException
 
-def test_version_is_0_2_1():
-    """Verify application version is updated to 0.2.1 per release mandate."""
-    assert settings.VERSION == "0.2.1"
+def test_version_is_0_2_2():
+    """Verify application version is updated to 0.2.2 per release mandate."""
+    assert settings.VERSION == "0.2.2"
+
 
 def test_mock_llm_provider_removed_from_production():
     """Verify MockLLMProvider is completely removed from production app.services.llm_providers."""

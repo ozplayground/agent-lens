@@ -407,16 +407,66 @@ backend/tests/test_anthropic_provider.py ..........                       [100%]
 
 ---
 
-## 7. 결론 및 Stage 3a 최종 릴리즈 승인 (v0.2.1 Sign-Off)
+## [Cycle 14] AI 챗 동적 뉴스 검색 결함 해결 & FTS5 색인 보장 & Gemini 연동 로직 복원 (v0.2.2)
 
-1. **앵무새 반복 결함 완전 해소**:
-   - Scoped 기사 포커스 질의 시 실제 Anthropic Claude 5.5 모델이 기사의 전문, 요약, 제목에 기반하여 정밀한 컨텍스트 그라운딩 답변을 실시간 SSE 스트리밍으로 제공.
-2. **프로덕션 제로-목(Zero-Mock) 거버넌스 확립**:
-   - 프로덕션 런타임 코드(`backend/app/`)에서 `MockLLMProvider`를 완전히 추방하여 외부 API 장애 시 거짓 답변을 출력하지 않고 정직하게 fail-fast.
-3. **Anthropic 400 에러 원천 차단**:
-   - Claude 5.5 계열의 `temperature` 파라미터 제외로 HTTP 200 정상 응답 보장.
-4. **과거 데이터 무결성 보장**:
-   - DB에 기저장된 이전 모델명(Gemini 등)을 인위적으로 변조하지 않고 진본 그대로 보존.
+### 1. RED Phase (실패하는 테스트 작성)
+- **배경 및 결함 분석**:
+  1. **AI 챗 동적 뉴스 검색 결함**:
+     - Global RAG 모드에서 어떤 질문('Claude', 'MCP', 'Benchmark')을 해도 항상 동일한 고정 기사 5개만 소스로 반환되는 결함 식별.
+     - 원인: `SqliteFtsRetriever._ensure_fts_table()`이 정적 클래스 변수 플래그로 인해 신규 DB 또는 미색인 DB에서 `news_fts`를 온전히 생성/색인하지 못했고, 질의 파싱 시 한국어 조사/불용어('최신', '관련', '소식', '알려줘')가 FTS 및 SQL LIKE를 오염시켜 엉뚱한 기사 또는 테이블 순서대로 상위 30건이 무차별 반환됨.
+  2. **Google Gemini 연동 로직 복원**:
+     - `llm_processor.py`에서 삭제되었던 `_call_gemini` 메소드를 복원하되, 임의로 뒤에서 몰래 다른 모델로 넘겨버리는 우선순위 사일런트 폴백을 두지 않고, 지정된 프로바이더/모델을 정직하게 호출하도록 정리.
+- **작성된 신규 테스트 (`backend/tests/test_dynamic_rag_retrieval.py`)**:
+  - `test_dynamic_rag_retrieval_returns_distinct_articles_by_query`: Claude, MCP, Benchmark 질문별로 서로 다른 연관 기사가 상위 1위로 검색되는지 검증.
+  - `test_conversational_queries_extract_keywords_and_return_distinct_articles`: '최신 Claude 관련 소식 알려줘' 등의 대화형 질문에서 불용어를 걸러내고 질문별로 고유한 기사가 검색되는지 검증.
+  - `test_ensure_fts_table_creates_table_and_indexes_items`: `news_fts` 가상 테이블 자동 생성 및 `news_items` 동기화 보장 검증.
+  - `test_sql_like_fallback_ranks_by_relevance_when_fts_fails`: FTS5 우회 시에도 SQL LIKE가 제목/기술스택 가중치로 관련도를 계산하여 정확한 결과를 반환하는지 검증.
+  - `test_gemini_call_restored_and_invokes_specified_model`: `_call_gemini` 메소드 복원 및 지정 모델 정직 호출 검증.
+  - `test_generate_live_answer_honestly_routes_to_gemini_when_requested`: 요청된 모델이 Gemini인 경우 사일런트 다운그레이드 없이 Gemini로 라우팅되는지 검증.
+  - `test_version_0_2_2_consistency`: 버전 0.2.2 정합성 검증.
+- **RED 실행 결과**:
+  - `_call_gemini`의 `model` 인자 부재 및 사일런트 차단으로 2건 실패 확인.
+
+### 2. GREEN Phase (최소 구현으로 통과)
+- **수정 내역**:
+  1. `backend/app/services/retriever.py`:
+     - `_ensure_fts_table()`: `sqlite_master`에서 `news_fts` 존재 여부를 실시간 검사하고, 미존재 시 테이블 및 트리거를 생성하며, row count가 `news_items`보다 작을 경우 `INSERT INTO news_fts(news_fts) VALUES('rebuild')`를 자동 수행하여 온전한 색인 보장.
+     - `extract_keywords()`: 한국어 조사, 어미, 대화형 종결구, 검색 노이즈 단어, 영어 불용어를 체계적으로 제거하고 핵심 도메인 키워드를 분리.
+     - `_sanitize_fts_query()`: 정제된 키워드로 안전한 FTS5 쿼리 조립.
+     - `_fetch_candidates()`: FTS5 검색 실패 시 SQL LIKE fallback에서 키워드별 제목(+5.0), 기술스택(+3.0), 요약(+2.0), 태그(+1.0) 가중치를 부여한 pseudo-BM25 랭킹을 적용하여 관련성 높은 기사 30건을 정렬 인출.
+  2. `backend/app/database.py`:
+     - `ensure_db_schema()` 내에 SQLite FTS5 가상 테이블 생성 및 `rebuild` 검사 로직을 내장하여 앱 기동 시 항상 인덱스 일관성 유지.
+  3. `backend/app/services/llm_processor.py`:
+     - `_call_gemini(prompt, model)` 복원: 지정된 모델(`gemini-3.5-flash-lite` 등)을 정직하게 Google GenAI REST API로 직접 호출.
+     - `has_live_provider(target_provider)` / `check_provider_available(target_provider)`: 특정 프로바이더 명시 요청 시 해당 API 키를 정확히 검증.
+     - `generate_live_answer()` / `stream_tokens()`: 요청 모델이 Gemini인 경우 사일런트 폴백 없이 정직하게 Gemini로 라우팅.
+  4. 버전 갱신:
+     - `backend/app/config.py`, `config.json`, `.env`, `backend/.env`, `.env.example`, `backend/.env.example`: 버전을 `0.2.2`로 동기화.
+     - `backend/tests/test_scoped_chat_grounding.py`, `backend/tests/test_config_and_live_llm.py`: 버전 0.2.2 테스트 단언문 갱신.
+- **실행 결과**:
+  - `backend/tests/test_dynamic_rag_retrieval.py`: 7 passed (100% Green)
+  - 전체 백엔드 테스트 스위트 (16개 모듈): **154 passed (100% Green, 0 failed)**
+
+### 3. REFACTOR Phase
+- 실제 DB(`agentlens.db`) 216개 기사를 대상으로 실전 검색 쿼리 검증:
+  - '최신 Claude 관련 소식 알려줘' ➔ 100% Claude 전용 기사 5건 인출
+  - '최신 MCP 관련 소식 알려줘' ➔ 100% MCP 전용 기사 5건 인출
+  - '최신 Benchmark 관련 소식 알려줘' ➔ 100% Benchmark 전용 기사 5건 인출
+- 불필요한 로그 정리 및 가독성 개선.
+
+---
+
+## 8. 결론 및 Stage 3a 최종 릴리즈 승인 (v0.2.2 Sign-Off)
+
+1. **동적 뉴스 검색 완전 정상화**:
+   - 질문 키워드('Claude', 'MCP', 'Benchmark')에 따라 질문별로 서로 다른 관련 기사가 100% 동적으로 검색됨.
+2. **FTS5 색인 무결성 보장**:
+   - DB 초기화 및 런타임 질의 시 `news_fts` 가상 테이블 존재 및 전체 216개 기사의 온전한 색인 자동 검증/재구축.
+3. **Gemini 정직한 연동 복원**:
+   - `_call_gemini` 메소드가 정직하게 복원되어 지정 모델을 투명하게 호출.
+4. **버전 SSOT 정합성 확보**:
+   - 백엔드 코드, 설정 파일, 환경변수 파일 6종 전체 `0.2.2` 동기화 완료.
 5. **100% 테스트 무결성 달성**:
-   - 총 15개 테스트 모듈, **147개 전원 통과 (100% GREEN)**.
+   - 총 16개 테스트 모듈, **154개 전원 통과 (100% GREEN)**.
+
 

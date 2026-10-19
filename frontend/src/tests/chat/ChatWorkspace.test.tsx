@@ -350,5 +350,36 @@ describe('ChatWorkspace Container', () => {
       { timeout: 4000 }
     );
   });
+
+  it('dynamically displays question-specific sources chip and inline citations for global mode questions (v0.2.2)', async () => {
+    render(<ChatWorkspace />);
+
+    const textarea = screen.getByRole('textbox', { name: /질문 입력/i });
+    const sendButton = screen.getByRole('button', { name: /질문 전송/i });
+
+    // Ask about LangGraph in global mode (no sourceId in searchParams)
+    fireEvent.change(textarea, { target: { value: 'LangGraph v0.2 시간 여행 디버깅 원리' } });
+    fireEvent.click(sendButton);
+
+    // Wait for stream to complete
+    await waitFor(
+      () => {
+        expect(screen.getByRole('button', { name: /심층 분석 과정.*단계 완료/i })).toBeInTheDocument();
+      },
+      { timeout: 5000 }
+    );
+
+    // Source chip at the message header should show "원문 1건" (not fixed 5건)
+    expect(screen.getByText('원문 1건')).toBeInTheDocument();
+
+    // Inline citation [1] should reference LangGraph
+    const citations1 = screen.getAllByRole('button', { name: /출처 1번:.*LangGraph/i });
+    expect(citations1.length).toBeGreaterThan(0);
+
+    // Markdown content should contain LangGraph-specific content
+    expect(screen.getAllByText(/LangGraph v0.2/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/durable state persistence/i)).toBeInTheDocument();
+  });
 });
+
 

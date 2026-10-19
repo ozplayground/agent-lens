@@ -69,5 +69,49 @@ async def ensure_db_schema():
                         connection.execute(text("ALTER TABLE chat_messages ADD COLUMN usage_json TEXT;"))
             except Exception:
                 pass
+
+            try:
+                fts_exists = connection.execute(text("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='news_fts';")).scalar()
+                if not fts_exists:
+                    connection.execute(text("""
+                        CREATE VIRTUAL TABLE IF NOT EXISTS news_fts USING fts5(
+                            title,
+                            summary,
+                            why_it_matters,
+                            tech_stack,
+                            tags,
+                            content='news_items',
+                            content_rowid='id'
+                        );
+                    """))
+                    connection.execute(text("""
+                        CREATE TRIGGER IF NOT EXISTS news_items_ai AFTER INSERT ON news_items BEGIN
+                            INSERT INTO news_fts(rowid, title, summary, why_it_matters, tech_stack, tags)
+                            VALUES (new.id, new.title, new.summary, new.why_it_matters, new.tech_stack, new.tags);
+                        END;
+                    """))
+                    connection.execute(text("""
+                        CREATE TRIGGER IF NOT EXISTS news_items_ad AFTER DELETE ON news_items BEGIN
+                            INSERT INTO news_fts(news_fts, rowid, title, summary, why_it_matters, tech_stack, tags)
+                            VALUES ('delete', old.id, old.title, old.summary, old.why_it_matters, old.tech_stack, old.tags);
+                        END;
+                    """))
+                    connection.execute(text("""
+                        CREATE TRIGGER IF NOT EXISTS news_items_au AFTER UPDATE ON news_items BEGIN
+                            INSERT INTO news_fts(news_fts, rowid, title, summary, why_it_matters, tech_stack, tags)
+                            VALUES ('delete', old.id, old.title, old.summary, old.why_it_matters, old.tech_stack, old.tags);
+                            INSERT INTO news_fts(rowid, title, summary, why_it_matters, tech_stack, tags)
+                            VALUES (new.id, new.title, new.summary, new.why_it_matters, new.tech_stack, new.tags);
+                        END;
+                    """))
+                    connection.execute(text("INSERT INTO news_fts(news_fts) VALUES('rebuild');"))
+                else:
+                    fts_cnt = connection.execute(text("SELECT count(*) FROM news_fts;")).scalar() or 0
+                    items_cnt = connection.execute(text("SELECT count(*) FROM news_items;")).scalar() or 0
+                    if fts_cnt < items_cnt:
+                        connection.execute(text("INSERT INTO news_fts(news_fts) VALUES('rebuild');"))
+            except Exception:
+                pass
         await conn.run_sync(_check_sqlite_cols)
+
 

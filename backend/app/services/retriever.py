@@ -60,82 +60,138 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
         self.session = session
 
     async def _ensure_fts_table(self):
-        """Ensure FTS5 virtual table and synchronization triggers exist."""
-        if SqliteFtsRetriever._fts_initialized:
-            return
-
+        """Ensure FTS5 virtual table and synchronization triggers exist and are fully populated."""
         try:
-            # Create FTS5 virtual table if it doesn't exist
-            await self.session.execute(text("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS news_fts USING fts5(
-                    title,
-                    summary,
-                    why_it_matters,
-                    tech_stack,
-                    tags,
-                    content='news_items',
-                    content_rowid='id'
-                );
-            """))
+            res = await self.session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='news_fts';"))
+            table_exists = res.scalar() is not None
 
-            # Create sync triggers for INSERT, DELETE, UPDATE
-            await self.session.execute(text("""
-                CREATE TRIGGER IF NOT EXISTS news_items_ai AFTER INSERT ON news_items BEGIN
-                    INSERT INTO news_fts(rowid, title, summary, why_it_matters, tech_stack, tags)
-                    VALUES (new.id, new.title, new.summary, new.why_it_matters, new.tech_stack, new.tags);
-                END;
-            """))
-            await self.session.execute(text("""
-                CREATE TRIGGER IF NOT EXISTS news_items_ad AFTER DELETE ON news_items BEGIN
-                    INSERT INTO news_fts(news_fts, rowid, title, summary, why_it_matters, tech_stack, tags)
-                    VALUES ('delete', old.id, old.title, old.summary, old.why_it_matters, old.tech_stack, old.tags);
-                END;
-            """))
-            await self.session.execute(text("""
-                CREATE TRIGGER IF NOT EXISTS news_items_au AFTER UPDATE ON news_items BEGIN
-                    INSERT INTO news_fts(news_fts, rowid, title, summary, why_it_matters, tech_stack, tags)
-                    VALUES ('delete', old.id, old.title, old.summary, old.why_it_matters, old.tech_stack, old.tags);
-                    INSERT INTO news_fts(rowid, title, summary, why_it_matters, tech_stack, tags)
-                    VALUES (new.id, new.title, new.summary, new.why_it_matters, new.tech_stack, new.tags);
-                END;
-            """))
+            if not table_exists:
+                # Create FTS5 virtual table if it doesn't exist
+                await self.session.execute(text("""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS news_fts USING fts5(
+                        title,
+                        summary,
+                        why_it_matters,
+                        tech_stack,
+                        tags,
+                        content='news_items',
+                        content_rowid='id'
+                    );
+                """))
 
-            # Rebuild index to guarantee consistency with existing news items
-            await self.session.execute(text("INSERT INTO news_fts(news_fts) VALUES('rebuild');"))
-            await self.session.commit()
+                # Create sync triggers for INSERT, DELETE, UPDATE
+                await self.session.execute(text("""
+                    CREATE TRIGGER IF NOT EXISTS news_items_ai AFTER INSERT ON news_items BEGIN
+                        INSERT INTO news_fts(rowid, title, summary, why_it_matters, tech_stack, tags)
+                        VALUES (new.id, new.title, new.summary, new.why_it_matters, new.tech_stack, new.tags);
+                    END;
+                """))
+                await self.session.execute(text("""
+                    CREATE TRIGGER IF NOT EXISTS news_items_ad AFTER DELETE ON news_items BEGIN
+                        INSERT INTO news_fts(news_fts, rowid, title, summary, why_it_matters, tech_stack, tags)
+                        VALUES ('delete', old.id, old.title, old.summary, old.why_it_matters, old.tech_stack, old.tags);
+                    END;
+                """))
+                await self.session.execute(text("""
+                    CREATE TRIGGER IF NOT EXISTS news_items_au AFTER UPDATE ON news_items BEGIN
+                        INSERT INTO news_fts(news_fts, rowid, title, summary, why_it_matters, tech_stack, tags)
+                        VALUES ('delete', old.id, old.title, old.summary, old.why_it_matters, old.tech_stack, old.tags);
+                        INSERT INTO news_fts(rowid, title, summary, why_it_matters, tech_stack, tags)
+                        VALUES (new.id, new.title, new.summary, new.why_it_matters, new.tech_stack, new.tags);
+                    END;
+                """))
+
+                # Rebuild index to guarantee consistency with existing news items
+                await self.session.execute(text("INSERT INTO news_fts(news_fts) VALUES('rebuild');"))
+                await self.session.commit()
+            else:
+                # Table exists: check if row counts match or if fts index is empty
+                fts_cnt_res = await self.session.execute(text("SELECT count(*) FROM news_fts;"))
+                fts_count = fts_cnt_res.scalar() or 0
+                items_cnt_res = await self.session.execute(text("SELECT count(*) FROM news_items;"))
+                items_count = items_cnt_res.scalar() or 0
+
+                if fts_count < items_count:
+                    await self.session.execute(text("INSERT INTO news_fts(news_fts) VALUES('rebuild');"))
+                    await self.session.commit()
             SqliteFtsRetriever._fts_initialized = True
         except Exception as e:
             logger.warning(f"FTS5 table initialization notice: {e}")
             await self.session.rollback()
 
-    def _sanitize_fts_query(self, query: str) -> str:
-        """Sanitize query string to avoid FTS5 syntax errors, remove stop words, and split Latin/Korean words."""
+    @staticmethod
+    def extract_keywords(query: str) -> List[str]:
+        """Extract clean, meaningful domain keywords from user query by stripping particles, question suffixes, and stopwords."""
         korean_stopwords = {
+            # 조사 및 접속사
             "와", "과", "의", "을", "를", "은", "는", "이", "가", "에", "에서",
-            "으로", "로", "및", "등", "에대해", "대해", "대하여", "알려줘", "알려주세요",
-            "비교해줘", "비교해주세요", "설명해줘", "설명해주세요", "무엇인가요", "무엇인지"
+            "으로", "로", "및", "등", "도", "만", "이나", "나", "란", "이란", "부터", "까지", "에게", "보다",
+            # 대화형 종결어미 및 질문 표현
+            "알려줘", "알려주세요", "알려줘요", "알려줄래", "말해줘", "말해주세요",
+            "설명해줘", "설명해주세요", "비교해줘", "비교해주세요", "추천해줘", "추천해주세요",
+            "요약해줘", "요약해주세요", "정리해줘", "정리해주세요", "보여줘", "보여주세요",
+            "무엇인가요", "무엇인지", "무엇이야", "어떤가요", "어떤지", "어떻게", "어때",
+            "대해", "대하여", "에대해", "관해", "관하여", "에관해", "관련된", "관련한",
+            # 검색 노이즈성 일반 단어
+            "최신", "관련", "소식", "뉴스", "정보", "동향", "기사", "내용", "자료",
+            "트렌드", "업데이트", "최근", "오늘", "요즘", "이번", "전체", "모든", "해당", "질문", "답변"
         }
-        raw_tokens = re.findall(r'[A-Za-z0-9_]+|[가-힣]+', query)
-        tokens = []
-        for t in raw_tokens:
-            if t in korean_stopwords:
-                continue
-            clean_t = t
-            if re.match(r'^[가-힣]+$', t) and len(t) > 2:
-                for suffix in ["에서", "으로", "까지", "에게", "의", "를", "을", "가", "이", "는", "은", "와", "과", "로"]:
-                    if clean_t.endswith(suffix) and len(clean_t) - len(suffix) >= 2:
-                        clean_t = clean_t[:-len(suffix)]
-                        break
-            if len(clean_t) >= 2 and clean_t not in korean_stopwords:
-                tokens.append(clean_t)
-            elif len(t) >= 2:
-                tokens.append(t)
+        english_stopwords = {
+            "what", "is", "are", "was", "were", "the", "a", "an", "in", "on", "at", "to",
+            "for", "of", "with", "about", "tell", "me", "how", "why", "who", "which",
+            "and", "or", "not", "latest", "news", "trend", "trends", "recent", "info",
+            "information", "article", "articles", "explain", "describe", "compare",
+            "summary", "summarize", "show"
+        }
+        particles_to_strip = [
+            "에서", "으로", "까지", "에게", "부터", "보다", "이나", "이란",
+            "의", "를", "을", "가", "이", "는", "은", "와", "과", "로", "도", "만", "나", "란", "에"
+        ]
 
-        if not tokens:
-            tokens = [t for t in raw_tokens if len(t) >= 1]
-        if not tokens:
+        raw_tokens = re.findall(r'[A-Za-z0-9_\-\.]+|[가-힣]+', query)
+        keywords = []
+        for raw in raw_tokens:
+            token = raw.strip()
+            if not token:
+                continue
+            lower_token = token.lower()
+            if lower_token in english_stopwords or token in korean_stopwords:
+                continue
+
+            clean_t = token
+            if re.match(r'^[가-힣]+$', clean_t) and len(clean_t) >= 2:
+                for suffix in particles_to_strip:
+                    if clean_t.endswith(suffix) and len(clean_t) - len(suffix) >= 2:
+                        stem = clean_t[:-len(suffix)]
+                        if stem not in korean_stopwords:
+                            clean_t = stem
+                        break
+
+            if clean_t in korean_stopwords or clean_t.lower() in english_stopwords:
+                continue
+
+            if len(clean_t) >= 2:
+                keywords.append(clean_t)
+            elif len(token) >= 2:
+                keywords.append(token)
+
+        # Fallback if all tokens were removed (e.g. query was just "최신 소식")
+        if not keywords:
+            for raw in raw_tokens:
+                if raw not in {"에", "의", "을", "를", "은", "는", "이", "가", "과", "와"}:
+                    keywords.append(raw)
+
+        return keywords
+
+    def _sanitize_fts_query(self, query: str) -> str:
+        """Sanitize query string into safe and high-precision FTS5 syntax."""
+        keywords = self.extract_keywords(query)
+        if not keywords:
             return '""'
-        return " OR ".join(f'"{t}"' for t in tokens)
+        safe_kw = [re.sub(r'["\']', '', k) for k in keywords if len(k) > 0]
+        if not safe_kw:
+            return '""'
+        return " OR ".join(f'"{k}"' for k in safe_kw)
 
     @classmethod
     def get_tau_seconds(cls, time_range: str) -> int:
@@ -261,8 +317,8 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
 
         # 2. Fallback to SQL LIKE if FTS5 returned no matches or errored
         if not candidates:
-            tokens = re.findall(r'[\w가-힣]+', query)
-            if tokens:
+            keywords = self.extract_keywords(query)
+            if keywords:
                 stmt = select(NewsItem).where(NewsItem.quality_score >= min_quality)
                 if filters.category and filters.category.lower() != "all":
                     stmt = stmt.where(NewsItem.category == filters.category.lower())
@@ -274,16 +330,42 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
                     stmt = stmt.where(NewsItem.is_high_signal == True)
 
                 conditions = []
-                for t in tokens:
-                    like_term = f"%{t}%"
+                for kw in keywords:
+                    like_term = f"%{kw}%"
                     conditions.append(NewsItem.title.ilike(like_term))
-                    conditions.append(NewsItem.summary.ilike(like_term))
                     conditions.append(NewsItem.tech_stack.ilike(like_term))
+                    conditions.append(NewsItem.summary.ilike(like_term))
                     conditions.append(NewsItem.tags.ilike(like_term))
-                stmt = stmt.where(or_(*conditions)).limit(30)
+                stmt = stmt.where(or_(*conditions))
 
                 like_rows = (await self.session.execute(stmt)).scalars().all()
+
+                # Score candidates based on keyword occurrence relevance
+                scored_like_candidates = []
                 for item in like_rows:
+                    t_str = (item.title or "").lower()
+                    tech_str = (item.tech_stack or "").lower()
+                    sum_str = (item.summary or "").lower()
+                    tag_str = (item.tags or "").lower()
+
+                    match_score = 0.0
+                    for kw in keywords:
+                        kw_l = kw.lower()
+                        if kw_l in t_str:
+                            match_score += 5.0
+                        if kw_l in tech_str:
+                            match_score += 3.0
+                        if kw_l in sum_str:
+                            match_score += 2.0
+                        if kw_l in tag_str:
+                            match_score += 1.0
+
+                    pseudo_bm25 = -1.0 - match_score
+                    scored_like_candidates.append((pseudo_bm25, item))
+
+                scored_like_candidates.sort(key=lambda x: x[0])
+
+                for pseudo_bm, item in scored_like_candidates[:30]:
                     candidates.append({
                         "id": item.id,
                         "title": item.title,
@@ -295,7 +377,7 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
                         "tech_stack": item.tech_stack or "",
                         "quality_score": float(item.quality_score or 6.0),
                         "published_at": item.published_at,
-                        "bm25_score": -1.0,
+                        "bm25_score": pseudo_bm,
                     })
 
         return candidates

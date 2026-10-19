@@ -74,9 +74,119 @@ export function getMockSessionStore(): ChatSessionDetail[] {
 
 
 /**
+ * 헬퍼: 사용자 question 텍스트의 키워드 및 의미론적 매핑을 기반으로 모의 청크 검색 및 필터링
+ */
+export function filterChunksByQuestion(
+  chunks: ChatSearchChunk[],
+  question?: string | null
+): ChatSearchChunk[] {
+  if (!question || !question.trim()) {
+    return [...chunks];
+  }
+
+  const q = question.toLowerCase();
+
+  // 특정 핵심 프레임워크 및 한글 키워드 매핑 룰
+  const topicMappings: { keywords: string[]; matches: (c: ChatSearchChunk) => boolean }[] = [
+    {
+      keywords: ['fastmcp', 'mcp', '엠씨피', 'model context protocol', 'stdio', '데코레이터'],
+      matches: (c) =>
+        c.id === 101 || c.category === 'mcp_plugins_skills' || c.title.toLowerCase().includes('mcp'),
+    },
+    {
+      keywords: [
+        'langgraph',
+        '랭그래프',
+        'langchain',
+        '시간 여행',
+        'time-travel',
+        '체크포인트',
+        'checkpoint',
+        'state machine',
+        '상태 머신',
+      ],
+      matches: (c) => c.id === 102 || c.title.toLowerCase().includes('langgraph'),
+    },
+    {
+      keywords: [
+        'swe-bench',
+        'swebench',
+        '하네스',
+        'harness',
+        '멀티모달',
+        'multimodal',
+        'gui',
+        '벤치마크',
+        'benchmark',
+      ],
+      matches: (c) => c.id === 103 || c.category === 'harness' || c.title.toLowerCase().includes('swe-bench'),
+    },
+    {
+      keywords: ['autogen', '오토젠', 'actor', '액터', '이벤트', 'event-driven', 'microsoft'],
+      matches: (c) => c.id === 104 || c.title.toLowerCase().includes('autogen'),
+    },
+    {
+      keywords: ['claude', '클로드', 'sonnet', '소네트', 'anthropic', '추론', 'reasoning', 'hybrid reasoning', 'thinking'],
+      matches: (c) => c.id === 105 || c.category === 'ai_news' || c.title.toLowerCase().includes('claude'),
+    },
+  ];
+
+  // 1. 특정 토픽 키워드가 감지된 경우, 해당 토픽과 정확히 일치하는 청크만 우선 필터링
+  const activeTopicMatches: ChatSearchChunk[] = [];
+  for (const mapping of topicMappings) {
+    if (mapping.keywords.some((kw) => q.includes(kw))) {
+      for (const chunk of chunks) {
+        if (mapping.matches(chunk) && !activeTopicMatches.some((m) => m.id === chunk.id)) {
+          activeTopicMatches.push(chunk);
+        }
+      }
+    }
+  }
+
+  if (activeTopicMatches.length > 0) {
+    activeTopicMatches.sort((a, b) => b.rag_score - a.rag_score);
+    return activeTopicMatches;
+  }
+
+  // 2. 일반 자연어 키워드 토큰 매칭
+  const scored = chunks.map((chunk) => {
+    let score = 0;
+    const titleLower = chunk.title.toLowerCase();
+    const snippetLower = chunk.snippet.toLowerCase();
+    const categoryLower = chunk.category.toLowerCase();
+
+    const tokens = q.match(/[a-z0-9_\-]+|[가-힣]{2,}/gi) || [];
+    for (const rawToken of tokens) {
+      const token = rawToken.toLowerCase();
+      // 버전 프리픽스(v0, v1, v0.2 등) 및 일반 조사/동사 불용어 배제
+      if (/^v\d+(\.\d+)?$/i.test(token) || token.length < 3) {
+        continue;
+      }
+      if (['질문', '알려줘', '설명', '분석', '어떻게', '방법', '테스트', '기본', '최신', '동향'].includes(token)) {
+        continue;
+      }
+      if (titleLower.includes(token)) score += 10;
+      if (snippetLower.includes(token)) score += 5;
+      if (categoryLower.includes(token)) score += 3;
+    }
+
+    return { chunk, score };
+  });
+
+  const matches = scored.filter((item) => item.score > 0);
+  if (matches.length > 0) {
+    matches.sort((a, b) => b.score - a.score || b.chunk.rag_score - a.chunk.rag_score);
+    return matches.map((m) => m.chunk);
+  }
+
+  return [...chunks];
+}
+
+/**
  * 헬퍼: ChatFocusFilter 적용 및 정렬
  */
 function applyFocusFilters(
+
   chunks: ChatSearchChunk[],
   filters?: ChatFocusFilter | null
 ): { filtered: ChatSearchChunk[]; isRelaxed: boolean; appliedFilters: ChatFocusFilter } {
@@ -296,8 +406,14 @@ export const chatHandlers = [
       ];
       supplementarySources = [mockSupplementarySources[0]];
     } else {
-      const filterResult = applyFocusFilters(mockSearchChunks, filters);
-      primarySources = filterResult.filtered.slice(0, top_k).map((s, idx) => ({
+      const matchedChunks = filterChunksByQuestion(mockSearchChunks, question);
+      const filterResult = applyFocusFilters(matchedChunks, filters);
+      const candidateList =
+        filterResult.filtered.length > 0
+          ? filterResult.filtered.slice(0, top_k)
+          : applyFocusFilters(mockSearchChunks, filters).filtered.slice(0, top_k);
+
+      primarySources = candidateList.map((s, idx) => ({
         index: idx + 1,
         type: 'primary' as const,
         id: s.id,
@@ -324,8 +440,11 @@ export const chatHandlers = [
 
     // 4) 4단 구조화 엔지니어링 리포트 마크다운 토큰 조립
     let answerBodyTokens: string[];
+    const topPrimaryId = primarySources[0]?.id;
     if (scope === 'scoped' && source_id && mockArticles[source_id]) {
       answerBodyTokens = generateArticleScopedAnswerTokens(mockArticles[source_id], isRelaxed);
+    } else if (typeof topPrimaryId === 'number' && mockArticles[topPrimaryId]) {
+      answerBodyTokens = generateArticleScopedAnswerTokens(mockArticles[topPrimaryId], isRelaxed);
     } else {
       const answerIntro = isRelaxed
         ? `> 💡 [안내: 선택 조건에 부합하는 소식이 없어 전체 기간으로 확장 검색했습니다]\n\n`
@@ -674,8 +793,14 @@ export const chatHandlers = [
         },
       ];
     } else {
-      const filterResult = applyFocusFilters(mockSearchChunks, body.filters);
-      primarySources = filterResult.filtered.slice(0, body.top_k || 5).map((s, idx) => ({
+      const matchedChunks = filterChunksByQuestion(mockSearchChunks, body.question);
+      const filterResult = applyFocusFilters(matchedChunks, body.filters);
+      const candidateList =
+        filterResult.filtered.length > 0
+          ? filterResult.filtered.slice(0, body.top_k || 5)
+          : applyFocusFilters(mockSearchChunks, body.filters).filtered.slice(0, body.top_k || 5);
+
+      primarySources = candidateList.map((s, idx) => ({
         index: idx + 1,
         type: 'primary' as const,
         id: s.id,

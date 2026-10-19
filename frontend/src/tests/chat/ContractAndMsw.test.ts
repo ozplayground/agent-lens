@@ -1230,8 +1230,46 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(text).toContain('"id":102');
       expect(text).toContain('LangGraph v0.2: Production Multi-Agent Workflows & Time-Travel');
     });
+
+    it('returns dynamically filtered, keyword-matched sources for global chat stream (v0.2.2)', async () => {
+      // 1. Query with LangGraph keyword in global scope
+      const resLangGraph = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: 'LangGraph v0.2의 분기 제어 및 상태 머신 원리',
+          scope: 'global',
+        }),
+      });
+      expect(resLangGraph.status).toBe(200);
+      const textLangGraph = await resLangGraph.text();
+      const sourcesLine = textLangGraph.split('\n').find((l) => l.startsWith('data: ') && l.includes('"sources"'));
+      expect(sourcesLine).toBeDefined();
+      const sourcesData = JSON.parse(sourcesLine!.replace('data: ', ''));
+      expect(sourcesData.primary_count).toBe(1);
+      expect(sourcesData.sources[0].id).toBe(102);
+      expect(sourcesData.sources[0].title).toContain('LangGraph');
+
+      // 2. Query with AutoGen keyword in global scope
+      const resAutoGen = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: 'AutoGen 0.4 액터 모델 이벤트 프레임워크',
+          scope: 'global',
+        }),
+      });
+      const textAutoGen = await resAutoGen.text();
+      const sourcesLineAutoGen = textAutoGen.split('\n').find((l) => l.startsWith('data: ') && l.includes('"sources"'));
+      expect(sourcesLineAutoGen).toBeDefined();
+      const sourcesDataAutoGen = JSON.parse(sourcesLineAutoGen!.replace('data: ', ''));
+      expect(sourcesDataAutoGen.primary_count).toBe(1);
+      expect(sourcesDataAutoGen.sources[0].id).toBe(104);
+      expect(sourcesDataAutoGen.sources[0].title).toContain('AutoGen');
+    });
   });
 });
+
 
 
 

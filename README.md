@@ -4,7 +4,7 @@
 
 **AI Agent · Harness · MCP 기술 소식 수집, 요약 및 전용 AI 챗 워크스페이스**
 
-[![Version](https://img.shields.io/badge/Version-v0.2.1-blue?style=flat-square)](https://github.com/ozplayground/agent-lens/releases)
+[![Version](https://img.shields.io/badge/Version-v0.2.2-blue?style=flat-square)](https://github.com/ozplayground/agent-lens/releases)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)

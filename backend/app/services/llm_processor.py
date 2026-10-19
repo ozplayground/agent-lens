@@ -125,12 +125,56 @@ class LLMProcessor:
             "cache_creation_input_tokens": None,
         }
 
-    async def _call_gemini(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
+    async def _call_gemini(self, prompt: str, model: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
         """
-        DECOMMISSIONED per POL-LLM-005, REQ-LLM-002, and ADR-012 (Anti-Gemini Policy).
-        Google Gemini invocation paths are permanently disabled.
+        Invokes Google Gemini API directly and honestly for the specified model without silent priority fallback.
         """
-        logger.warning("POL-LLM-005: _call_gemini invoked but is permanently decommissioned. Returning (None, None).")
+        json_cfg = load_json_config()
+        key = (
+            getattr(settings, "GEMINI_API_KEY", "")
+            or json_cfg.get("llm", {}).get("gemini_api_key", "")
+            or os.environ.get("GEMINI_API_KEY", "")
+            or self.gemini_key
+        )
+        if not key:
+            return None, None
+
+        target_model = (
+            model
+            or getattr(settings, "GEMINI_MODEL", "")
+            or json_cfg.get("llm", {}).get("gemini_model", "")
+            or "gemini-3.5-flash-lite"
+        )
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={key}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 2048}
+        }
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                res = await client.post(url, json=payload)
+                if res.status_code == 200:
+                    data = res.json()
+                    candidates_list = data.get("candidates", [])
+                    if candidates_list:
+                        parts = candidates_list[0].get("content", {}).get("parts", [])
+                        ans_parts = [
+                            p["text"].strip() for p in parts
+                            if not p.get("thought") and "text" in p and p["text"].strip()
+                        ]
+                        if ans_parts:
+                            ans_text = "\n\n".join(ans_parts).strip()
+                            logger.info(f"Gemini generation succeeded with model {target_model}")
+                            return ans_text, f"Google {target_model}"
+                        elif parts and "text" in parts[0]:
+                            return parts[0]["text"].strip(), f"Google {target_model}"
+                elif res.status_code == 429:
+                    logger.warning(f"Gemini API ({target_model}) rate limited (429)")
+                else:
+                    logger.warning(f"Gemini API ({target_model}) returned {res.status_code}: {res.text[:120]}")
+        except Exception as e:
+            logger.warning(f"Gemini API call ({target_model}) failed: {e}")
         return None, None
 
     async def _call_openai(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
@@ -196,14 +240,22 @@ class LLMProcessor:
             return True
         return False
 
-    def has_live_provider(self) -> bool:
-        """Checks if a valid live LLM provider (Anthropic, OpenAI, Ollama) is configured and reachable."""
+    def has_live_provider(self, target_provider: Optional[str] = None) -> bool:
+        """Checks if a valid live LLM provider is configured and reachable."""
+        if target_provider == "gemini":
+            json_cfg = load_json_config()
+            gemini_key = (
+                getattr(settings, "GEMINI_API_KEY", "")
+                or json_cfg.get("llm", {}).get("gemini_api_key", "")
+                or os.environ.get("GEMINI_API_KEY", "")
+                or self.gemini_key
+            )
+            return bool(gemini_key)
+
         if self.anthropic_provider.is_available():
             return True
 
         json_cfg = load_json_config()
-        # Anti-Gemini Policy (POL-LLM-005, REQ-LLM-002, ADR-012):
-        # GEMINI_API_KEY is decommissioned and never treated as a live provider.
         openai_key = (
             getattr(settings, "OPENAI_API_KEY", "")
             or json_cfg.get("llm", {}).get("openai_api_key", "")
@@ -224,12 +276,12 @@ class LLMProcessor:
                 pass
         return False
 
-    def check_provider_available(self) -> bool:
+    def check_provider_available(self, target_provider: Optional[str] = None) -> bool:
         """
         Check LLM availability.
         Raises LLMProviderUnavailableException (HTTP 503) if no live provider is configured.
         """
-        if self.has_live_provider():
+        if self.has_live_provider(target_provider=target_provider):
             return True
 
         raise LLMProviderUnavailableException("가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)")
@@ -238,10 +290,28 @@ class LLMProcessor:
     async def generate_live_answer(
         self, prompt: str, model: Optional[str] = None, model_tier: Optional[str] = None
     ) -> Tuple[str, str]:
-        """Generate answer via live LLM (Anthropic -> OpenAI -> Ollama). Never falls back to Gemini or fake text."""
+        """Generate answer via live LLM. Honors explicitly requested provider/model honestly without silent switching."""
+        requested_model = (model or model_tier or "").lower()
+
+        # Explicit Gemini routing
+        if "gemini" in requested_model:
+            self.check_provider_available(target_provider="gemini")
+            ans, g_model = await self._call_gemini(prompt, model=model or model_tier)
+            if ans and g_model:
+                return ans, sanitize_model_identifier(g_model)
+            raise LLMUpstreamException(f"Google Gemini ({model or model_tier}) 호출 실패 / API 장애")
+
+        # Explicit OpenAI routing
+        if "gpt" in requested_model or "openai" in requested_model:
+            self.check_provider_available()
+            ans, o_model = await self._call_openai(prompt)
+            if ans and o_model:
+                return ans, sanitize_model_identifier(o_model)
+            raise LLMUpstreamException(f"OpenAI ({model}) 호출 실패 / API 장애")
+
         self.check_provider_available()
 
-        # 1. Anthropic Claude (Priority 1)
+        # 1. Anthropic Claude (Priority 1 for default chat)
         if self.anthropic_provider.is_available():
             try:
                 ans, resolved_model, usage = await self.anthropic_provider.generate_text_with_usage(
@@ -256,8 +326,6 @@ class LLMProcessor:
                 raise
             except Exception as e:
                 logger.warning(f"Anthropic call failed in generate_live_answer: {e}")
-
-        # Note: Google Gemini is permanently decommissioned per POL-LLM-005, REQ-LLM-002, and ADR-012.
 
         # 2. OpenAI
         json_cfg = load_json_config()
@@ -292,7 +360,18 @@ class LLMProcessor:
     async def stream_tokens(
         self, prompt: str, model: Optional[str] = None, model_tier: Optional[str] = None
     ) -> AsyncGenerator[Tuple[str, str], None]:
-        """Stream raw tokens from actual LLM (Anthropic -> OpenAI -> Ollama). Raises exceptions on failure without fake text."""
+        """Stream raw tokens from actual LLM. Honors explicitly requested provider/model honestly."""
+        requested_model = (model or model_tier or "").lower()
+
+        # Explicit Gemini routing
+        if "gemini" in requested_model:
+            self.check_provider_available(target_provider="gemini")
+            ans, g_model = await self._call_gemini(prompt, model=model or model_tier)
+            if ans and g_model:
+                yield (ans, sanitize_model_identifier(g_model))
+                return
+            raise LLMUpstreamException(f"Google Gemini ({model or model_tier}) 호출 실패 / API 장애")
+
         self.check_provider_available()
 
         token_yielded = False
