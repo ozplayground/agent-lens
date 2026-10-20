@@ -17,13 +17,13 @@ async def seed_distinct_rag_articles():
         test_items = [
             {
                 "id": 9001,
-                "title": "Anthropic Claude 3.7 Sonnet Hybrid Reasoning Architecture",
-                "url": "https://anthropic.com/news/claude-3-7-sonnet",
+                "title": "Anthropic Claude 5.5 Sonnet Hybrid Reasoning Architecture",
+                "url": "https://anthropic.com/news/claude-5-5-sonnet",
                 "source": "anthropic",
                 "category": "ai_news",
-                "summary": "Anthropic releases Claude 3.7 Sonnet featuring hybrid standard and extended thinking reasoning modes.",
+                "summary": "Anthropic releases Claude 5.5 Sonnet featuring hybrid standard and extended thinking reasoning modes.",
                 "why_it_matters": "Enables developers to dynamically adjust reasoning budget for coding agent harnesses.",
-                "tech_stack": "Claude 3.7, Anthropic, Python, Reasoning",
+                "tech_stack": "Claude 5.5, Anthropic, Python, Reasoning",
                 "tags": "claude, anthropic, reasoning, sonnet",
                 "quality_score": 9.5,
                 "is_high_signal": True,
@@ -255,13 +255,13 @@ async def test_generate_live_answer_honestly_routes_to_gemini_when_requested():
 
 
 def test_version_0_2_2_consistency():
-    """Verify version 0.3.0 is synchronized across configuration sources."""
-    assert settings.VERSION == "0.3.0"
+    """Verify version 0.3.1 is synchronized across configuration sources."""
+    assert settings.VERSION == "0.3.1"
     cfg_path = find_config_json()
     assert cfg_path is not None
     with open(cfg_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    assert data.get("app", {}).get("version") == "0.3.0"
+    assert data.get("app", {}).get("version") == "0.3.1"
 
 
 @pytest.mark.asyncio

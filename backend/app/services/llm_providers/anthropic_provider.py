@@ -26,48 +26,100 @@ class AnthropicOverloadedException(Exception):
     pass
 
 
-MODEL_TIER_MAPPING: Dict[str, Tuple[str, str]] = {
-    # Haiku
-    "haiku": ("claude-haiku-5-5", "haiku"),
-    "claude-haiku-5-5": ("claude-haiku-5-5", "haiku"),
-    # Sonnet (default)
-    "sonnet": ("claude-sonnet-5-5", "sonnet"),
-    "claude-sonnet-5-5": ("claude-sonnet-5-5", "sonnet"),
-    # Opus
-    "opus": ("claude-opus-5-5", "opus"),
-    "claude-opus-5-5": ("claude-opus-5-5", "opus"),
-}
+def get_configured_model(tier: str) -> str:
+    """Dynamically retrieves configured model identifier for a given tier or default from settings/config."""
+    if tier == "haiku":
+        return getattr(settings, "ANTHROPIC_HAIKU_MODEL", None) or os.environ.get("ANTHROPIC_HAIKU_MODEL") or "claude-haiku-5-5"
+    elif tier == "opus":
+        return getattr(settings, "ANTHROPIC_OPUS_MODEL", None) or os.environ.get("ANTHROPIC_OPUS_MODEL") or "claude-opus-5-5"
+    elif tier == "sonnet":
+        return (
+            getattr(settings, "ANTHROPIC_SONNET_MODEL", None)
+            or os.environ.get("ANTHROPIC_SONNET_MODEL")
+            or getattr(settings, "ANTHROPIC_DEFAULT_CHAT_MODEL", None)
+            or getattr(settings, "ANTHROPIC_MODEL", None)
+            or "claude-sonnet-5-5"
+        )
+    return (
+        getattr(settings, "ANTHROPIC_DEFAULT_CHAT_MODEL", None)
+        or os.environ.get("ANTHROPIC_DEFAULT_CHAT_MODEL")
+        or getattr(settings, "ANTHROPIC_MODEL", None)
+        or "claude-sonnet-5-5"
+    )
 
-DEFAULT_MODEL = "claude-sonnet-5-5"
+
+def get_model_tier_mapping() -> Dict[str, Tuple[str, str]]:
+    """Builds dynamic model-tier dictionary from runtime settings."""
+    haiku_model = get_configured_model("haiku")
+    sonnet_model = get_configured_model("sonnet")
+    opus_model = get_configured_model("opus")
+    default_model = get_configured_model("default")
+    return {
+        "haiku": (haiku_model, "haiku"),
+        haiku_model.lower(): (haiku_model, "haiku"),
+        "sonnet": (sonnet_model, "sonnet"),
+        sonnet_model.lower(): (sonnet_model, "sonnet"),
+        "opus": (opus_model, "opus"),
+        opus_model.lower(): (opus_model, "opus"),
+        "default": (default_model, "sonnet"),
+    }
+
+
+class _DynamicModelTierMapping(dict):
+    """Dynamic dict supporting runtime config lookups for backward compatibility."""
+    def __getitem__(self, key):
+        mapping = get_model_tier_mapping()
+        if key in mapping:
+            return mapping[key]
+        return (key, "sonnet")
+
+    def __contains__(self, key):
+        mapping = get_model_tier_mapping()
+        return key in mapping
+
+    def get(self, key, default=None):
+        mapping = get_model_tier_mapping()
+        return mapping.get(key, default)
+
+
+MODEL_TIER_MAPPING = _DynamicModelTierMapping()
+DEFAULT_MODEL = getattr(settings, "ANTHROPIC_DEFAULT_CHAT_MODEL", "claude-sonnet-5-5")
 DEFAULT_TIER = "sonnet"
 
 
 def resolve_model_and_tier(model_or_tier: Optional[str]) -> Tuple[str, str]:
-    """Resolves arbitrary model name or tier identifier into (anthropic_model_id, tier_name)."""
+    """Resolves arbitrary model name or tier identifier dynamically into (anthropic_model_id, tier_name)."""
+    default_model = get_configured_model("default")
     if not model_or_tier:
-        return DEFAULT_MODEL, DEFAULT_TIER
+        return default_model, DEFAULT_TIER
 
     normalized = model_or_tier.strip().lower()
 
     # POL-LLM-005 & ADR-012: Anti-Gemini Policy. Gemini/Google identifiers are strictly rejected.
     if "gemini" in normalized or "google" in normalized:
         logger.warning(
-            f"POL-LLM-005: Unauthorized model '{model_or_tier}' blocked in resolve_model_and_tier. Normalizing to Sonnet default."
+            f"POL-LLM-005: Unauthorized model '{model_or_tier}' blocked in resolve_model_and_tier. Normalizing to default."
         )
-        return DEFAULT_MODEL, DEFAULT_TIER
+        return default_model, DEFAULT_TIER
 
-    if normalized in MODEL_TIER_MAPPING:
-        return MODEL_TIER_MAPPING[normalized]
+    mapping = get_model_tier_mapping()
+    if normalized in mapping:
+        return mapping[normalized]
 
-    # Partial match fallback
+    # Keyword matching
     if "haiku" in normalized:
-        return MODEL_TIER_MAPPING["haiku"]
+        return (model_or_tier.strip(), "haiku") if normalized.startswith("claude-") else mapping["haiku"]
     elif "opus" in normalized:
-        return MODEL_TIER_MAPPING["opus"]
+        return (model_or_tier.strip(), "opus") if normalized.startswith("claude-") else mapping["opus"]
     elif "sonnet" in normalized:
-        return MODEL_TIER_MAPPING["sonnet"]
+        return (model_or_tier.strip(), "sonnet") if normalized.startswith("claude-") else mapping["sonnet"]
 
-    return DEFAULT_MODEL, DEFAULT_TIER
+    # Open model string (any custom Claude model, e.g. claude-...)
+    if normalized.startswith("claude-"):
+        return (model_or_tier.strip(), DEFAULT_TIER)
+
+    # Any other dynamic model identifier
+    return (model_or_tier.strip(), DEFAULT_TIER)
 
 
 class AnthropicLLMProvider(BaseLLMProvider):
@@ -290,7 +342,7 @@ class AnthropicLLMProvider(BaseLLMProvider):
 
         text, model, usage = await self.generate_text_with_usage(
             prompt=user_prompt,
-            model="claude-sonnet-5-5",
+            model=getattr(settings, "ANTHROPIC_COLLECTION_MODEL", None) or "claude-sonnet-5-5",
             system_blocks=system_blocks,
             max_tokens=1500,
         )

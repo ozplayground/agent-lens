@@ -393,7 +393,9 @@ class ChatService:
             try:
                 try:
                     raw_ans, _ = await llm_processor.generate_live_answer(
-                        planner_prompt, model="claude-haiku-5-5", model_tier="haiku"
+                        planner_prompt,
+                        model=getattr(settings, "ANTHROPIC_HAIKU_MODEL", None) or "claude-haiku-5-5",
+                        model_tier="haiku",
                     )
                 except TypeError:
                     raw_ans, _ = await llm_processor.generate_live_answer(planner_prompt)

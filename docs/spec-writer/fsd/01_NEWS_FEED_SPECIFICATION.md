@@ -246,7 +246,7 @@ flowchart TD
 #### 6. 예외 처리 및 엣지 케이스 (Edge Cases & Exception Handling)
 | 발생 상황 | 화면 반응 | 사용자 안내 메시지 |
 | :--- | :--- | :--- |
-| 외부 AI 모델 API 호출 한도 초과 또는 타임아웃 | 내장 로컬 분석 요약 기반으로 즉시 자동 폴백 전환하여 답변 제시 | "외부 AI 응답 지연으로 내장 분석 결과를 기반으로 답변합니다." |
+| 외부 AI 모델 API 호출 한도 초과(429) 또는 프로바이더 장애(503/502) | 재시도 버튼 및 에러 안내 카드 노출, 기존 입력 질문 보존 | "AI 모델 호출 한도가 초과되었거나 서비스를 일시적으로 이용할 수 없습니다. 잠시 후 다시 시도해주세요." |
 | 빈 공백만 연속 입력 후 전송 시도 | 전송 트리거 무시 및 입력창 흔들림(Shake) 피드백 | "질문 내용을 2자 이상 입력해주세요." |
 | 모달 실수 닫힘 발생 시 | 직전 대화 기록을 `sessionStorage`에 10분간 임시 보존하여 재오픈 시 자동 복원 | "이전 대화 내용이 복원되었습니다." |
 
@@ -254,7 +254,9 @@ flowchart TD
 | 비즈니스 에러 코드 | 발생 사유 | HTTP 상태 코드 매핑 | 클라이언트 표시 형태 |
 | :--- | :--- | :---: | :--- |
 | `ERR_ASK_EMPTY_QUESTION` | 질문 내용 부족 (2자 미만) | 400 Bad Request | 입력창 테두리 붉은색 강조 |
-| `ERR_AI_SERVICE_UNAVAILABLE` | AI 서비스 응답 실패 | 503 Service Unavailable | 인라인 경고 카드 및 "재시도" 버튼 |
+| `ERR_LLM_PROVIDER_UNAVAILABLE` | 가용한 AI 모델 프로바이더 API 키 미설정 | 503 Service Unavailable | 인라인 경고 카드 및 API 키 설정 안내 |
+| `ERR_LLM_UPSTREAM_FAILED` | 외부 LLM 업스트림 장애 또는 타임아웃 | 502 Bad Gateway | 인라인 재시도 버튼 노출 |
+| `ERR_LLM_QUOTA_EXCEEDED` | 외부 AI 모델 호출 한도 초과 | 429 Too Many Requests | 사용량 초과 경고 카드 |
 | `ERR_HANDOVER_PAYLOAD_TOO_LARGE`| 전달 질문 길이 500자 초과 | 400 Bad Request | 500자 자동 잘림 처리 후 전용 챗 이동 |
 
 ---

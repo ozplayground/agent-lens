@@ -99,12 +99,12 @@ export const mockArticles: Record<number, ChatSourceDetailResponse> = {
   },
   105: {
     id: 105,
-    title: 'Anthropic Claude 3.7 Sonnet & Hybrid Reasoning Model Released',
-    url: 'https://www.anthropic.com/news/claude-3-7-sonnet',
+    title: 'Anthropic Claude 5.5 Sonnet & Hybrid Reasoning Model Released',
+    url: 'https://www.anthropic.com/news/claude-5-5-sonnet',
     source: 'rss',
     category: 'ai_news',
     author: 'Anthropic',
-    summary: 'Claude 3.7 Sonnet introduces hybrid reasoning capabilities allowing dynamic thinking token control.',
+    summary: 'Claude 5.5 Sonnet introduces hybrid reasoning capabilities allowing dynamic thinking token control.',
     tldr_bullets: [
       '즉각 응답과 확장 사고(Extended Thinking) 모드를 단일 모델에서 하이브리드 지원',
       'SWE-bench Verified 70.3% 돌파로 최고 성능 달성',

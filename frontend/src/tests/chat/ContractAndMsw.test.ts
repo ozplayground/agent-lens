@@ -665,8 +665,8 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
     it('validates NewsItemSchema with complete attributes', () => {
       const mockRawNews = {
         id: 1,
-        title: 'Anthropic Claude 3.7 Sonnet & Hybrid Reasoning Model Released',
-        url: 'https://www.anthropic.com/news/claude-3-7-sonnet',
+        title: 'Anthropic Claude 5.5 Sonnet & Hybrid Reasoning Model Released',
+        url: 'https://www.anthropic.com/news/claude-5-5-sonnet',
         source: 'rss',
         category: 'ai_news',
         summary: 'Hybrid reasoning and extended thinking capabilities announced.',
@@ -679,7 +679,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
 
       const parsed = NewsItemSchema.parse(mockRawNews);
       expect(parsed.id).toBe(1);
-      expect(parsed.title).toContain('Claude 3.7');
+      expect(parsed.title).toContain('Claude 5.5');
       expect(parsed.quality_score).toBe(9.8);
       expect(parsed.is_high_signal).toBe(true);
       expect(parsed.tags).toEqual([]);
@@ -835,15 +835,12 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(() => ModelTierSchema.parse('gemini-flash')).toThrow();
     });
 
-    it('validates ChatModelSchema for official Claude models and rejects unsupported strings', () => {
+    it('validates ChatModelSchema allows dynamic model identifiers and rejects empty strings', () => {
       expect(ChatModelSchema.parse('claude-sonnet-5-5')).toBe('claude-sonnet-5-5');
       expect(ChatModelSchema.parse('claude-haiku-5-5')).toBe('claude-haiku-5-5');
       expect(ChatModelSchema.parse('claude-opus-5-5')).toBe('claude-opus-5-5');
-      expect(ChatModelSchema.parse('claude-3-5-haiku')).toBe('claude-3-5-haiku');
-      expect(ChatModelSchema.parse('claude-3-5-sonnet')).toBe('claude-3-5-sonnet');
-      expect(ChatModelSchema.parse('claude-3-5-opus')).toBe('claude-3-5-opus');
-      expect(() => ChatModelSchema.parse('claude-2.1')).toThrow();
-      expect(() => ChatModelSchema.parse('gpt-4')).toThrow();
+      expect(ChatModelSchema.parse('custom-llm-model')).toBe('custom-llm-model');
+      expect(() => ChatModelSchema.parse('')).toThrow();
     });
 
     it('verifies Claude model constants and bidirectional mappings', () => {
@@ -859,12 +856,6 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(MODEL_TO_TIER['claude-sonnet-5-5']).toBe('sonnet');
       expect(MODEL_TO_TIER['claude-haiku-5-5']).toBe('haiku');
       expect(MODEL_TO_TIER['claude-opus-5-5']).toBe('opus');
-      expect(MODEL_TO_TIER['claude-3-5-haiku']).toBe('haiku');
-      expect(MODEL_TO_TIER['claude-3-5-sonnet']).toBe('sonnet');
-      expect(MODEL_TO_TIER['claude-3-5-opus']).toBe('opus');
-      expect(MODEL_TO_TIER['claude-3-5-haiku-latest']).toBe('haiku');
-      expect(MODEL_TO_TIER['claude-3-5-sonnet-latest']).toBe('sonnet');
-      expect(MODEL_TO_TIER['claude-3-5-opus-latest']).toBe('opus');
     });
 
     it('verifies sanitizeModelTier preserves historical models and defaults to sonnet for claude', () => {
@@ -875,14 +866,8 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       expect(sanitizeModelTier('claude-sonnet-5-5')).toBe('sonnet');
       expect(sanitizeModelTier('claude-haiku-5-5')).toBe('haiku');
       expect(sanitizeModelTier('claude-opus-5-5')).toBe('opus');
-      expect(sanitizeModelTier('claude-3-5-haiku')).toBe('haiku');
-      expect(sanitizeModelTier('claude-3-5-haiku-latest')).toBe('haiku');
       expect(sanitizeModelTier('haiku')).toBe('haiku');
-      expect(sanitizeModelTier('claude-3-5-opus')).toBe('opus');
-      expect(sanitizeModelTier('claude-3-5-opus-latest')).toBe('opus');
       expect(sanitizeModelTier('opus')).toBe('opus');
-      expect(sanitizeModelTier('claude-3-5-sonnet')).toBe('sonnet');
-      expect(sanitizeModelTier('claude-3-5-sonnet-latest')).toBe('sonnet');
       expect(sanitizeModelTier('sonnet')).toBe('sonnet');
       expect(sanitizeModelTier(undefined)).toBe('sonnet');
       expect(sanitizeModelTier(null)).toBe('sonnet');
@@ -957,7 +942,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       const payload = {
         done: true as const,
         session_id: '7b6a48f2-2973-45f6-8c46-9562725b821a',
-        model: 'claude-3-5-sonnet' as const,
+        model: 'claude-sonnet-5-5' as const,
         model_tier: 'sonnet' as const,
         sources_count: 2,
         primary_count: 1,
@@ -1005,7 +990,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
         created_at: '2026-10-19T09:00:00Z',
         sources: null,
         status: 'completed',
-        model: 'claude-3-5-sonnet',
+        model: 'claude-sonnet-5-5',
         model_tier: 'sonnet',
         latency_ms: 642,
         usage: {

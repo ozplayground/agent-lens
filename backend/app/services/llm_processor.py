@@ -44,7 +44,6 @@ KNOWN_TECH_STACK = {
     "claude-haiku-5-5": "Claude 5.5 Haiku",
     "claude-opus-5-5": "Claude 5.5 Opus",
     "claude 3.7": "Claude 3.7",
-    "claude 3.5": "Claude 3.5",
     "gpt-4.5": "GPT-4.5",
     "gpt-4o": "GPT-4o",
     "o1": "OpenAI o1",
@@ -94,10 +93,10 @@ def sanitize_model_identifier(model_name: Optional[str]) -> str:
     Sanitizes and preserves model identifier.
     Guarantees historical integrity: if past DB records or messages used Gemini, OpenAI,
     or other models, their exact model names are strictly preserved and never overwritten.
-    Defaults to 'claude-sonnet-5-5' only when model_name is empty/None for new invocations.
+    Defaults to settings.ANTHROPIC_DEFAULT_CHAT_MODEL only when model_name is empty/None for new invocations.
     """
     if not model_name:
-        return "claude-sonnet-5-5"
+        return getattr(settings, "ANTHROPIC_DEFAULT_CHAT_MODEL", None) or getattr(settings, "ANTHROPIC_MODEL", "claude-sonnet-5-5")
     return model_name.strip()
 
 

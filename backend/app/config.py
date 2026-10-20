@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     ANTHROPIC_MODEL: str = _json_data.get("llm", {}).get("anthropic_model", "claude-sonnet-5-5")
     ANTHROPIC_COLLECTION_MODEL: str = _json_data.get("llm", {}).get("anthropic_collection_model", "claude-sonnet-5-5")
     ANTHROPIC_DEFAULT_CHAT_MODEL: str = _json_data.get("llm", {}).get("anthropic_default_chat_model", "claude-sonnet-5-5")
+    ANTHROPIC_HAIKU_MODEL: str = _json_data.get("llm", {}).get("anthropic_haiku_model", "claude-haiku-5-5")
+    ANTHROPIC_SONNET_MODEL: str = _json_data.get("llm", {}).get("anthropic_sonnet_model", "claude-sonnet-5-5")
+    ANTHROPIC_OPUS_MODEL: str = _json_data.get("llm", {}).get("anthropic_opus_model", "claude-opus-5-5")
     GEMINI_API_KEY: str = _json_data.get("llm", {}).get("gemini_api_key", "")
     GEMINI_MODEL: str = _json_data.get("llm", {}).get("gemini_model", "gemini-3.5-flash-lite")
     OPENAI_API_KEY: str = _json_data.get("llm", {}).get("openai_api_key", "")
@@ -113,6 +116,12 @@ class Settings(BaseSettings):
             self.ANTHROPIC_COLLECTION_MODEL = llm.get("anthropic_collection_model") or os.environ.get("ANTHROPIC_COLLECTION_MODEL", "claude-sonnet-5-5")
         if not self.ANTHROPIC_DEFAULT_CHAT_MODEL:
             self.ANTHROPIC_DEFAULT_CHAT_MODEL = llm.get("anthropic_default_chat_model") or os.environ.get("ANTHROPIC_DEFAULT_CHAT_MODEL", "claude-sonnet-5-5")
+        if not self.ANTHROPIC_HAIKU_MODEL:
+            self.ANTHROPIC_HAIKU_MODEL = llm.get("anthropic_haiku_model") or os.environ.get("ANTHROPIC_HAIKU_MODEL", "claude-haiku-5-5")
+        if not self.ANTHROPIC_SONNET_MODEL:
+            self.ANTHROPIC_SONNET_MODEL = llm.get("anthropic_sonnet_model") or os.environ.get("ANTHROPIC_SONNET_MODEL", "claude-sonnet-5-5")
+        if not self.ANTHROPIC_OPUS_MODEL:
+            self.ANTHROPIC_OPUS_MODEL = llm.get("anthropic_opus_model") or os.environ.get("ANTHROPIC_OPUS_MODEL", "claude-opus-5-5")
         if not self.GEMINI_API_KEY:
             self.GEMINI_API_KEY = llm.get("gemini_api_key") or os.environ.get("GEMINI_API_KEY", "")
         if (not self.GEMINI_MODEL or self.GEMINI_MODEL in ["", "gemini-2.0-flash", "gemini-flash-latest"]):

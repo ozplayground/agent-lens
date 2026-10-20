@@ -156,10 +156,10 @@ describe('WorkflowStepTracker Component', () => {
     };
     const toolCallingStep: ChatStatusPayload = {
       step: 'tool_calling',
-      label: '🔍 뉴스 코퍼스 검색 도구 호출 중: search_news_corpus("Claude 3.7 Sonnet")',
+      label: '🔍 뉴스 코퍼스 검색 도구 호출 중: search_news_corpus("Claude 5.5 Sonnet")',
       timestamp: '2026-10-19T10:00:01Z',
       progress: 55,
-      query: 'Claude 3.7 Sonnet',
+      query: 'Claude 5.5 Sonnet',
     };
     const observingStep: ChatStatusPayload = {
       step: 'observing',

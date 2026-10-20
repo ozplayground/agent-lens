@@ -3,15 +3,15 @@ info:
   title: AgentLens API
   version: 0.2.0
   description: |
-    Global AI Agent, Harness & MCP Vertical News Curation Platform and Dedicated AI Chat / Personal RAG RESTful API Specification
-    (0.2.0 Gemini 무단 폴백 전면 차단, Anthropic Claude 3.5/5.5 전용 고정, Claude Sonnet 5.5 전담 수집 파이프라인 [FUNC-COLL-005] & 프롬프트 캐싱, AI 챗 상단 헤더 & 입력창 듀얼 모델 선택기 [FUNC-CHAT-013: claude-3-5-haiku, claude-3-5-sonnet, claude-3-5-opus], Zero-Leak API 키 보안 거버넌스 [POL-SEC-004], Multi-LLM Provider Resiliency & Mock Fallback Chain [FUNC-SYS-005], Dual-Layer Chat Session Persistence & Multi-turn Continuity [FUNC-CHAT-012], Live Full-Text Scraping & SQLite full_content Caching [FUNC-CHAT-009], Agentic Web Search [FUNC-CHAT-010], 4-Section Structured Engineering Report & Markdown Export [FUNC-CHAT-011, REQ-EXPORT-001], Power User Keyboard Shortcuts & Command Palette [FUNC-NAV-001, FUNC-FEED-007], Zero-Flicker SSR Dark Mode [FUNC-THEME-001], and Local FastMCP Server Integration [FUNC-SYS-004]).
+    Global AI Agent, Harness & MCP Vertical News Curation Platform and Dedicated AI Chat / Personal RAG RESTful API Specification.
+    Supports 4 Multi-LLM Providers (Anthropic Claude, Google Gemini, OpenAI, OpenAI-Compatible Ollama / vLLM), Dual-Placement Model Selector (ChatHeader & ChatPromptInput), Prompt Caching, Zero-Leak API Key Security Governance, Dual-Layer Chat Session Persistence & Multi-turn Continuity, Live Full-Text Scraping, Agentic Web Search, 4-Section Structured Engineering Report & Markdown Export, Power User Keyboard Shortcuts & Command Palette, Zero-Flicker SSR Dark Mode, and Local FastMCP Server Integration.
 servers:
   - url: http://localhost:8000
     description: Local Backend Server
 
 tags:
   - name: Chat
-    description: 전용 AI 챗 워크스페이스, 세션 영속화 및 멀티턴 복원, Mock LLM Fallback 체인 (503 에러 원천 차단), 실시간 전문 스크래핑 & 자율 보충 검색 에이전틱 워크플로우, 4단 구조화 엔지니어링 리포트 및 개인 지식 RAG
+    description: 전용 AI 챗 워크스페이스, 세션 영속화 및 멀티턴 복원, 4대 멀티 LLM 프로바이더 지원(Claude, Gemini, OpenAI, Ollama), 실시간 전문 스크래핑 & 자율 보충 검색 에이전틱 워크플로우, 4단 구조화 엔지니어링 리포트 및 개인 지식 RAG
   - name: News
     description: 기사 피드 조회, 단건 상세, 인라인 Ask AI 및 RSS 내보내기
   - name: Briefing
@@ -36,49 +36,55 @@ tags:
 paths:
   /api/chat/stream:
     post:
-      summary: 전용 AI 챗 Claude 3-Tier SSE 다중 이벤트 실시간 스트리밍 질의응답 (Server-Sent Events)
+      summary: 전용 AI 챗 4대 멀티 LLM SSE 다중 이벤트 실시간 스트리밍 질의응답 (Server-Sent Events)
       description: |
         단일 기사 집중(Scoped Focus) 또는 타깃팅된 전체 뉴스 코퍼스 지식 검색(Global Corpus) 모드를 기반으로
         자율 에이전틱 리서치 워크플로우를 가동하여 실시간 마크다운 답변을 Server-Sent Events(SSE)로 스트리밍합니다.
         
-        [Anthropic Claude 3.5/5.5 멀티 모델 라우팅 및 인라인 동적 전환 (FUNC-CHAT-013)]
-        - 사용자의 작업 의도에 맞춘 3-Tier 모델(`claude-3-5-haiku`, `claude-3-5-sonnet`, `claude-3-5-opus`, 기본값: `claude-3-5-sonnet`)을 지원합니다.
+        [4대 멀티 LLM 프로바이더 라우팅 및 인라인 동적 전환 (FUNC-CHAT-013)]
+        - 지원 프로바이더: Anthropic Claude, Google Gemini, OpenAI, OpenAI-Compatible Local LLM (Ollama / vLLM).
+        - 요청 페이로드(`model`, `model_tier`)에 지정된 프로바이더/모델로 다이렉트 라우팅됩니다.
         - 대화 도중 모델을 교체하더라도 세션을 초기화하지 않고 기존 멀티턴 맥락(최대 10턴, 3,000토큰)을 100% 무손실 인계(Zero Context Erasure)합니다.
         
-        [백엔드 LLM 장애 복원력 및 Mock Provider / Fallback 체인 (FUNC-SYS-005, REQ-LLM-001)]
+        [에러 전파 및 장애 처리 정책]
         - 사전 가용성 검증(`check_provider_available`):
-          1) 테스트 환경(`TESTING=True` 또는 `PYTEST_CURRENT_TEST` 감지) 시 외부 API 키 유무와 무관하게 즉각 `MockLLMProvider`로 안전 전환되어 503 에러 발생을 원천 차단하고 100% 정상 스트림을 공급합니다.
-          2) 일반 프로덕션 환경에서 API 키가 누락되었더라도 `ALLOW_MOCK_FALLBACK=True` 구성 시 안전한 Mock 스트림으로 폴백합니다.
-          3) 엄격한 프로덕션(`ALLOW_MOCK_FALLBACK=False`) 환경에서만 관리자 조치를 위해 `503 Service Unavailable` (`ERR_CLAUDE_API_KEY_MISSING` / `ERR_ANTHROPIC_KEY_MISSING`)을 반환합니다.
+          1) 시스템에 가용한 유효 LLM 프로바이더 엔진 또는 API 키가 전혀 구성되지 않은 경우, 즉시 `503 Service Unavailable` (`ERR_LLM_PROVIDER_UNAVAILABLE`)을 반환합니다.
+          2) 특정 프로바이더(예: Claude) 호출 시 API 키가 누락된 경우 `401 Unauthorized` (`ERR_CLAUDE_API_KEY_MISSING`)을 반환합니다.
+          3) 업스트림 LLM API 호출 한도(TPM/RPM Quota) 초과 시 `429 Too Many Requests` (`ERR_LLM_QUOTA_EXCEEDED` 또는 `ERR_CLAUDE_QUOTA_EXCEEDED`)를 반환합니다.
+          4) 외부 LLM 서버 통신 장애 또는 5xx 오류 발생 시 `502 Bad Gateway` (`ERR_LLM_UPSTREAM_FAILED`)를 반환합니다.
+          5) Anthropic 서버 일시 과부하 시 `529 Site Overloaded` (`ERR_CLAUDE_OVERLOADED`)를 반환합니다.
+          6) SSE 스트리밍 토큰 전송 도중 네트워크 단절이나 예외 발생 시 `event: error` (`StreamErrorPayload`, error_code: `ERR_LLM_STREAM_FAILED`, status_code: 502, retryable: true)를 방출하고 스트림을 종료합니다.
         
         [Zero-Leak API 키 보안 거버넌스 및 서버 사이드 격리 (POL-SEC-004)]
-        - 브라우저 클라이언트에 Anthropic API 키를 일체 노출하지 않으며, 백엔드 단독 `.env` 보관 및 FastAPI SSE 프록시 스트리밍으로 통신합니다.
+        - 브라우저 클라이언트에 외부 LLM API 키를 일체 노출하지 않으며, 백엔드 단독 환경변수/설정 격리 및 FastAPI SSE 프록시 스트리밍으로 통신합니다.
         
         [대화 세션 연동 및 자동 영속화 (Session Persistence & Multi-turn Continuity, FUNC-CHAT-012)]
         - 클라이언트는 요청 페이로드에 `session_id`를 지정하여 대화 세션을 바인딩합니다.
         - 스트리밍 응답이 완료(`event: done`)되는 즉시, 백엔드는 단일 ACID 트랜잭션 내에서:
           1) 사용자 질의 메시지(role: 'user', content: question, status: 'completed') INSERT
-          2) AI 어시스턴트 응답 메시지(role: 'assistant', content: answer, sources: sources, status: 'completed', model, latency_ms) INSERT
+          2) AI 어시스턴트 응답 메시지(role: 'assistant', content: answer, sources: sources, status: 'completed', model, model_tier, latency_ms, usage) INSERT
           3) 세션의 `updated_at` 타임스탬프 갱신 및 최초 턴 질문 기준 앞 30자 자동 타이틀링(Auto-Titling)을 수행합니다.
         
         [에이전틱 워크플로우 및 SSE 다중 이벤트 스트림 프로토콜]
         1. event: status (StatusPayload)
-           - 단계별 진행 상태를 실시간 통지합니다:
-             - 'extracting_source': 원본 URL 실시간 전문 비동기 스크래핑 (Trafilatura/Readability, 캐시 히트 시 0ms)
-             - 'evaluating_sufficiency': LLM 기반 원본 본문 정보 충실도 자체 평가
-             - 'agentic_searching': 지식 결손(설치법, 비교, 패치) 또는 페이월 차단 감지 시 앵커링 웹 검색 자율 가동 (DuckDuckGo/Tavily)
-             - 'synthesizing': Senior Staff Architect 4단 엔지니어링 리포트 프롬프트 조립 (Claude 프롬프트 캐싱 적용)
+            - 단계별 진행 상태를 실시간 통지합니다:
+              - 'thinking': 질문 의도 및 도구 필요성 ReAct 분석 (Global 모드)
+              - 'tool_calling': search_news_corpus 등 자율 도구 실행 (Global 모드)
+              - 'extracting_source': 원본 URL 실시간 전문 비동기 스크래핑 (Scoped 모드)
+              - 'evaluating_sufficiency': LLM 기반 원본 본문 정보 충실도 자체 평가
+              - 'agentic_searching': 지식 결손(설치법, 비교, 패치) 또는 페이월 차단 감지 시 앵커링 웹 검색 자율 가동
+              - 'synthesizing': Senior Staff Architect 4단 엔지니어링 리포트 프롬프트 조립
         2. event: sources (SourcesPayload)
-           - 답변 생성에 주입된 원본 소스([1]) 및 외부 보충 출처([S1], [S2]) 목록을 분리하여 선행 전달합니다.
-           - ChatFocusFilter 바인딩 내역 및 기간 자동 완화 여부(is_relaxed)를 포함합니다.
+            - 답변 생성에 주입된 원본 소스([1]) 및 외부 보충 출처([S1], [S2]) 목록을 분리하여 선행 전달합니다.
+            - ChatFocusFilter 바인딩 내역 및 기간 자동 완화 여부(is_relaxed)를 포함합니다.
         3. event: token (TokenPayload)
-           - 실제 Anthropic Claude 모델 또는 MockLLMProvider가 생성한 순수 마크다운 텍스트 토큰을 실시간 스트리밍합니다.
-           - 피상적 2줄 요약 앵무새 답변을 차단하고 4대 섹션 구조화 리포트를 생성합니다.
+            - 실제 Anthropic Claude 모델 및 멀티 프로바이더 엔진이 생성한 순수 마크다운 텍스트 토큰을 실시간 스트리밍합니다.
+            - 피상적 2줄 요약 앵무새 답변을 차단하고 4대 섹션 구조화 리포트를 생성합니다.
         4. event: done (DonePayload)
-           - 스트리밍 완료 통계(session_id, model, model_tier, sources_count, latency_ms, usage)를 전달하고 연결을 종료합니다.
-           - 클라이언트 UI는 스텝 트래커를 접이식 완료 아코디언으로 즉시 축소 전환하고 어시스턴트 카드 푸터에 실제 모델 배지와 레이턴시를 렌더링합니다.
+            - 스트리밍 완료 통계(session_id, model, model_tier, sources_count, latency_ms, usage)를 전달하고 연결을 종료합니다.
+            - 클라이언트 UI는 스텝 트래커를 접이식 완료 아코디언으로 즉시 축소 전환하고 어시스턴트 카드 푸터에 실제 모델 배지와 레이턴시를 렌더링합니다.
         5. event: error (StreamErrorPayload)
-           - 스트림 진행 도중 외부 LLM 단절 또는 타임아웃 발생 시 에러 신호를 방출하고 정상 종료합니다.
+            - 스트림 진행 도중 외부 LLM 단절 또는 타임아웃 발생 시 에러 신호를 방출하고 정상 종료합니다.
       tags: [Chat]
       requestBody:
         required: true
@@ -88,7 +94,7 @@ paths:
               $ref: '#/components/schemas/ChatStreamRequest'
       responses:
         '200':
-          description: 실시간 SSE 다중 이벤트 스트림 수립 성공 (text/event-stream) - 실제 Claude 스트림 또는 Mock Fallback 스트림
+          description: 실시간 SSE 다중 이벤트 스트림 수립 성공 (text/event-stream)
           content:
             text/event-stream:
               schema:
@@ -120,26 +126,29 @@ paths:
                     data: {"token":"LangGraph v0.3은 분산 상태 머신(State Machine) 그래프를 기반으로..."}
 
                     event: done
-                    data: {"done":true,"session_id":"7b6a48f2-2973-45f6-8c46-9562725b821a","model":"claude-3-5-sonnet-latest","model_tier":"sonnet","sources_count":2,"primary_count":1,"supplementary_count":1,"latency_ms":642,"usage":{"input_tokens":1250,"output_tokens":840,"cache_read_input_tokens":2500,"cache_creation_input_tokens":0}}
-                mock_fallback_stream:
-                  summary: 테스트/키 미등록 시 Mock LLM Provider 폴백 응답 예시 (Zero 503)
+                    data: {"done":true,"session_id":"7b6a48f2-2973-45f6-8c46-9562725b821a","model":"claude-sonnet-5-5","model_tier":"sonnet","sources_count":2,"primary_count":1,"supplementary_count":1,"latency_ms":642,"usage":{"input_tokens":1250,"output_tokens":840,"cache_read_input_tokens":2500,"cache_creation_input_tokens":0}}
+                claude_haiku_stream:
+                  summary: Claude Haiku 5.5 고속 스트리밍 응답 예시
                   value: |
                     event: status
-                    data: {"step":"extracting_source","label":"🌐 원본 소스 본문 추출 중 (Mock Fallback)...","timestamp":"2026-10-19T09:40:01Z","progress":20}
-
-                    event: status
-                    data: {"step":"synthesizing","label":"📝 Mock 엔지니어링 리포트 종합 중...","timestamp":"2026-10-19T09:40:02Z","progress":85}
+                    data: {"step":"synthesizing","label":"⚡ Haiku 5.5 고속 리포트 종합 중...","timestamp":"2026-10-19T09:40:02Z","progress":85}
 
                     event: sources
-                    data: {"sources":[{"index":1,"type":"primary","id":42,"title":"LangGraph v0.3 Mock Source","url":"https://example.com/mock","source":"github","category":"agent_tech","quality_score":8.5,"domain":"example.com"}],"applied_filters":null,"is_relaxed":false,"primary_count":1,"supplementary_count":0}
+                    data: {"sources":[{"index":1,"type":"primary","id":42,"title":"LangGraph v0.3 Release Notes","url":"https://github.com/langchain-ai/langgraph","source":"github","category":"agent_tech","quality_score":8.5,"domain":"github.com"}],"applied_filters":null,"is_relaxed":false,"primary_count":1,"supplementary_count":0}
 
                     event: token
-                    data: {"token":"## 1. 핵심 아키텍처 및 동작 원리 (Mock Fallback)\n\n본 응답은 테스트 및 Mock Fallback 체인에 의해 생성된 엔지니어링 분석 리포트입니다.\n\n## 2. 주요 기능 및 코드 구현 예시\n\n```python\n# Mock Code Example\nimport langgraph\nprint('AgentLens Mock Fallback Active')\n```\n\n## 3. 기존 기술 대비 차별점 및 벤치마크\n\n- 테스트 환경 503 에러 원천 차단 및 무중단 TDD 스트리밍 보장\n\n## 4. 실무 도입 시 고려사항 및 트레이드오프\n\n- 프로덕션 배포 시 유효한 ANTHROPIC_API_KEY 주입 권장\n"}
+                    data: {"token":"## 1. 핵심 아키텍처 및 동작 원리\n\nLangGraph 분산 상태 그래프 분석입니다.\n\n## 2. 주요 기능 및 코드 구현 예시\n\n```python\nimport langgraph\n```\n"}
 
                     event: done
-                    data: {"done":true,"session_id":"7b6a48f2-2973-45f6-8c46-9562725b821a","model":"mock-provider","model_tier":"sonnet","sources_count":1,"primary_count":1,"supplementary_count":0,"latency_ms":120}
+                    data: {"done":true,"session_id":"7b6a48f2-2973-45f6-8c46-9562725b821a","model":"claude-haiku-5-5","model_tier":"haiku","sources_count":1,"primary_count":1,"supplementary_count":0,"latency_ms":180,"usage":{"input_tokens":650,"output_tokens":420,"cache_read_input_tokens":2500,"cache_creation_input_tokens":0}}
         '400':
           description: 유효하지 않은 요청 파라미터 (빈 질문 ERR_CHAT_PAYLOAD_EMPTY, 2,000자 초과 ERR_CHAT_PAYLOAD_TOO_LARGE, 지원하지 않는 스코프 ERR_INVALID_SCOPE_PARAM, 미지원 모델 티어 ERR_INVALID_MODEL_TIER 등)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Anthropic Claude API 키 미설정 (ERR_CLAUDE_API_KEY_MISSING)
           content:
             application/json:
               schema:
@@ -151,7 +160,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '429':
-          description: Anthropic Claude TPM/RPM 호출 한도 초과 (ERR_CLAUDE_QUOTA_EXCEEDED, ERR_ANTHROPIC_RATE_LIMIT)
+          description: 외부 LLM API 호출 한도 초과 (ERR_LLM_QUOTA_EXCEEDED, ERR_CLAUDE_QUOTA_EXCEEDED)
           content:
             application/json:
               schema:
@@ -163,13 +172,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '502':
-          description: 외부 LLM 업스트림 통신 실패 또는 외부 웹 검색 실패 (ERR_LLM_UPSTREAM_FAILED)
+          description: 외부 LLM 업스트림 통신 실패 / API 장애 (ERR_LLM_UPSTREAM_FAILED)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: 엄격 프로덕션 환경에서 Anthropic API 키 미설정(ERR_CLAUDE_API_KEY_MISSING) 또는 Anthropic 서버 과부하(ERR_CLAUDE_OVERLOADED)
+          description: 가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록) (ERR_LLM_PROVIDER_UNAVAILABLE)
           content:
             application/json:
               schema:
@@ -180,18 +189,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '529':
+          description: Anthropic 서버 과부하 (ERR_CLAUDE_OVERLOADED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/chat/query:
     post:
-      summary: 전용 AI 챗 Claude 3-Tier 동기식 단건 질의응답 (Non-streaming)
+      summary: 전용 AI 챗 4대 멀티 LLM 동기식 단건 질의응답 (Non-streaming)
       description: |
-        스트리밍 없이 단일 JSON 응답으로 질문에 대한 Claude 모델 답변 및 인용 출처 목록을 반환합니다.
-        3-Tier 모델(`claude-3-5-haiku`, `claude-3-5-sonnet`, `claude-3-5-opus`) 선택 및 토큰 소비 메타데이터(usage)를 제공합니다.
+        스트리밍 없이 단일 JSON 응답으로 질문에 대한 멀티 LLM 모델 답변 및 인용 출처 목록을 반환합니다.
+        Anthropic Claude(Haiku/Sonnet/Opus 3-Tier), Google Gemini, OpenAI, Ollama/vLLM 모델 선택 및 토큰 소비 메타데이터(usage)를 제공합니다.
         포커스 필터(ChatFocusFilter: 카테고리, 기간, 정렬, 고신호 한정)가 RAG 검색 쿼리에 동적으로 바인딩됩니다.
         REST 클라이언트, CLI 도구, 자동화 테스트 및 배치 작업에 적합합니다.
         
-        [Mock Provider Fallback (FUNC-SYS-005)]
-        테스트 환경(`TESTING=True`, `pytest`) 또는 `ALLOW_MOCK_FALLBACK=True` 설정 시, 외부 API 키 부재 시에도 503 에러 없이 200 OK 상태로 Mock 4단 리포트 JSON을 정상 반환합니다.
+        [에러 처리 원칙]
+        가용한 LLM 프로바이더 미구성 시 즉시 503 `ERR_LLM_PROVIDER_UNAVAILABLE`, 외부 API 장애 시 502 `ERR_LLM_UPSTREAM_FAILED`, 한도 초과 시 429 `ERR_LLM_QUOTA_EXCEEDED`, Claude 키 부재 시 401 `ERR_CLAUDE_API_KEY_MISSING`, 과부하 시 529 `ERR_CLAUDE_OVERLOADED`를 반환합니다.
       tags: [Chat]
       requestBody:
         required: true
@@ -201,13 +216,19 @@ paths:
               $ref: '#/components/schemas/ChatQueryRequest'
       responses:
         '200':
-          description: AI 답변 및 인용 출처 반환 성공 (실제 Claude 모델 답변 또는 Mock Fallback 답변)
+          description: AI 답변 및 인용 출처 반환 성공 (Claude, Gemini, OpenAI, Ollama 4단 구조화 리포트 JSON)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatQueryResponse'
         '400':
-          description: 유효하지 않은 요청 파라미터 (ERR_CHAT_PAYLOAD_EMPTY, ERR_CHAT_PAYLOAD_TOO_LARGE, ERR_INVALID_SCOPE_PARAM, ERR_INVALID_MODEL_TIER)
+          description: 유효하지 않은 요청 파라미터 (ERR_CHAT_PAYLOAD_EMPTY, ERR_CHAT_PAYLOAD_TOO_LARGE, ERR_INVALID_SCOPE_PARAM)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Anthropic Claude API 키 미설정 (ERR_CLAUDE_API_KEY_MISSING)
           content:
             application/json:
               schema:
@@ -219,19 +240,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '429':
-          description: Claude API 호출 한도 초과 (ERR_CLAUDE_QUOTA_EXCEEDED, ERR_ANTHROPIC_RATE_LIMIT)
+          description: 외부 LLM API 호출 한도 초과 (ERR_LLM_QUOTA_EXCEEDED, ERR_CLAUDE_QUOTA_EXCEEDED)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '502':
-          description: 외부 LLM 업스트림 통신 실패 (ERR_LLM_UPSTREAM_FAILED)
+          description: 외부 LLM 업스트림 통신 실패 / API 장애 (ERR_LLM_UPSTREAM_FAILED)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: 엄격 프로덕션 환경에서 Anthropic API 키 미설정 (ERR_CLAUDE_API_KEY_MISSING) 또는 과부하 (ERR_CLAUDE_OVERLOADED)
+          description: 가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록) (ERR_LLM_PROVIDER_UNAVAILABLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '529':
+          description: Anthropic 서버 과부하 (ERR_CLAUDE_OVERLOADED)
           content:
             application/json:
               schema:
@@ -1223,10 +1250,16 @@ components:
           example: 최근 공개된 SWE-bench 평가 하네스의 주요 변경 사항은?
         model:
           type: string
-          enum: [claude-3-5-haiku, claude-3-5-sonnet, claude-3-5-opus]
-          default: claude-3-5-sonnet
-          description: Anthropic Claude 3.5/5.5 3-Tier 모델 식별자 (⚡ Haiku 5.5, 🎯 Sonnet 5.5 (기본값), 🧠 Opus 5.5). 미지정 시 기본값 `claude-3-5-sonnet` 적용.
-          example: claude-3-5-sonnet
+          nullable: true
+          default: claude-sonnet-5-5
+          description: 호출 대상 멀티 LLM 모델 식별자 (미지정 시 설정된 기본 모델 적용)
+          example: claude-sonnet-5-5
+        model_tier:
+          type: string
+          enum: [haiku, sonnet, opus]
+          nullable: true
+          description: Anthropic Claude 3-Tier 모델 티어 지정 (haiku, sonnet, opus)
+          example: sonnet
         scope:
           type: string
           enum: [scoped, global]
@@ -1353,8 +1386,18 @@ components:
         model:
           type: string
           nullable: true
-          description: 답변 생성에 사용된 Claude 모델 식별자
-          example: claude-3-5-sonnet-latest
+          description: 답변 생성에 사용된 LLM 모델 식별자
+          example: claude-sonnet-5-5
+        model_tier:
+          type: string
+          enum: [haiku, sonnet, opus]
+          nullable: true
+          description: 적용된 Anthropic 3-Tier 모델 티어
+          example: sonnet
+        usage:
+          $ref: '#/components/schemas/TokenUsageMeta'
+          nullable: true
+          description: 토큰 소비 및 프롬프트 캐시 통계
         latency_ms:
           type: integer
           nullable: true
@@ -1461,10 +1504,16 @@ components:
           example: LangGraph와 AutoGen의 멀티에이전트 패턴 차이점은?
         model:
           type: string
-          enum: [claude-3-5-haiku, claude-3-5-sonnet, claude-3-5-opus]
-          default: claude-3-5-sonnet
-          description: Anthropic Claude 3.5/5.5 3-Tier 모델 식별자 (⚡ Haiku 5.5, 🎯 Sonnet 5.5 (기본값), 🧠 Opus 5.5). 미지정 시 기본값 `claude-3-5-sonnet` 적용.
-          example: claude-3-5-sonnet
+          nullable: true
+          default: claude-sonnet-5-5
+          description: 호출 대상 멀티 LLM 모델 식별자 (미지정 시 설정된 기본 모델 적용)
+          example: claude-sonnet-5-5
+        model_tier:
+          type: string
+          enum: [haiku, sonnet, opus]
+          nullable: true
+          description: Anthropic Claude 3-Tier 모델 티어 지정 (haiku, sonnet, opus)
+          example: sonnet
         scope:
           type: string
           enum: [scoped, global]
@@ -1501,7 +1550,7 @@ components:
 
     ChatStatusStep:
       type: string
-      enum: [extracting_source, evaluating_sufficiency, agentic_searching, synthesizing]
+      enum: [thinking, tool_calling, observing, extracting_source, evaluating_sufficiency, agentic_searching, synthesizing]
       description: 에이전틱 리서치 워크플로우 실시간 단계 코드
       example: extracting_source
 
@@ -1591,16 +1640,31 @@ components:
           nullable: true
           description: 품질 점수 (1.0~10.0, 웹 검색 출처일 경우 null 가능)
           example: 9.2
+        score:
+          type: number
+          format: float
+          nullable: true
+          description: RAG 유사도 또는 순위 점수
+          example: 0.85
         snippet:
           type: string
           nullable: true
           description: 답변 근거로 사용된 핵심 발췌문
           example: Built-in persistence and time-travel debugging improvements.
+        full_content:
+          type: string
+          nullable: true
+          description: 스크래핑된 원문 전체 본문 텍스트 (캐시된 경우)
         domain:
           type: string
           nullable: true
           description: 출처 도메인 호스트명 (파비콘 및 프리뷰용)
           example: github.com
+        publisher:
+          type: string
+          nullable: true
+          description: 출판자 또는 발행 기관명
+          example: LangChain
         relevance_score:
           type: number
           format: float
@@ -1668,7 +1732,7 @@ components:
         model:
           type: string
           description: 생성에 사용된 Claude 모델 식별자
-          example: claude-3-5-sonnet-latest
+          example: claude-sonnet-5-5
         model_tier:
           type: string
           enum: [haiku, sonnet, opus]
@@ -1705,20 +1769,25 @@ components:
         error_code:
           type: string
           description: 비즈니스 에러 코드
-          example: ERR_CLAUDE_OVERLOADED
+          example: ERR_LLM_STREAM_FAILED
         message:
           type: string
           description: 에러 상세 메시지
-          example: Anthropic 서버 과부하가 발생했습니다. 잠시 후 다시 시도해주세요.
+          example: LLM 스트리밍 도중 외부 프로바이더 오류가 발생했습니다.
         status_code:
           type: integer
           description: HTTP 대응 상태 코드
-          example: 503
+          example: 502
         step:
           type: string
           nullable: true
           description: 에러 발생 단계
           example: synthesizing
+        retryable:
+          type: boolean
+          default: true
+          description: 클라이언트 재시도 가능 여부
+          example: true
       required: [error_code, message, status_code]
 
     ChatSourceMeta:
@@ -1744,7 +1813,7 @@ components:
         model:
           type: string
           description: 사용된 Claude 모델 식별자
-          example: claude-3-5-sonnet-latest
+          example: claude-sonnet-5-5
         model_tier:
           type: string
           enum: [haiku, sonnet, opus]
@@ -1925,22 +1994,22 @@ components:
           type: string
           description: |
             정의된 표준 비즈니스 에러 코드 목록:
-            - ERR_CLAUDE_API_KEY_MISSING: Anthropic Claude API 키 미설정 (엄격 프로덕션 키 부재)
-            - ERR_ANTHROPIC_KEY_MISSING: Anthropic Claude API 키 미설정 별칭
+            - ERR_CLAUDE_API_KEY_MISSING: Anthropic Claude API 키 미설정 (HTTP 401)
+            - ERR_ANTHROPIC_KEY_MISSING: Anthropic Claude API 키 미설정 별칭 (HTTP 401)
             - ERR_CLAUDE_QUOTA_EXCEEDED: Anthropic Claude TPM/RPM 호출 한도 초과 (HTTP 429)
             - ERR_ANTHROPIC_RATE_LIMIT: Anthropic Claude 호출 한도 초과 별칭 (HTTP 429)
-            - ERR_CLAUDE_OVERLOADED: Anthropic 서버 과부하 (HTTP 503 / 529)
+            - ERR_CLAUDE_OVERLOADED: Anthropic 서버 과부하 (HTTP 529 / 503)
             - ERR_ANTHROPIC_OVERLOADED: Anthropic 서버 과부하 별칭
             - ERR_INVALID_MODEL_TIER: 허용되지 않은 모델 티어 코드 요청 (HTTP 400)
             - ERR_SONNET_SCHEMA_VALIDATION: Claude Sonnet 5.5 수집 Pydantic JSON 스키마 검증 실패
             - ERR_STREAM_ABORTED_BY_USER: 모델 전환 또는 브라우저 이탈 등으로 인한 스트림 중단 (HTTP 499)
             - ERR_ARTICLE_EXTRACTION_FAIL: 원문 웹페이지 404/403 또는 본문 추출 실패 (HTTP 502)
-            - ERR_LLM_PROVIDER_UNAVAILABLE: 가용한 LLM 프로바이더 엔진 미설정 (엄격 프로덕션 키 부재)
-            - ERR_LLM_UPSTREAM_FAILED: 외부 LLM API 통신 실패 또는 5xx 장애
+            - ERR_LLM_PROVIDER_UNAVAILABLE: 가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록, Ollama 미기동 등) (HTTP 503)
+            - ERR_LLM_UPSTREAM_FAILED: 외부 LLM API 통신 실패 또는 5xx 장애 (HTTP 502)
             - ERR_LLM_QUOTA_EXCEEDED: 외부 LLM API 호출 한도 초과 (HTTP 429)
-            - ERR_LLM_STREAM_FAILED: 스트리밍 중간 단절 또는 네트워크 타임아웃
+            - ERR_LLM_STREAM_FAILED: 스트리밍 중간 단절 또는 네트워크 타임아웃 (HTTP 502)
             - ERR_LLM_PAYLOAD_PARSE_FAILED: LLM 응답 JSON 파싱 실패
-            - ERR_CHAT_PAYLOAD_EMPTY: 질문 본문 공백 또는 빈 문자열
+            - ERR_CHAT_PAYLOAD_EMPTY: 질문 본문 공백 또는 빈 문자열 (HTTP 400)
             - ERR_CHAT_PAYLOAD_TOO_LARGE: 질문 2,000자 초과
             - ERR_INVALID_SCOPE_PARAM: 유효하지 않은 스코프 파라미터 (scoped / global 외 값)
             - ERR_HANDOVER_SOURCE_NOT_FOUND: Scoped 모드 기사 미존재 (HTTP 404)
@@ -2111,7 +2180,7 @@ components:
           example: Anthropic Claude 3.7 Sonnet & Hybrid Reasoning Model Released
         url:
           type: string
-          example: https://www.anthropic.com/news/claude-3-7-sonnet
+          example: https://www.anthropic.com/news/claude-5-5-sonnet
         source:
           type: string
           example: rss
@@ -2231,8 +2300,8 @@ components:
         model_used:
           type: string
           nullable: true
-          description: 답변 생성에 사용된 모델 식별자 (Google gemini-* 생성 엄격 금지, claude-3-5-sonnet-latest 등 Claude 모델 한정)
-          example: claude-3-5-sonnet-latest
+          description: 답변 생성에 사용된 LLM 모델 식별자 (Anthropic Claude, Google Gemini, OpenAI, Ollama / vLLM)
+          example: claude-sonnet-5-5
       required: [news_id, question, answer]
 
     BriefingCategoryItem:

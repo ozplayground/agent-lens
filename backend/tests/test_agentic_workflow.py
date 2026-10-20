@@ -437,7 +437,7 @@ async def test_chat_query_scoped_with_agentic_workflow_success(db_session: Async
 
         mock_gen.return_value = (
             "## 1. 핵심 아키텍처 및 동작 원리\n상태 머신[1]\n## 2. 주요 기능 및 코드 구현 예시\n코드[1]\n## 3. 기존 기술 대비 차별점 및 벤치마크\n차별점\n## 4. 실무 도입 시 고려사항 및 튜닝 파라미터\n주의점",
-            "claude-3-5-sonnet-20241022"
+            "claude-sonnet-5-5"
         )
 
         res = await chat_service.query_chat(req)
@@ -527,7 +527,7 @@ async def test_chat_global_react_search_tool_lifecycle(db_session: AsyncSession,
     )
 
     async def fake_tokens(prompt: str, **kwargs):
-        yield "LangGraph v0.3 관련 분석 답변입니다[1].", "claude-3-5-sonnet-20241022"
+        yield "LangGraph v0.3 관련 분석 답변입니다[1].", "claude-sonnet-5-5"
 
     with patch("app.services.llm_processor.llm_processor.stream_tokens", side_effect=fake_tokens):
         events = []
@@ -557,7 +557,7 @@ async def test_chat_global_react_casual_greeting_skips_search_tool(db_session: A
     chat_service = ChatService(db_session)
 
     async def fake_tokens(prompt: str, **kwargs):
-        yield "안녕하세요! 무엇을 도와드릴까요?", "claude-3-5-sonnet-20241022"
+        yield "안녕하세요! 무엇을 도와드릴까요?", "claude-sonnet-5-5"
 
     for casual_q in [
         "안녕하세요!",

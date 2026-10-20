@@ -18,7 +18,7 @@ CATEGORY_MAP = {
         "Semantic Kernel", "Pydantic AI"
     ],
     "Models & Reasoning": [
-        "Claude 3.7", "Claude 3.5 Sonnet", "DeepSeek-R1", "DeepSeek-V3",
+        "Claude 5.5", "Claude 5.5 Sonnet", "DeepSeek-R1", "DeepSeek-V3",
         "GPT-4.5", "GPT-4o", "Gemini 2.0", "Gemini 1.5 Pro", "Llama 3.3",
         "Reasoning Model", "o3-mini", "o1", "Qwen 2.5", "OpenAI", "Anthropic"
     ],

@@ -1,42 +1,18 @@
-# [AgentLens] 비동기 LLM ReAct 플래너, 스트리밍 완료 후 인용 출처 확정 방출, Scoped 단일 기사 고정 및 완료 조건 가드 (v0.3.1) 통합 QA 테스트 계획서 (QA Test Plan)
+# [AgentLens] 통합 QA 테스트 계획서 (QA Test Plan)
 
-- **작성일자**: 2026-10-19
+- **작성일자**: 2026-10-20
 - **작성자**: 품질 보증 엔지니어 (`qa-engineer`)
-- **문서 버전**: v0.3.1 (비동기 LLM ReAct 플래너 `_plan_react_action`, 스트리밍 전 `"관련 뉴스 5건 관찰 완료"` 및 선행 `sources` 5건 방출 제거, 스트리밍 완료 후 실제 인용된 출처만 `_filter_cited_sources`로 확정 방출, Scoped 단일 기사 고정 [`primary_count=1, supplementary_count=0`], 프론트엔드 `message.status === 'completed'` 조건 강화, 백엔드 160건 & 프론트엔드 240건 총 400건 자동화 테스트 전수 검증)
+- **문서 버전**: v0.3.1
 - **상태**: Approved
-- **선행 산출물 및 기준 문서**:
-  - 제품 요구사항 명세서: [`01_PRD.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/01_PRD.md) (ReAct 자율 도구 호출, Scoped 단일 기사 그라운딩, `REQ-CHAT-011`, `REQ-CHAT-012`, `REQ-LLM-002`, `REQ-UI-008`, `REQ-CLAUDE-001`)
-  - 비즈니스 정책 및 엣지 케이스: [`03_POLICIES_AND_EDGES.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/03_POLICIES_AND_EDGES.md) (`POL-LLM-006`: Production Zero-Mock Fail-Fast Policy, `POL-RAG-001`: Dynamic Keyword Relevance Ranking, `POL-REACT-001`: ReAct Autonomous Tool Execution & Post-Stream Cited Source Filtering)
-  - 상세 기능 정의서:
-    - [`05_AI_CHAT_SPECIFICATION.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/spec-writer/fsd/05_AI_CHAT_SPECIFICATION.md) (`FUNC-CHAT-001`: 글로벌 ReAct 자율 지식 검색 챗, `FUNC-CHAT-002`: Scoped 포커스 단일 기사 질의, `FUNC-CHAT-013`: Claude 3-Tier 멀티모델 선택기, `FUNC-CHAT-014`: 듀얼 모델 셀렉터)
-  - 시스템 설계서 & OpenAPI: [`01_SYSTEM_DESIGN.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/system-designer/01_SYSTEM_DESIGN.md), [`02_OPENAPI_SPEC.yaml`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/system-designer/02_OPENAPI_SPEC.yaml)
-  - 데이터 계약 및 MSW 명세서: [`01_CONTRACT_AND_MSW_SPEC.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md)
-  - 5-Pillar 코드 품질 감사 보고서:
-    - 백엔드: [`docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md) (APPROVED)
-    - 프론트엔드: [`docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md) (APPROVED)
 
 ---
 
 ## 1. 테스트 범위 및 환경 (Test Scope & Environment)
-
-### 1.1 테스트 대상 (Test Scope)
-기획 요구사항(`01_PRD.md`), 상세 기능정의서(FSD 01~06), 그리고 이번 수정사항(비동기 LLM ReAct 플래너 `_plan_react_action`, 스트리밍 전 `"관련 뉴스 5건 관찰 완료"` 및 선행 `sources` 5건 방출 제거, 스트리밍 완료 후 실제 인용된 출처만 `_filter_cited_sources`로 확정 방출, Scoped 단일 기사 고정, 프론트엔드 `status === 'completed'` 조건 강화)에 따른 핵심 검증 항목:
-
-1. **FastAPI `ASGITransport` 기반 4대 SSE 스트리밍 시나리오 실증 검증 (`ChatService._plan_react_action`, `_filter_cited_sources`, `stream_chat`, `query_chat`)**:
-   - **시나리오 1 (Global 일상 인사/대화: `"안녕 반가워"`, `"오늘 날씨 어때"`)**: `thinking` $\rightarrow$ `synthesizing` (`"✍️ 도구 호출 없이 직접 답변 생성 중..."`) $\rightarrow$ `token` $\rightarrow$ `done` 순서로 방출되며, `event: sources`가 미방출되고 `sources_count=0, primary_count=0, supplementary_count=0`인지 검증.
-   - **시나리오 2 (Global 메타 불만 질문: `"인사했는데 왜 뉴스 5개를 찾아?"`)**: 비동기 `_plan_react_action`에서 `action == "none"`으로 정확히 판정되어 검색 도구를 호출하지 않고 `event: sources` 미방출(`sources_count=0`)되는지 검증.
-   - **시나리오 3 (Global 기술 질문: `"Claude 3.7 Sonnet"`)**: 스트리밍 도중에는 `"관련 뉴스 5건 관찰 완료"`(`observing`)나 선행 `event: sources` 5건이 먼저 방출되지 않고(`thinking` $\rightarrow$ `tool_calling` $\rightarrow$ `synthesizing` $\rightarrow$ `token`), `token` 스트리밍이 모두 완료된 후 실제 답변에 인용된 출처만 `_filter_cited_sources`로 필터링되어 `event: sources` $\rightarrow$ `event: done` 순서로 확정 방출되는지 검증.
-   - **시나리오 4 (Scoped 특정 뉴스 질문: `scope="scoped", source_id=1`)**: 코퍼스 검색이나 외부 보충 검색(`evaluating_sufficiency`, `agentic_searching`) 없이 해당 뉴스 1건만 `extracting_source` $\rightarrow$ `synthesizing` $\rightarrow$ `sources` (`primary_count=1, supplementary_count=0`)로 고정 반환되는지 검증.
-2. **프론트엔드 `status === 'completed'` 조건 강화 및 Zero-DOM 가드 (`ChatMessageItem.tsx`, `ChatWorkspace.tsx`)**:
-   - `ChatMessageItem.tsx`에서 `message.status === 'completed' && Boolean(message.content && message.content.trim().length > 0) && message.sources && message.sources.length > 0` 조건을 통해 스트리밍 진행 중(`status === 'streaming'`)에는 `원문 N건` 뱃지가 절대 조기 노출되지 않고 스트리밍 완료 후에만 확정된 인용 출처 수로 표시되는지 검증.
-   - `primaryCount === 0 && supplementaryCount === 0`일 때 `null`을 반환하여 불필요한 빈 출처 뱃지 컨테이너가 렌더링되지 않는지 검증.
-3. **전체 자동화 회귀 테스트 전원 Green 통과**:
-   - 백엔드 핵심 테스트(`tests/test_agentic_workflow.py`, `tests/test_chat.py` 50건) 및 전체 스위트(160건)와 프론트엔드 전체 테스트(`npx vitest run` 240건) 총 400건 100% 통과 및 `npx tsc --noEmit` 0 에러 검증.
-
-### 1.2 테스트 환경 (Test Environment)
-- **API 서버**: FastAPI `ASGITransport` 및 로컬 인스턴스 (`http://localhost:8000`), Python 3.11.9, FastAPI 0.115.6, SQLite 3.43+ WAL (`PRAGMA foreign_keys = ON;`)
-- **웹 클라이언트**: Next.js 16.3.4 (App Router, Turbopack, React 19.2.8), Tailwind CSS v4, MSW v2.15.0
-- **검증 뷰포트**: 모바일(375px/390px), 태블릿(768px), 데스크톱(1280px/1440px)
+- **테스트 대상**: 기획 요구사항 및 상세 기능정의서에 정의된 멀티 LLM(Claude, Gemini, OpenAI, Ollama) 라우팅 및 듀얼 모델 셀렉터, 글로벌 자율 검색(Agentic Web Search), Scoped 단일 기사 포커스 분석, 사후 인용 출처 표시 및 프리뷰 팝오버, 대화 세션 히스토리 복원 및 삭제, 4단 엔지니어링 리포트 익스포트(마크다운 복사, 파일 다운로드, Notion 동기화), 뉴스 피드 큐레이션 및 다차원 필터링, 반응형 모바일(375px) 뷰포트 무결성 및 키보드 접근성 전수
+- **테스트 환경**:
+  - API 서버: 라이브 로컬 인스턴스 (`http://localhost:8000`)
+  - 웹 클라이언트: 모바일(375px), 태블릿(768px), 데스크톱(1440px)
+  - 브라우저: Chromium, Firefox, WebKit (Safari)
 
 ---
 
@@ -44,34 +20,30 @@
 
 | 케이스 ID | 테스트 구분 | 검증 시나리오 | 사전 조건 및 입력 데이터 | 기대 결과 (Pass Criteria) |
 | :--- | :---: | :--- | :--- | :--- |
-| `TC-REACT-001` | E2E/ReAct | **[시나리오 1] Global 일상 인사/대화 (`"안녕 반가워"`, `"오늘 날씨 어때"`) 도구 생략 및 무출처 직답** | `POST /api/chat/stream`<br>`scope="global", question="안녕 반가워"` / `"오늘 날씨 어때"` | • `thinking` $\rightarrow$ `synthesizing` (`"✍️ 도구 호출 없이 직접 답변 생성 중..."`) $\rightarrow$ `token` $\rightarrow$ `done`<br>• `event: sources` 미방출, `sources_count: 0, primary_count: 0, supplementary_count: 0` |
-| `TC-REACT-002` | E2E/ReAct | **[시나리오 2] Global 메타 불만 질문 (`"인사했는데 왜 뉴스 5개를 찾아?"`) 검색 차단** | `POST /api/chat/stream`<br>`scope="global", question="인사했는데 왜 뉴스 5개를 찾아?"` | • `_plan_react_action`에서 `action == "none"` 판정<br>• `event: sources` 미방출 및 `sources_count: 0` 확인 |
-| `TC-REACT-003` | E2E/ReAct | **[시나리오 3] Global 기술 질문 (`"Claude 3.7 Sonnet"`) 스트리밍 완료 후 인용 출처만 확정 방출** | `POST /api/chat/stream`<br>`scope="global", question="Claude 3.7 Sonnet"` | • 스트리밍 전 `"관련 뉴스 5건 관찰 완료"` 및 선행 `sources` 5건 미방출<br>• `thinking` $\rightarrow$ `tool_calling` $\rightarrow$ `synthesizing` $\rightarrow$ `token` 완료 후 `_filter_cited_sources`로 실제 인용된 출처만 `event: sources` $\rightarrow$ `done` 방출 |
-| `TC-SCOPED-004` | E2E/Scoped | **[시나리오 4] Scoped 특정 뉴스 질문 (`scope="scoped", source_id=1`) 단일 기사 고정** | `POST /api/chat/stream`<br>`scope="scoped", source_id=1` | • 코퍼스/외부 검색 없이 `extracting_source` $\rightarrow$ `synthesizing`만 수행<br>• 해당 뉴스 1건만 `primary_count: 1, supplementary_count: 0`으로 고정 반환 |
-| `TC-FE-REACT-001`| UI/스트리밍 | **프론트엔드 `status === 'completed'` 조건 강화 및 0건 `null` 반환** | `ChatMessageItem` (`status === 'streaming'` vs `'completed'`) | • `status === 'streaming'` 중에는 `sources`나 `content`가 있어도 `원문 N건` 뱃지 미노출<br>• `status === 'completed'` 완료 시점에만 인용 출처 뱃지 렌더링, 0건 시 `null` 반환 |
-| `TC-DYN-RAG-001`| E2E/데이터 | **질문별 동적 기사 검색 및 고정 5개 슬라이스 배제** | 질문: `'Claude'`, `'MCP'`, `'Benchmark'` 각각 질의 | • 각 질문별로 상위 1순위 소스 기사 ID가 서로 다른 고유 기사로 동적 인출됨 |
-| `TC-GEMINI-001` | API/라우팅 | **`_call_gemini` 메소드 복원 및 사일런트 다운그레이드 배제** | `_call_gemini` 호출 및 실패 시나리오 | • 지정 모델 정직 호출 및 실패 시 사일런트 폴백 없이 HTTP 502 Fail-Fast |
-| `TC-PRODMOCK-001`| 아키텍처/보안| **프로덕션 `mock_provider.py` 영구 퇴역 및 Zero-Mock 거버넌스** | 프로덕션 코드 임포트 및 라이브 키 부재 상태 질의 | • 프로덕션 임포트 시 `ImportError`, 가용 키 부재 시 HTTP 503 fail-fast |
-| `TC-REG-BE-001` | 통합 회귀 | **백엔드 핵심 테스트(50건) 및 전체 테스트(160건) 전원 Green 통과** | `../.venv/bin/pytest tests/test_agentic_workflow.py tests/test_chat.py` 및 전체 실행 | • 16개 테스트 파일, 160건 100% 통과 (0 Failed, 0 Error) |
-| `TC-REG-FE-001` | 통합 회귀 | **프론트엔드 전체 테스트(240건) 전원 Green 통과** | `npx vitest run` 전체 스위트 실행 | • 24개 테스트 파일, 240건 100% 통과 (0 Failed, 0 Flaky) |
-| `TC-REG-TYPE-001`| 정적 검증 | **프론트엔드 TypeScript 정적 타입 검증** | `npx tsc --noEmit` 실행 | • 타입 에러 0건, Exit Code 0 |
-
----
-
-## 3. 테스트 실행 지침 및 하드 게이트 (Execution Guidelines & Quality Gates)
-
-1. **자동화 검증 스위트 실행 파이프라인**:
-   - 백엔드 타겟 스위트: `cd backend && ../.venv/bin/pytest tests/test_agentic_workflow.py tests/test_chat.py -v` (**50개 테스트 전원 Green**)
-   - 백엔드 pytest 전체 회귀 스위트: `cd backend && ../.venv/bin/pytest -v` (**160개 테스트 전원 Green**)
-   - 프론트엔드 vitest 전체 회귀 스위트: `cd frontend && npx vitest run` (**240개 테스트 전원 Green**)
-   - 프론트엔드 정적 타입 검증: `cd frontend && npx tsc --noEmit` (**0 에러, Exit Code 0**)
-   - FastAPI `ASGITransport` 기반 4대 SSE 스트리밍 실증 검증: `../.venv/bin/python scratch/verify_4_scenarios.py` (**4대 시나리오 전원 PASS**)
-2. **하드 퀄리티 게이트 통과 기준 (Hard Quality Gate Criteria)**:
-   - 자동화 테스트 통과율: **100% (Pass Rate = 100%, 400/400건)**
-   - Global 일상 인사/대화 및 메타 불만 질문 도구 오호출 / `sources` 오방출: **0건 (`sources_count=0, primary_count=0, supplementary_count=0`)**
-   - Global 기술 질문 스트리밍 전 `"관련 뉴스 5건 관찰 완료"` 및 선행 `sources` 방출: **0건 (반드시 `token` 스트리밍 종료 후 실제 인용된 출처만 `event: sources`로 방출)**
-   - Scoped 모드 단일 기사 고정 (`primary_count=1, supplementary_count=0`, 외부 보충 검색 0건): **100%**
-   - 프론트엔드 `status === 'completed'` 전 조기 출처 뱃지 노출: **0건**
-   - Blocker / Critical / 회귀 결함 수: **0건**
-3. **최종 보고서 연계**:
-   - 본 테스트 계획서에 따른 전수 검증 결과는 [`docs/qa-engineer/02_QA_TEST_REPORT.md`](file:///Users/wonyoung/workspace/ozplayground/agentlens/docs/qa-engineer/02_QA_TEST_REPORT.md)에 투명하게 기록하고 최종 출시 승인(`RELEASE_APPROVED`)을 판정합니다.
+| `TC-E2E-001` | E2E 정상 | 글로벌 AI 챗 일상 질의 및 일반 대화 처리 | AI 챗 워크스페이스 진입, 입력창에 "안녕하세요! 오늘 기분이 어떠신가요?" 전송 | 불필요한 뉴스 검색(RAG) 엔진이 동작하지 않고 즉시 자연스러운 인사 답변이 스트리밍되며 출처 배지가 표시되지 않음 |
+| `TC-E2E-002` | E2E 정상 | 글로벌 AI 챗 기술 트렌드 복합 질의 및 자율 보충 검색 | 글로벌 모드 설정, "최신 MCP 프로토콜과 Claude 에이전트 아키텍처 연동 동향을 알려줘" 전송 | 실시간 상태 트래커(검색 ➔ 본문 추출 ➔ 추론)가 순차 표시되며 최신 정보를 반영한 심층 기술 분석 답변이 스트리밍됨 |
+| `TC-E2E-003` | E2E 정상 | 사후 인용 출처 표시 및 인라인 인용 프리뷰 팝오버 | 기술 질문 스트리밍 완료 상태, 본문 내 인라인 인용 배지 또는 하단 출처 카드 클릭 | 실제 본문에 인용된 출처 배지만 선별 표시되며(미참조 출처 필터링), 인라인 배지 클릭 시 해당 뉴스 제목, 신뢰도 점수, 스니펫 팝오버가 즉각 렌더링됨 |
+| `TC-E2E-004` | E2E 정상 | 특정 기사 포커스(Scoped) 심층 분석 및 컨텍스트 핸드오버 | 뉴스 피드 카드 및 상세 모달에서 'Ask AI' 클릭 후 "이 아키텍처의 핵심 병목 구간은 어디인가?" 전송 | 타 기사 검색 없이 선택한 단일 기사 본문만을 기반으로 4단 기술 분석 리포트가 도출되며 원문 출처 배지 1건만 정확히 표시됨 |
+| `TC-E2E-005` | E2E 정상 | 멀티 LLM 3-Tier 모델 전환 및 듀얼 셀렉터 동기화 | 상단 글로벌 헤더에서 Haiku 선택 후 입력창 확인, 입력창에서 Opus 선택 후 헤더 확인 | 별도 지연(0ms) 없이 상단 헤더와 하단 입력창 간 양방향 동기화가 즉시 이루어지며 다음 질의 시 선택된 모델 티어로 정상 응답이 생성됨 |
+| `TC-E2E-006` | E2E 정상 | 이종 멀티 LLM 프로바이더 라우팅 (Claude, Gemini, OpenAI, Ollama) | 모델 선택기에서 Claude, Gemini, OpenAI, Ollama 로컬 모델을 순차 선택하여 질의 전송 | 각 프로바이더 엔드포인트로 정상 라우팅되어 응답이 스트리밍되고 응답 푸터에 실제 사용된 프로바이더/모델명과 레이턴시가 투명하게 표기됨 |
+| `TC-E2E-007` | E2E 정상 | 대화 맥락 보존 모델 인라인 전환 (Context Preservation) | 1턴 질의 완료 후 모델 변경, 동일 세션에서 후속 질문("방금 답변한 구조에서 캐싱 레이어를 추가하는 방법은?") 전송 | 타임라인에 모델 변경 안내선이 삽입되고 이전 대화 맥락을 완벽히 인지한 연속 답변이 새로운 모델로 생성됨 |
+| `TC-E2E-008` | E2E 정상 | 대화 세션 히스토리 자동 저장 및 브라우저 새로고침 복원 | 다중 턴 대화 수행 후 브라우저 새로고침(F5) 또는 재접속 실행 | 사이드바 세션 목록이 유지되고 활성 세션의 모든 메시지 턴, 코드 블록, 인용 출처 정보가 손실 없이 완벽히 복원됨 |
+| `TC-E2E-009` | E2E 정상 | 대화 세션 전환 및 세션 단건/전체 삭제 | 복수 세션 존재 상태에서 세션 전환 클릭 및 특정 세션 삭제 아이콘 클릭 | 세션 전환 시 해당 대화가 즉시 로드되며 삭제 확인 시 사이드바 목록과 저장소에서 즉시 영구 제거되고 화면이 초기화됨 |
+| `TC-E2E-010` | E2E 정상 | 심층 엔지니어링 리포트 마크다운 클립보드 복사 및 파일 다운로드 | 4단 분석 리포트 생성 완료 메시지 하단에서 [마크다운 복사] 및 [다운로드] 버튼 클릭 | 클립보드 복사 완료 토스트 노출 및 마크다운 구조화 텍스트 복사 확인, 클릭 즉시 .md 파일이 브라우저에서 다운로드됨 |
+| `TC-E2E-011` | E2E 정상 | 리포트 Notion 워크스페이스 1-클릭 페이지 생성 및 연동 | 노션 연동 토큰이 설정된 상태에서 AI 응답 하단 [Notion 내보내기] 버튼 클릭 | 노션 페이지 생성 성공 토스트 안내와 함께 생성된 노션 페이지 바로가기 링크 버튼이 정상 제공됨 |
+| `TC-E2E-012` | E2E 정상 | 뉴스 피드 다차원 필터링 및 실시간 검색 연동 | 카테고리(하네스, MCP, 에이전트) 탭 선택, Must Read 필터 토글 활성화, 검색어 입력 | 조건에 일치하는 고신호 뉴스 카드만 0.3초 이내 필터링되어 목록에 노출되고 카드 내 태그 하이라이트가 정상 표시됨 |
+| `TC-SEC-001` | 보안/안전 | 외부 LLM API 키 미설정 상태에서의 Fallback 및 설정 유도 | LLM API 키가 환경변수 및 설정에 등록되지 않은 상태에서 채팅 질의 전송 | 가짜 응답을 임의 생성하지 않고 "API 키 설정이 필요합니다" 안내 배너와 설정 모달 열기 버튼을 명확히 제공함 |
+| `TC-SEC-002` | 보안/무결성 | 브라우저 네트워크 응답 및 로컬 스토리지 내 API 키 평문 노출 차단 | 설정 모달 조회, 채팅 스트리밍 네트워크 탭 및 브라우저 스토리지 전수 점검 | 클라이언트로 원본 API 키 평문이 일체 전송되지 않으며 마스킹 처리된 메타데이터만 표기됨 (Zero-Leak 보안 거버넌스) |
+| `TC-SEC-003` | 보안/취약점 | 마크다운 렌더러 프롬프트 인젝션 및 XSS 방어 | 악의적인 스크립트 태그(`<script>`, `<img onerror>`)가 포함된 프롬프트 질의 전송 | 스크립트 실행이 원천 차단되고 안전한 텍스트 또는 이스케이프된 코드 블록으로 무해화되어 렌더링됨 |
+| `TC-SEC-004` | 보안/인가 | 유효하지 않은 세션 ID 또는 위조된 식별자 접근 차단 | 존재하지 않는 임의의 위조 UUID 세션 식별자로 접근 및 질의 시도 | 서버 충돌 없이 안전한 에러 핸들링과 함께 신규 유효 세션으로 자동 초기화되어 정상 서비스 연속성을 보장함 |
+| `TC-EDGE-001`| 엣지/스트리밍 | 장문 기술 리포트 및 복합 코드 블록 스트리밍 완결성 | 대용량 아키텍처 비교 및 다중 언어 구현 코드 생성 요청 | 토큰 스트리밍 도중 문장이나 코드 블록이 깨지거나 중간 단절되지 않고 마지막 결론부까지 온전히 렌더링되며 완료 시점에만 출처 배지가 활성화됨 |
+| `TC-EDGE-002`| 엣지/중단 | 스트리밍 도중 사용자 수동 중단(Abort) 및 상태 보존 | 토큰 스트리밍 도중 하단 [답변 생성 중지] 버튼 클릭 | 브라우저 SSE 스트림이 즉시 안전하게 닫히고 지금까지 수신된 메시지 본문이 유실 없이 보존되며 재시도 액션이 활성화됨 |
+| `TC-EDGE-003`| 엣지/네트워크 | 스트리밍 도중 네트워크 일시 단절 및 재시도 UX | 답변 스트리밍 도중 네트워크 오프라인 전환 시뮬레이션 | 브라우저 멈춤 없이 "네트워크 연결이 끊어졌습니다" 안내 토스트 및 [다시 시도] 액션 버튼이 정상 표시됨 |
+| `TC-EDGE-004`| 엣지/입력검증 | 공백, 초단문 및 2,000자 초과 입력 데이터 유효성 검증 | 공백 문자열 전송 시도 및 2,000자 초과 장문 프롬프트 입력 | 공백 시 전송 버튼이 비활성화되며, 2,000자 초과 시 입력 필드 하단에 경고 문구가 노출되고 전송이 차단됨 |
+| `TC-EDGE-005`| 엣지/추출실패 | 원본 소스 웹 스크래핑 실패 시 Graceful Degradation | 원문 웹페이지가 404 또는 스크래핑 차단된 기사를 대상으로 Ask AI 질의 수행 | 시스템 충돌 없이 기존 3줄 요약본을 대체 컨텍스트로 활용하여 안전하게 답변을 생성하고 안내 배지를 노출함 |
+| `TC-EDGE-006`| 엣지/레이아웃 | 코드 및 테이블 블록 국소 가로 스크롤 격리 (No Page Overflow) | 가로 폭이 넓은 대형 테이블 및 120컬럼 이상의 장문 코드 스니펫 렌더링 | 전체 페이지 뷰포트에 가로 스크롤이 발생하지 않고 해당 코드/테이블 블록 내부에서만 독립 가로 스크롤이 안전하게 동작함 |
+| `TC-A11Y-001`| 접근성/반응형 | 모바일 뷰포트(375px) 무결성 및 가로 스크롤 0px 검증 | 소형 모바일 해상도(375px)에서 피드 및 AI 챗 화면 전체 탐색 | 좌우 가로 스크롤 발생 0px을 유지하며, 사이드바는 바텀시트/슬라이드 드로어로 자연스럽게 전환됨 |
+| `TC-A11Y-002`| 접근성/반응형 | 모바일 가상 키보드 오픈 시 뷰포트 안정성 및 입력창 고정 | 모바일 기기에서 프롬프트 입력창 포커스 시 가상 키보드 활성화 대응 | 입력창이 가상 키보드에 가려지지 않고 키보드 상단에 견고히 밀착 고정되며 메시지 타임라인 스크롤 영역이 안정적으로 유지됨 |
+| `TC-A11Y-003`| 접근성/키보드 | 파워 유저 키보드 단축키 탐색 및 포커스 링 시각화 | 마우스 없이 키보드(`j`/`k`, `/`, `b`, `c`, `Esc`)만으로 피드 탐색 및 동작 수행 | `j`/`k` 입력 시 피드 카드가 순차 포커싱되며 시각적 포커스 링이 선명하게 표시되고, `Enter`로 상세 모달 열기 및 `Esc`로 닫기가 정상 작동함 |
+| `TC-A11Y-004`| 접근성/키보드 | 전역 커맨드 팔레트(Cmd+K) 키보드 제어 및 포커스 트랩 | 임의 화면에서 `Cmd+K` 입력 ➔ 방향키로 항목 탐색 ➔ `Enter` 실행 | 커맨드 팔레트 모달이 열리고 포커스가 모달 내부로 트랩되며, 액션 실행 후 모달이 닫히고 타깃 화면으로 즉시 이동함 |
+| `TC-A11Y-005`| 접근성/시각 | 전역 테마(다크/라이트) 전환 및 명도 대비 준수 | 헤더 테마 토글 버튼을 통해 다크 모드 ➔ 라이트 모드 전환 | 화면 깜빡임 없이 테마가 즉시 전환되며 모든 텍스트와 배경의 명도 대비가 WCAG 2.1 AA 기준(4.5:1 이상)을 충족함 |

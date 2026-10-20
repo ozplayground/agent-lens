@@ -219,7 +219,7 @@ export default function HomePage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="키워드 검색 (SWE-bench, MCP, LangGraph, Claude 3.7 등)..."
+                placeholder="키워드 검색 (SWE-bench, MCP, LangGraph, Claude 5.5 등)..."
                 autoComplete="off"
                 suppressHydrationWarning
                 className="w-full bg-slate-50 border border-slate-300 focus:border-blue-500 focus:bg-white focus:outline-none rounded-lg pl-10 pr-16 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 transition-colors"

@@ -281,12 +281,6 @@ export const chatHandlers = [
         'claude-sonnet-5-5',
         'claude-haiku-5-5',
         'claude-opus-5-5',
-        'claude-3-5-haiku',
-        'claude-3-5-sonnet',
-        'claude-3-5-opus',
-        'claude-3-5-haiku-latest',
-        'claude-3-5-sonnet-latest',
-        'claude-3-5-opus-latest',
       ].includes(model)
     ) {
       return HttpResponse.json<ErrorResponse>(
@@ -685,12 +679,6 @@ export const chatHandlers = [
         'claude-sonnet-5-5',
         'claude-haiku-5-5',
         'claude-opus-5-5',
-        'claude-3-5-haiku',
-        'claude-3-5-sonnet',
-        'claude-3-5-opus',
-        'claude-3-5-haiku-latest',
-        'claude-3-5-sonnet-latest',
-        'claude-3-5-opus-latest',
       ].includes(body.model)
     ) {
       return HttpResponse.json<ErrorResponse>(

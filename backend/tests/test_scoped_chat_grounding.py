@@ -6,8 +6,8 @@ from app.services.llm_providers.anthropic_provider import AnthropicLLMProvider
 from app.services.llm_processor import llm_processor, LLMUpstreamException, LLMProviderUnavailableException
 
 def test_version_is_0_2_2():
-    """Verify application version is updated to 0.3.0 per release mandate."""
-    assert settings.VERSION == "0.3.0"
+    """Verify application version is synchronized to 0.3.1 per release mandate."""
+    assert settings.VERSION == "0.3.1"
 
 
 def test_mock_llm_provider_removed_from_production():

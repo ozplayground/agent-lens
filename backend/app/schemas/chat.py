@@ -1,18 +1,13 @@
 from typing import List, Optional, Dict, Any, Literal, Union
 from pydantic import BaseModel, Field, ConfigDict
+from app.config import settings
+
+def get_default_chat_model() -> str:
+    """Dynamically resolves default chat model from settings/config."""
+    return getattr(settings, "ANTHROPIC_DEFAULT_CHAT_MODEL", "claude-sonnet-5-5")
 
 ModelTier = Literal["haiku", "sonnet", "opus"]
-ChatModel = Literal[
-    "claude-sonnet-5-5",
-    "claude-haiku-5-5",
-    "claude-opus-5-5",
-    "claude-3-5-haiku",
-    "claude-3-5-sonnet",
-    "claude-3-5-opus",
-    "claude-3-5-haiku-latest",
-    "claude-3-5-sonnet-latest",
-    "claude-3-5-opus-latest",
-]
+ChatModel = str  # Dynamic model identifier, open to any configured LLM model
 
 class TokenUsageMeta(BaseModel):
     input_tokens: int = 0
@@ -32,7 +27,7 @@ class ChatFocusFilter(BaseModel):
 
 class ChatStreamRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
-    model: Optional[str] = "claude-sonnet-5-5"
+    model: Optional[str] = Field(default_factory=get_default_chat_model)
     model_tier: Optional[ModelTier] = None
     scope: Literal["scoped", "global"] = "global"
     source_id: Optional[int] = None
@@ -43,7 +38,7 @@ class ChatStreamRequest(BaseModel):
 
 class ChatQueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
-    model: Optional[str] = "claude-sonnet-5-5"
+    model: Optional[str] = Field(default_factory=get_default_chat_model)
     model_tier: Optional[ModelTier] = None
     scope: Literal["scoped", "global"] = "global"
     source_id: Optional[int] = None
@@ -114,7 +109,7 @@ class StreamErrorPayload(BaseModel):
 class DonePayload(BaseModel):
     done: bool = True
     session_id: str
-    model: Optional[str] = "claude-sonnet-5-5"
+    model: Optional[str] = Field(default_factory=get_default_chat_model)
     model_tier: Optional[ModelTier] = "sonnet"
     sources_count: int
     primary_count: Optional[int] = None
@@ -126,7 +121,7 @@ class ChatQueryResponse(BaseModel):
     answer: str
     sources: List[ChatSourceItem]
     session_id: str
-    model: Optional[str] = "claude-sonnet-5-5"
+    model: Optional[str] = Field(default_factory=get_default_chat_model)
     model_tier: Optional[ModelTier] = "sonnet"
     scope: Literal["scoped", "global"]
     applied_filters: Optional[ChatFocusFilter] = None

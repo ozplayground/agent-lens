@@ -155,74 +155,99 @@ flowchart TD
 #### 1. 기본 정보
 - **기능명**: 듀얼 스코프(Scoped Focus vs Global Corpus) 지식 검색 및 실시간 스트리밍 질의응답
 - **기능 ID**: `FUNC-CHAT-003`
-- **대응 요구사항 ID**: `REQ-CHAT-003`, `REQ-CHAT-005`
+- **대응 요구사항 ID**: `REQ-CHAT-003`, `REQ-CHAT-005`, `REQ-LLM-001`
 - **대상 화면 코드**: `SCR-CHAT-001` (전용 AI 챗 페이지)
 - **우선순위**: Must Have
 - **관련 액터 (Actor)**: AI 에이전트 개발자 / 테크 리서처
 
 #### 2. 사전 조건 (Pre-conditions)
-1. 사용자가 전용 AI 챗 페이지(`SCR-CHAT-001`)에서 유효한 질문(2자 이상)을 작성한 상태.
-2. 백엔드 AI 챗 스트리밍 엔드포인트(`/api/chat/stream`)가 가동 중인 상태.
+1. 사용자가 전용 AI 챗 페이지(`SCR-CHAT-001`)에서 유효한 질문(2자 이상 2,000자 이하)을 작성한 상태.
+2. 백엔드 AI 챗 스트리밍 엔드포인트(`/api/chat/stream`)가 가동 중이며 멀티 LLM 프로바이더 API 키가 등록된 상태.
 
 #### 3. 사용자 인터랙션 및 시스템 동작 흐름과 플로우차트 (Step-by-Step Flow & Flowchart)
-1. 사용자가 상단 스코프 셀렉터(또는 토글 스위치)를 통해 검색 범위를 결정한다:
-   - **Scoped 모드**: 특정 기사(현재 선택된 아티클)의 전문 및 요약만을 컨텍스트로 격리 주입.
-   - **Global Corpus 모드**: 수집된 전체 뉴스 데이터베이스를 대상으로 하이브리드 검색(`FUNC-CHAT-005`)을 실행하여 상위 5~7개의 고신호 기사 청크를 컨텍스트로 동적 결합.
-2. 사용자가 질문을 입력하고 `Enter` 또는 전송 버튼을 누른다.
-3. 시스템은 사용자 질문 버블을 대화창에 즉시 추가하고 스크롤을 하단으로 이동한다.
-4. 시스템은 `POST /api/chat/stream` 엔드포인트로 SSE(Server-Sent Events) 스트리밍 요청을 개시한다. 페이로드에는 `{ question, scope: 'scoped' | 'global', source_id?: number, session_id: string }`가 포함된다.
-5. 백엔드는 SSE 이벤트 스트림을 통해 다음 순서로 청크를 전송한다:
-   - `event: sources`: 주입된 기사 레퍼런스 목록(`[{ index: 1, id: 101, title: '...', url: '...' }]`) 전송.
-   - `event: token`: LLM이 생성하는 실시간 텍스트 토큰(`{ token: '...' }`) 연속 전송.
-   - `event: done`: 스트리밍 완료 신호 및 사용된 모델 메타데이터 전송.
-6. 클라이언트는 수신된 토큰을 마크다운 뷰어에 실시간 누적 렌더링하며, 인라인 인용 뱃지(`[1]`, `[2]`)를 감지하여 인터랙티브 컴포넌트로 파싱한다(`FUNC-CHAT-004`).
-7. 스트리밍이 완료되면 입력창이 다시 활성화되고 후속 질문(Follow-up) 대기 상태로 전환된다.
+1. **검색 스코프 모드 선택**:
+   - **Scoped 모드 (단일 기사 집중 분석)**:
+     - 특정 기사(`source_id`) 1건을 대상으로 기사 전문(Full Content)과 요약 메타데이터를 컨텍스트로 바인딩한다.
+     - 4단 구조화 리포트(1. 핵심 아키텍처 및 동작 원리, 2. 주요 기능 및 코드 구현 예시, 3. 기존 기술 대비 차별점 및 벤치마크, 4. 실무 도입 시 고려사항 및 튜닝 파라미터) 시스템 프롬프트를 주입한다.
+     - SSE 이벤트 시퀀스: `event: status` (extracting_source, 30%) $\rightarrow$ `event: status` (synthesizing, 85%) $\rightarrow$ `event: sources` (단일 primary 출처 `[1]`) $\rightarrow$ `event: token` (4단 심층 분석 마크다운 토큰 실시간 스트리밍) $\rightarrow$ `event: done`.
+   - **Global Corpus 모드 (전체 지식 검색)**:
+     - ReAct 플래너(`_plan_react_action`)가 사용자 질의의 의도를 판별한다:
+       1. **일상 대화 / 인사** (예: "안녕", "hello", "반가워", "감사합니다" 등 도메인 신호 부재 시):
+          뉴스 DB 검색 도구를 호출하지 않고(`action: none`) 대화형으로 즉시 응답하며 외부 출처 번호를 붙이지 않는다.
+          SSE 이벤트 시퀀스: `event: status` (thinking, 25%) $\rightarrow$ `event: status` (synthesizing, 75%) $\rightarrow$ `event: token` $\rightarrow$ `event: done` (`sources: []`).
+       2. **기술 / 트렌드 질문** (AI/에이전트 기술 스택, 최신 뉴스, 릴리즈 등 도메인 신호 포함 시):
+          `action: search_news_corpus`로 판단하여 SQLite FTS5 + BM25 + Quality Score + Recency 하이브리드 검색(`FUNC-CHAT-005`)을 수행한다.
+          SSE 이벤트 시퀀스: `event: status` (thinking, 25%) $\rightarrow$ `event: status` (tool_calling, 50%) $\rightarrow$ `event: status` (synthesizing, 80%) $\rightarrow$ `event: token` $\rightarrow$ `event: sources` (답변 생성 완료 시점에 실제 인용된 출처 `[1]`, `[2]`, `[S1]`만 필터링하여 전달) $\rightarrow$ `event: done`.
+2. **질문 전송 및 검증**:
+   - 클라이언트에서 2자 이상 2,000자 이하 길이를 검증하고, 백엔드는 가용 LLM 프로바이더 유무를 사전 검증한다.
+   - API 키 미등록 시 즉시 HTTP 503 `ERR_LLM_PROVIDER_UNAVAILABLE`을 반환한다.
+3. **스트리밍 수신 및 렌더링**:
+   - 수신된 토큰을 마크다운 뷰어에 실시간 누적 렌더링하며, 인라인 인용 뱃지(`[1]`, `[2]`)를 감지하여 인터랙티브 컴포넌트로 파싱한다(`FUNC-CHAT-004`).
+   - 스트리밍이 완료되면 입력창이 다시 활성화되고 실제 사용된 모델 및 레이턴시 메타데이터를 표시한다.
 
 ```mermaid
 flowchart TD
-    A[사용자 질문 전송] --> B{현재 검색 스코프 모드 확인}
-    B -- Scoped 모드 --> C[선택 기사 전문 & 메타데이터 바인딩]
-    B -- Global 모드 --> D[SQLite FTS5 + BM25 + Quality 점수 하이브리드 검색 실행]
-    D --> E[상위 5~7개 고신호 기사 청크 선별]
-    C & E --> F[Grounding 시스템 프롬프트 조립]
-    F --> G[POST /api/chat/stream SSE 연결 수립]
-    G --> H[event: sources 수신 -> 상단 인용 소스 바 렌더링]
-    H --> I[event: token 수신 -> 실시간 마크다운 스트리밍]
-    I --> J{스트리밍 진행 중}
-    J -- 추가 토큰 --> I
-    J -- event: done 수신 --> K[스트리밍 종료, 입력창 재활성화 & 세션 저장]
+    A[사용자 질문 전송] --> B{사전 검증: 프로바이더 API 키 등록 여부}
+    B -- 미등록 --> C[503 ERR_LLM_PROVIDER_UNAVAILABLE 키 설정 안내]
+    B -- 등록됨 --> D{검색 스코프 모드 확인}
+
+    D -- Scoped 모드 --> E[단일 기사 전문/메타데이터 바인딩]
+    E --> F[4단 심층 분석 프롬프트 조립]
+    F --> G[event: status -> event: sources [1] -> event: token -> event: done]
+
+    D -- Global 모드 --> H{ReAct 의도 분석: 도메인 기술 신호 유무}
+    H -- 일상 대화/인사 (action: none) --> I[뉴스 검색 생략 & 즉시 대화 생성]
+    I --> J[event: status -> event: token -> event: done (출처 없음)]
+
+    H -- 기술/트렌드 질문 (action: search) --> K[SQLite FTS5 BM25 + Quality 하이브리드 검색]
+    K --> L[선별 청크 기반 Grounding 프롬프트 조립]
+    L --> M[event: status -> event: token 실시간 스트리밍]
+    M --> N[답변 완료 시점에 실제 인용 출처 필터링 & event: sources 전달]
+    N --> O[event: done 스트리밍 완료]
 ```
 
 #### 4. 화면 표시 및 입력 데이터 항목 명세 (UI Data Elements - 8대 표준 컬럼)
 | 항목명 | 화면 표시/입력 구분 | UI 컴포넌트 | 필수 여부 | 데이터 타입 / 제약 | 기본값 | 유효성 검증 규칙 (Validation) | 노출/수정 조건 |
 | :--- | :---: | :--- | :---: | :--- | :---: | :--- | :--- |
 | `scope_mode` | 사용자 선택 | Segmented Control Tab | 필수 | Enum (`scoped`, `global`) | `global` (단, 핸드오버 시 `scoped`) | 정의된 2개 옵션 중 1개 선택 | 상시 상단 툴바 노출 |
-| `question_input` | 사용자 입력 | Auto-growing Textarea | 필수 | String / 2~2,000자 | "" | 트림 후 최소 2자 이상 | 상시 하단 노출 |
+| `question_input` | 사용자 입력 | Auto-growing Textarea | 필수 | String / 2~2,000자 | "" | 트림 후 최소 2자 이상 2,000자 이하 | 상시 하단 노출 |
 | `streaming_bubble` | 노출 전용 | Markdown Chat Bubble | 필수 | Text Stream | - | 실시간 마크다운 파싱 및 XSS 살균 | 답변 생성 중 노출 |
 | `pulsing_cursor` | 노출 전용 | Blinking Indicator | - | CSS Animation | - | 토큰 스트리밍 도중 표시 | 답변 수신 중 |
-| `sources_summary_bar`| 노출 전용| Referenced Sources Bar | 선택 | Array[SourceMeta] | [] | 주입된 기사 개수 및 제목 태그 | Global 모드 답변 상단 |
+| `sources_summary_bar`| 노출 전용| Referenced Sources Bar | 선택 | Array[SourceMeta] | [] | 답변 완료 시점에 인용된 기사 태그 | 기술 질문 완료 시 노출 |
 | `stop_generating_btn`| 사용자 조작 | Action Button (Square) | 선택 | Button (`중단`) | - | 클릭 시 SSE 스트림 Abort | 답변 스트리밍 중만 노출 |
 | `follow_up_chips` | 사용자 선택 | Suggestion Pill Group | 선택 | Array[String] | [] | LLM 제안 또는 기본 후속 질문 | 답변 완료 후 하단 노출 |
-| `model_indicator` | 노출 전용 | Text Badge | 필수 | String | 'Gemini 2.5 Flash' | 실제 사용된 LLM 모델 표기 | 답변 말풍선 하단 |
+| `model_indicator` | 노출 전용 | Text Badge | 필수 | String | 'Claude Sonnet' | 실제 사용된 LLM 모델 표기 | 답변 말풍선 하단 |
 
 #### 5. 비즈니스 규칙 (Business Rules)
-- **BR-CHAT-003-1 (Scoped 모드 격리 원칙)**: `scope_mode === 'scoped'`일 때 LLM은 지정된 단일 기사의 본문 및 요약에 기재된 내용만을 기반으로 답변해야 하며, 기사에 명시되지 않은 사실은 "해당 기사에서 확인할 수 없는 내용입니다"라고 정직하게 폴백해야 한다.
-- **BR-CHAT-003-2 (Global 모드 환각 방지 지침)**: `scope_mode === 'global'`일 때 검색기(Retriever)가 반환한 기사 청크들에 대해서만 인라인 인용 번호(`[1]`, `[2]`)를 매핑할 수 있으며, 검색되지 않은 허위 레퍼런스 번호 생성을 시스템 프롬프트 차원에서 엄격히 금지한다.
-- **BR-CHAT-003-3 (스트리밍 중단 처리)**: 사용자가 "중단(Stop Generating)" 버튼을 클릭하거나 페이지를 이탈하면 클라이언트의 `AbortController`가 즉시 SSE 연결을 닫고, 현재까지 누적된 텍스트까지만 대화 내역으로 안전하게 커밋한다.
+- **BR-CHAT-003-1 (Scoped 모드 단일 기사 심층 분석)**: `scope_mode === 'scoped'`일 때 LLM은 지정된 단일 기사 1건의 원문 및 요약에 기재된 내용만을 기반으로 4단 심층 분석 리포트를 합성하며, 기사에 명시되지 않은 사실은 "해당 기사에서 확인할 수 없는 내용입니다"라고 정직하게 안내한다.
+- **BR-CHAT-003-2 (Global 모드 의도 기반 라우팅 & 완료 시점 출처 인용)**: 일상 대화/인사에는 뉴스 DB 검색 도구를 호출하지 않고 즉시 대화형으로 답변하며 가짜 인용 번호를 붙이지 않는다. 기술 질문은 코퍼스 검색 후 생성된 답변 완료 시점에 실제로 인용된 출처(`[1]`, `[2]`, `[S1]`)만을 필터링하여 표시한다.
+- **BR-CHAT-003-3 (LLM 에러 전파 및 장애 처리 정책)**: 사용 가능한 프로바이더 키가 없을 경우 HTTP 503 `ERR_LLM_PROVIDER_UNAVAILABLE`, 업스트림 통신 장애 시 HTTP 502 `ERR_LLM_UPSTREAM_FAILED`, 호출 한도 초과 시 HTTP 429 `ERR_LLM_QUOTA_EXCEEDED`를 사용자에게 정직하게 안내한다.
+- **BR-CHAT-003-4 (스트리밍 중단 및 부분 답변 보존)**: 사용자가 "중단" 버튼을 클릭하거나 연결이 단절될 경우, 현재까지 수신된 텍스트를 대화 내역으로 안전하게 커밋하고 재시도 인터랙션을 제공한다.
 
 #### 6. 예외 처리 및 엣지 케이스 (Edge Cases & Exception Handling)
 | 발생 상황 (Edge Case Scenario) | 화면 반응 및 시스템 처리 방식 | 사용자 안내 메시지 |
 | :--- | :--- | :--- |
-| Global 검색 질의 시 코퍼스 내 일치 기사가 0건인 경우 | 일반 AI 지식 모드로 부드럽게 폴백하여 답변하되 출처 뱃지 미부여 | "수집된 뉴스에서 직접적인 일치 기사를 찾지 못해 범용 AI 지식으로 답변합니다." |
-| SSE 스트리밍 도중 백엔드 타임아웃 또는 연결 끊김 | 끊긴 시점까지의 메시지를 보존하고 말풍선 하단에 "재시도" 버튼 노출 | "네트워크 지연으로 응답이 중단되었습니다. [재시도]" |
-| Scoped 모드인데 대상 기사 본문이 비정상적으로 짧은 경우 (50자 미만) | 사용자에게 본문 정보 부족을 알리고 Global 모드 전환 권유 칩 제공 | "기사 본문이 매우 짧습니다. 전체 뉴스 코퍼스 검색 모드로 전환하시겠습니까?" |
+| 가용한 LLM 프로바이더 API 키 미설정 | 503 응답 수신, 입력 내용 유지 및 API 키 설정 안내 배너 노출 | "사용 가능한 AI 모델이 설정되지 않았습니다. API 키를 설정해주세요." |
+| 외부 LLM 업스트림 통신 장애 / 5xx 오류 | 502 응답 수신, 입력 내용 유지 및 재시도 버튼 노출 | "AI 모델 응답에 실패했습니다. 다시 시도해주세요." |
+| 외부 LLM API 호출 한도 초과 (429) | 429 응답 수신, 경고 토스트 노출 및 타 모델 선택 유도 | "AI 모델 사용량이 초과되었습니다. 잠시 후 다시 시도해주세요." |
+| SSE 스트리밍 도중 통신 중단 | 끊긴 시점까지의 메시지를 보존하고 말풍선 하단에 "재시도" 버튼 노출 | "답변 생성이 중단되었습니다. [다시 시도]" |
+| Scoped 모드 대상 기사 본문 미비 (50자 미만) | 본문 정보 부족 알림 및 Global 모드 전환 권유 칩 제공 | "기사 본문이 매우 짧습니다. 전체 뉴스 코퍼스 검색 모드로 전환하시겠습니까?" |
+| Global 검색 질의 시 코퍼스 내 일치 기사 0건 | 일반 AI 지식 모드로 답변하되 출처 뱃지 미부여 | "수집된 뉴스에서 직접적인 일치 기사를 찾지 못해 범용 AI 지식으로 답변합니다." |
 
 #### 7. 비즈니스 에러 코드 매핑
 | 비즈니스 에러 코드 | 발생 사유 | HTTP 상태 코드 매핑 | 클라이언트 표시 형태 |
 | :--- | :--- | :---: | :--- |
-| `ERR_CHAT_STREAM_TIMEOUT` | 스트리밍 응답 15초 초과 무응답 | 504 Gateway Timeout | 말풍선 하단 인라인 재시도 안내 카드 |
-| `ERR_LLM_QUOTA_EXCEEDED` | 외부 LLM API 사용량 초과 (429) | 429 Too Many Requests | 토스트 및 로컬 엔진 폴백 안내 |
-| `ERR_INVALID_SCOPE_PARAM` | 지원하지 않는 scope_mode 값 전달 | 400 Bad Request | 기본값 'global'로 강제 보정 |
+| `ERR_LLM_PROVIDER_UNAVAILABLE` | 가용한 LLM 프로바이더 API 키 미설정 | 503 Service Unavailable | 키 설정 안내 인라인 배너 노출 |
+| `ERR_LLM_UPSTREAM_FAILED` | 외부 LLM API 통신 장애 또는 5xx 수신 | 502 Bad Gateway | 오류 배너 및 재시도 버튼 |
+| `ERR_LLM_QUOTA_EXCEEDED` | 외부 LLM API 사용량 한도 초과 | 429 Too Many Requests | 경고 토스트 알림 |
+| `ERR_LLM_STREAM_FAILED` | 스트리밍 도중 연결 중단 | 스트림 내 오류 이벤트 | 부분 답변 하단 재시도 버튼 |
+| `ERR_CLAUDE_API_KEY_MISSING` | Anthropic Claude API 키 미설정 | 401 Unauthorized | API 키 등록 유도 팝업 |
+| `ERR_CLAUDE_OVERLOADED` | Anthropic 서버 과부하 | 529 Service Overloaded | 일시 지연 안내 및 재시도 버튼 |
+| `ERR_HANDOVER_SOURCE_NOT_FOUND` | Scoped 대상 기사 ID 미존재 | 404 Not Found | 경고 토스트 및 Global 모드 전환 |
+| `ERR_CHAT_PAYLOAD_EMPTY` | 질문 본문 공백 입력 | 400 Bad Request | 입력창 인라인 붉은색 경고 |
+| `ERR_CHAT_PAYLOAD_TOO_LARGE` | 질문 2,000자 초과 | 400 Bad Request | 글자 수 초과 안내 문구 |
+| `ERR_INVALID_SCOPE_PARAM` | 지원하지 않는 scope 값 | 400 Bad Request | 기본값 'global' 자동 보정 |
+| `ERR_CHAT_STREAM_TIMEOUT` | 스트리밍 15초 초과 무응답 | 504 Gateway Timeout | 말풍선 하단 재시도 안내 카드 |
 
 ---
 
@@ -357,8 +382,12 @@ flowchart TD
 | 사용자가 특수 기호(따옴표, 괄호 등 FTS5 예약어)를 과도하게 입력 | FTS5 구문 오류 방지를 위해 쿼리 문자열 자동 이스케이프 및 살균 처리 | (정상 검색 수행) |
 | 데이터베이스 내 전체 기사 수가 5건 미만인 초기 구동 환경 | 존재하는 기사 전체를 컨텍스트로 전달하고 부족 안내 생략 | (수집 데이터 한도 내에서 최선 답변) |
 
+#### 7. 비즈니스 에러 코드 매핑
+| 비즈니스 에러 코드 | 발생 사유 | HTTP 상태 코드 매핑 | 클라이언트 표시 형태 |
+| :--- | :--- | :---: | :--- |
 | `ERR_RETRIEVER_INDEX_ERROR` | FTS5 인덱스 테이블 접근 실패 | 500 Internal Server Error | 내부 에러 로깅 및 SQL LIKE 폴백 가동 |
 | `ERR_EMPTY_CORPUS` | 데이터베이스에 수집된 기사가 0건 | 200 OK (빈 결과) | "수집된 뉴스가 없습니다. 피드 수집을 먼저 진행해주세요." |
+| `ERR_SEARCH_QUERY_TOO_SHORT` | 검색어 2글자 미만 입력 | 400 Bad Request | 검색창 하단 인라인 경고 안내 |
 
 ---
 

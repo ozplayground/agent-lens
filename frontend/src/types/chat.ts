@@ -110,20 +110,10 @@ export type LlmErrorResponse = z.infer<typeof LlmErrorResponseSchema>;
 export const ModelTierSchema = z.enum(['haiku', 'sonnet', 'opus']);
 export type ModelTier = z.infer<typeof ModelTierSchema>;
 
-export const ChatModelSchema = z.enum([
-  'claude-sonnet-5-5',
-  'claude-haiku-5-5',
-  'claude-opus-5-5',
-  'claude-3-5-haiku',
-  'claude-3-5-sonnet',
-  'claude-3-5-opus',
-  'claude-3-5-haiku-latest',
-  'claude-3-5-sonnet-latest',
-  'claude-3-5-opus-latest',
-]);
-export type ChatModel = z.infer<typeof ChatModelSchema>;
+export const ChatModelSchema = z.string().min(1);
+export type ChatModel = string;
 
-export const DEFAULT_CHAT_MODEL: ChatModel = 'claude-sonnet-5-5';
+export const DEFAULT_CHAT_MODEL: string = 'claude-sonnet-5-5';
 export const DEFAULT_MODEL_TIER: ModelTier = 'sonnet';
 
 export const CLAUDE_MODELS = {
@@ -132,7 +122,7 @@ export const CLAUDE_MODELS = {
   opus: 'claude-opus-5-5',
 } as const;
 
-export const TIER_TO_MODEL: Record<ModelTier, ChatModel> = {
+export const TIER_TO_MODEL: Record<ModelTier, string> = {
   haiku: 'claude-haiku-5-5',
   sonnet: 'claude-sonnet-5-5',
   opus: 'claude-opus-5-5',
@@ -142,12 +132,6 @@ export const MODEL_TO_TIER: Record<string, ModelTier> = {
   'claude-sonnet-5-5': 'sonnet',
   'claude-haiku-5-5': 'haiku',
   'claude-opus-5-5': 'opus',
-  'claude-3-5-haiku': 'haiku',
-  'claude-3-5-sonnet': 'sonnet',
-  'claude-3-5-opus': 'opus',
-  'claude-3-5-haiku-latest': 'haiku',
-  'claude-3-5-sonnet-latest': 'sonnet',
-  'claude-3-5-opus-latest': 'opus',
 };
 
 /**
