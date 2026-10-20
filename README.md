@@ -1,8 +1,17 @@
+<div align="center">
+
 # 🔭 AgentLens
 
-**AI 에이전트·하네스·MCP 기술 소식 자동 수집, 요약 및 질의응답 플랫폼**
+**AI 에이전트 · 하네스 · MCP 기술 소식 수집, 요약 및 AI 질의응답 플랫폼**
 
+[![Version](https://img.shields.io/badge/Version-v0.3.1-blue?style=flat-square)](https://github.com/ozplayground/agent-lens/releases)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.141+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
+
+</div>
 
 ---
 
