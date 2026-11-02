@@ -85,3 +85,10 @@ Thumbs.db
 # PNPM store
 .pnpm-store/
 frontend/.pnpm-store/
+
+# Claude Code SDLC harness
+.claude/worktrees/
+**/.claude/settings.local.json
+**/CLAUDE.local.md
+bench/**/.venv/
+bench/**/node_modules/

@@ -1,0 +1,23 @@
+{
+  "docs_root": "docs",
+  "artifact_root": "docs/features",
+  "tasks_root": "tasks",
+  "plan_files_heading": "## 변경 파일",
+  "gated_paths": [
+    "backend/app/**",
+    "frontend/src/**"
+  ],
+  "deploy_patterns": [
+    "*make reset*",
+    "*curl*reset-and-collect*",
+    "*git push*-tags*",
+    "*git push*refs/tags/*",
+    "*git push* v[0-9]*"
+  ],
+  "check_command": "make check",
+  "high_risk": [],
+  "bench_runtimes": [
+    "python3",
+    "node"
+  ]
+}

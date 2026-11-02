@@ -41,3 +41,9 @@ docker-down:
 docker-logs:
 	docker compose logs -f
 
+
+.PHONY: check
+# 검사: backend pytest + frontend vitest, eslint, tsc --noEmit. 하나라도 실패하면 0 이 아닌 값으로 끝난다
+check:
+	cd backend && ../.venv/bin/pytest -v tests/
+	cd frontend && pnpm test && pnpm lint && pnpm exec tsc --noEmit

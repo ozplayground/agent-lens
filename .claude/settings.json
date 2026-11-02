@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py\"; [ -f \"$f\" ] || { echo \"sdlc_hook.py 없음: 하네스 파일을 커밋했는지 확인\" >&2; exit 1; }; python3 \"$f\" session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py\"; [ -f \"$f\" ] || { echo \"sdlc_hook.py 없음: 하네스 파일을 커밋했는지 확인\" >&2; exit 1; }; python3 \"$f\" pre-tool",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "chrome-devtools-mcp@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true
+  }
+}
