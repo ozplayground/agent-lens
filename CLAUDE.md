@@ -11,25 +11,43 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 ## SDLC
 작업은 기능 단위로 스테이지를 따른다. 각 스테이지는 산출물을 커밋하고, 다음 스테이지는 그것을 읽고 시작한다.
 
-| 스테이지 | 기능별 산출물 (`docs/features/<기능-id>/`) | 통합 문서 (`docs/`) | 승인 | 스킬 |
-|---|---|---|---|---|
-| (선택) Research | research.md | research/product.md, research/tech.md | — | `/research-product`, `/research-tech` |
-| Plan | intent.md | product.md | 제품 오너 (본인) | `/write-intent` |
-| Design | spec.md | tech-spec.md | 제품 오너 (본인) | `/write-spec` |
-| Build | plan.md → 코드 | (tech-spec.md 반영) | 엔지니어 (본인) | `/write-plan`, `/implement-plan` |
-| Test | verify.md | test-strategy.md | 코드 오너 (본인) | `/verify-change` |
-| Deploy | release.md (PR 리뷰는 REVIEW.md) | releases.md | 코드 오너, 태그 push 는 릴리스 관리자 (모두 본인) | `/review-change`, `/prepare-release` |
-| Maintain | 새 intent.md | — | 서비스 오너 (본인) | `/triage-signal` |
+| 스테이지 | 기능별 산출물 (`docs/features/<기능-id>/`) | 승인 | 스킬 |
+|---|---|---|---|
+| (선택) Research | research.md | — | `/research-product`, `/research-tech` |
+| Plan | intent.md | 제품 오너 (본인) | `/write-intent` |
+| Design | spec.md | 제품 오너 (본인) | `/write-spec` |
+| Build | plan.md → 코드 | 엔지니어 (본인) | `/write-plan`, `/implement-plan` |
+| Test | verify.md | 코드 오너 (본인) | `/verify-change` |
+| Deploy | release.md (PR 리뷰는 REVIEW.md) | 코드 오너, 태그 push 는 릴리스 관리자 (모두 본인) | `/review-change`, `/prepare-release` |
+| Maintain | 새 intent.md | 서비스 오너 (본인) | `/triage-signal` |
 
 - 현재 상태: `/sdlc-status`
 - 문서 경로는 모두 저장소 루트 기준이다. 하위 폴더에서 시작한 세션도 루트의 `docs/`, `tasks/` 에 쓴다.
-- 통합 문서는 지금 제품·시스템의 모습이고, 기능별 산출물은 그 작업이 바꾸는 것이다. product.md 는 intent 승인 뒤 `/write-spec` 이, tech-spec.md 는 구현 마지막 단계에서 `/implement-plan` 이 고친다.
 - Research 는 선택 스테이지다. 사용자가 지시하거나, 열린 질문이 외부 사실(시장, 경쟁 제품, 기술 성능)로만 답할 수 있을 때 실행한다. 출처 없는 주장과 측정하지 않은 숫자는 쓰지 않는다. 측정 코드는 `bench/<주제>/` 에 둔다 (런타임: python3 `.venv`, node pnpm). 더 깊은 조사는 `/deep-research <질문>` (사용자가 실행)
 - 산출물의 `Status:` 를 승인 상태로 바꾸는 것은 승인자만 한다: `! python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve <파일>`
 - 승인된 plan.md 의 '변경 파일' 에 없는 `backend/app/**`, `frontend/src/**` 경로는 편집이 막힌다 (`frontend/src/tests/**`, `backend/app/config/sources.json` 포함). 범위를 바꾸려면 plan.md 를 고치고 재승인받는다.
 - 테스트를 고쳐 통과시키지 않는다. 코드를 고친다.
 - Deploy 는 프로덕션 배포가 없다: release.md 승인, 버전 bump, 버전 태그, releases.md 기록만 한다. 원격 태그 push(`git push --tags`, `git push … v<숫자>`)와 파괴적 명령(`make reset`, `make reset-and-collect`, `curl … reset-and-collect`)은 `RELEASE_APPROVAL` 이 있는 세션에서만 실행된다.
 - 계약(`backend/app/schemas/` ↔ `frontend/src/types/` ↔ `frontend/src/mocks/`)은 손으로 맞춘다. 고칠 때 `.claude/rules/contracts.md` 를 따른다.
+
+## 문서 지도
+통합 문서(`docs/*.md`)는 지금 제품·시스템의 모습만 적는다. 기능별 산출물은 그 작업이 바꾸는 것을 적는다. 문서를 만들고 고치는 규칙은 이 표와 각 스킬에 있고, 통합 문서 안에는 적지 않는다.
+
+| 문서 | 만드는 것 | 고치는 것 | 읽는 것 |
+|---|---|---|---|
+| `docs/features/<id>/intent.md` | `/write-intent`, `/triage-signal` | 같은 스킬 | `/write-spec`, `/write-plan`, `/research-product` |
+| `docs/features/<id>/research.md` | `/research-product`, `/research-tech` | 같은 스킬 | `/write-spec` |
+| `docs/features/<id>/spec.md` | `/write-spec` | 같은 스킬 | `/write-plan`, `/review-change` |
+| `docs/features/<id>/plan.md` | `/write-plan` | 범위가 바뀌면 고치고 재승인 | `/implement-plan`, `/verify-change`, `/review-change` |
+| `tasks/<id>/NN-<slug>.md` | `/implement-plan` | 같은 스킬 | `/sdlc-status` |
+| `docs/features/<id>/verify.md` | `/verify-change` | 같은 스킬 | `/prepare-release` |
+| `docs/features/<id>/release.md` | `/prepare-release` | 같은 스킬 | — |
+| `docs/product.md` | 하네스 생성 | `/write-spec` (범위, 사용자, 원칙, 기능 목록), `/research-product` (근거) | `/write-intent`, `/research-product` |
+| `docs/tech-spec.md` | 하네스 생성 | `/implement-plan` (구현 반영, 기술 선택과 근거, 변경 이력), `/research-tech` (기술 선택과 근거) | `/write-spec`, `/write-plan`, `/research-tech`, `/prepare-release` |
+| `docs/test-strategy.md` | 하네스 생성 | `/implement-plan` (검사 명령이나 테스트 종류가 바뀔 때) | `/write-plan`, `/verify-change`, `/prepare-release` |
+| `docs/releases.md` | 하네스 생성 | `/prepare-release` (버전 문자열 위치, 이력) | `/prepare-release` |
+| `docs/research/product.md` | `/research-product` (제품 전체 조사) | 같은 스킬 (번호를 이어 추가) | `/research-product` |
+| `docs/research/tech.md` | `/research-tech` (시스템 전체 조사) | 같은 스킬 (번호를 이어 추가) | `/write-spec`, `/research-tech` |
 
 ## 진행 기록과 이어서 하기
 - plan 의 작업 순서 단계마다 `tasks/<기능-id>/NN-<slug>.md` 에 상태(todo, doing, done, blocked), 한 일, 바꾼 파일, 결정, 막힌 점, 다음을 남긴다. `/implement-plan` 이 만들고 고친다.

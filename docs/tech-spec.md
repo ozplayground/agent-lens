@@ -1,9 +1,6 @@
 # 기술 스펙: AgentLens
 
 Updated: 2026-11-02
-갱신: 기능 구현이 끝나면 `/implement-plan` 의 마지막 단계에서 그 기능 spec 의 설계를 반영한다. 지금 동작하는 시스템만 적는다. 계획은 기능 spec 에 둔다.
-
-이 문서의 첫 내용은 현재 코드(브랜치 `chore/sdlc-harness`)만 보고 썼다.
 
 ## 시스템 구성
 | 앱/서비스 | 책임 | 스택 | 위치 |
@@ -24,7 +21,7 @@ Updated: 2026-11-02
   - frontend: `frontend/src/types/chat.ts`, `news.ts`, `trends.ts` (TS + zod)
   - 목: `frontend/src/mocks/handlers.ts`, `frontend/src/mocks/handlers/chat.ts`, `frontend/src/mocks/fixtures/chat.ts` (MSW)
   - 계약 테스트: `frontend/src/tests/chat/ContractAndMsw.test.ts`
-  - 변경 규칙: `.claude/rules/contracts.md`. 하위 호환·버전 규칙은 아직 정하지 않았다.
+  - 변경 규칙: 계약을 바꾸면 위 세 곳과 계약 테스트를 함께 바꾼다. 하위 호환·버전 규칙은 아직 정하지 않았다.
 - MCP 도구: `get_latest_harness_methods`, `get_mcp_and_skills_ecosystem`, `search_agent_news`, `trigger_agentlens_crawl`.
 
 ## 데이터
@@ -44,8 +41,6 @@ Updated: 2026-11-02
 ## 기술 선택과 근거
 | 선택 | 대안 | 근거 | 결정한 기능 |
 |---|---|---|---|
-
-근거 칸에는 `docs/research/tech.md #번호` 나 기능 spec 의 '근거' 를 적는다. 근거가 없으면 "가정" 으로 적는다.
 
 ## 변경 이력
 | 날짜 | 기능 id | 바뀐 절 |

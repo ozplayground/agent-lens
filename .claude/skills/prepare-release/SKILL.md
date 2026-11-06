@@ -15,6 +15,6 @@ argument-hint: "[버전] [기능-id ...]"
 4. 통합 문서가 반영됐는지 확인한다: tech-spec.md 의 '변경 이력' 에 기능 행이 있는가. 없으면 release.md 의 '통합 문서 반영' 에 적는다.
 5. 버전을 올린다. `docs/releases.md` 의 '버전 문자열 위치' 표의 파일을 모두 새 버전으로 바꾸고, `git grep -n '<이전 버전>'` 으로 남은 곳이 없는지 확인한다 (lockfile 제외). 표에 없는 곳이 나오면 표에 추가한다.
    - `backend/app/config.py`, `frontend/src/app/api/health/route.ts` 는 게이트 경로다. 포함 기능의 승인된 plan.md '변경 파일' 에 없으면 hook 이 막는다. 그때는 멈추고 plan.md 에 넣어 재승인받으라고 알린다.
-6. `docs/releases.md` 맨 위 '이력' 표에 이번 릴리스를 추가한다. 버전 bump 와 문서를 커밋한 뒤 로컬 주석 태그를 만든다: `git tag -a v<버전> -m "Release v<버전>: <요약>"`
+6. `docs/releases.md` 의 '이력' 표 맨 위에 행을 추가한다: `| v<버전> | <날짜> | <커밋> | <기능 id, ...> | <한 줄 요약> |`. 검증 결과, 태그·되돌리기 명령은 기능별 release.md 에 두고 releases.md 에는 쓰지 않는다. 버전 bump 와 문서를 커밋한 뒤 로컬 주석 태그를 만든다: `git tag -a v<버전> -m "Release v<버전>: <요약>"`
 7. 원격 태그 push 는 hook 이 막는다. 릴리스 관리자에게 넘길 내용을 한 블록으로 정리한다: 버전, 변경 요약, 검증 결과, push 명령(`git push origin v<버전>`), 되돌리기(`git tag -d v<버전>`, push 뒤라면 `git push origin :refs/tags/v<버전>`), 승인 명령:
    `! python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve docs/features/<id>/release.md`

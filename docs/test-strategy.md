@@ -1,7 +1,6 @@
 # 테스트 전략: AgentLens
 
 Updated: 2026-11-02
-갱신: 검사 명령이나 테스트 종류를 바꾸는 plan 을 구현할 때 같이 고친다. `/verify-change` 와 `/prepare-release` 가 이 문서를 기준으로 쓴다.
 
 ## 검사 명령
 - 전체: `make check` (아래 둘을 차례로 돈다. 하나라도 실패하면 0 이 아닌 값으로 끝난다)
@@ -40,6 +39,6 @@ Updated: 2026-11-02
 - 지정한 고위험 영역이 없다.
 
 ## 릴리스 전 통합·회귀 검증
-- `make check` 를 돌리고 출력을 release.md 에 붙인다.
+- `make check` 가 통과한다.
 - 버전 문자열이 모두 새 버전인지 확인한다: `git grep -n '<새 버전>'` 로 `docs/releases.md` 의 '버전 문자열 위치' 를 대조한다.
 - 두 앱을 함께 띄우는 통합 검사는 정하지 않았다. 하려면 `make docker-up` 후 `curl -f http://127.0.0.1:8000/health` 와 `wget -qO- http://127.0.0.1:3001/api/health` (compose healthcheck 와 같은 명령) 를 쓸 수 있다.
