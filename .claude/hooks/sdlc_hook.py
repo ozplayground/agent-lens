@@ -3,7 +3,7 @@
 
 settings.json 의 hooks 에서 호출된다 (stdin 으로 hook 입력 JSON 을 받는다).
   session-start   SessionStart: 작업 단위별 현재 스테이지와 tasks 진행률을 컨텍스트로 출력
-  pre-tool        PreToolUse: 산출물 체인, 승인 위조, plan 범위, 배포 게이트 검사
+  pre-tool        PreToolUse: 역할 게이트, 산출물 체인, 승인 위조, plan 범위, 배포 게이트 검사
   task-completed  TaskCompleted(에이전트 팀): check_command 가 실패하면 완료를 막는다
 사람이 직접 실행한다 (Claude 의 도구 호출이 아니라 프롬프트의 `!` 접두어로):
   status          작업 단위별 스테이지 표
@@ -17,6 +17,7 @@ import fnmatch
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -144,6 +145,71 @@ def covered_by_approved_plan(rel, root, cfg):
     return None
 
 
+# --------------------------------------------------------------------------
+# 역할 게이트: role_owners 의 경로는 지정된 서브에이전트(agent_type)만 쓴다.
+# 메인 세션의 도구 호출에는 agent_type 이 없다. 사람이 세션을 띄울 때
+# SDLC_ROLE_GATE=0 을 주면 끈다 (Claude 의 Bash 로는 바꿀 수 없다).
+# --------------------------------------------------------------------------
+WRITE_VERB_RE = re.compile(
+    r"(?:^|[\s;&|(])(?:sed\s+(?:-[a-zA-Z]*i|--in-place)|tee|mv|cp|rm|rmdir|touch|truncate|patch|install|"
+    r"perl\s+-[a-zA-Z]*i)\b|\bgit\s+(?:apply|am)\b|\.write\(|writeFile|write_text|write_bytes|"
+    r"open\([^)]*,\s*['\"][wax]"
+)
+REDIRECT_RE = re.compile(r"(?<![0-9&])>{1,2}(?!&)\s*([^\s;&|]+)")
+
+
+def role_gate_enabled():
+    return os.environ.get("SDLC_ROLE_GATE", "").strip().lower() not in ("0", "false", "no", "off")
+
+
+def role_owners_for(rel, cfg):
+    for glob, owners in cfg.get("role_owners", {}).items():
+        if fnmatch.fnmatch(rel, glob):
+            return owners
+    return None
+
+
+def to_rel(path, cwd, root):
+    return os.path.relpath(os.path.realpath(os.path.join(cwd or root, path)), os.path.realpath(root))
+
+
+def bash_role_violation(cmd, cwd, root, cfg, agent_type):
+    """Bash 명령이 역할 소유 경로를 고치면 (경로, 소유자) 를 돌려준다."""
+    try:
+        tokens = shlex.split(cmd, posix=True)
+    except ValueError:
+        tokens = re.split(r"[\s'\"]+", cmd)
+    candidates = set()
+    for tok in tokens:
+        for part in re.split(r"[;&|()<>=,'\"\[\]{}]", tok):
+            part = part.strip()
+            if part and ("/" in part or "." in part) and not part.startswith("-"):
+                candidates.add(part)
+    # 패치 적용은 내용이 어느 파일을 고치는지 명령만으로 알 수 없어 implementer 만 허용한다
+    # 명령 위치(줄·&&·;·| 로 나눈 각 구간의 맨 앞)에서 실행될 때만 본다. 문자열 안의 단어는 무시한다.
+    segments = [seg.strip() for seg in re.split(r"\n|&&|\|\||;|\|", cmd)]
+    if agent_type != "implementer" and any(
+        re.match(r"^(?:sudo\s+)?(?:git\s+(?:-C\s+\S+\s+)?(?:apply|am)\b|patch\s)", seg) for seg in segments
+    ):
+        return "(패치 적용)", ["implementer"]
+    redirect_targets = {m.group(1).strip("'\"") for m in REDIRECT_RE.finditer(cmd)}
+    has_verb = bool(WRITE_VERB_RE.search(cmd))
+    for cand in candidates | redirect_targets:
+        rel = to_rel(cand, cwd, root)
+        owners = role_owners_for(rel, cfg)
+        if not owners or agent_type in owners:
+            continue
+        if cand in redirect_targets or has_verb:
+            return rel, owners
+    return None
+
+
+def role_deny(rel, owners, agent_type):
+    who = f"`{agent_type}` 서브에이전트" if agent_type else "메인 세션"
+    deny(f"역할 게이트: `{rel}` 는 {', '.join(owners)} 서브에이전트가 쓴다. {who}은(는) 직접 고치지 않는다. "
+         f"Agent 도구로 `{owners[0]}` 를 불러 맡긴다 (사람이 끄려면 세션을 SDLC_ROLE_GATE=0 으로 띄운다).")
+
+
 def deny(reason):
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
@@ -157,9 +223,15 @@ def pre_tool(data, cfg):
     ti = data.get("tool_input", {}) or {}
     root = repo_root(data.get("cwd") or os.getcwd())
     art = cfg["artifact_root"].rstrip("/") + "/"
+    agent_type = data.get("agent_type")
+    gate_roles = role_gate_enabled()
 
     if tool == "Bash":
         cmd = ti.get("command", "")
+        if gate_roles:
+            hit = bash_role_violation(cmd, data.get("cwd"), root, cfg, agent_type)
+            if hit:
+                role_deny(hit[0], hit[1], agent_type)
         if art.rstrip("/") in cmd and APPROVAL_ANY_RE.search(cmd):
             deny("산출물 승인은 사람이 한다. 승인자가 프롬프트에서 `! python3 \"$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py\" approve <파일>` 을 실행해야 한다.")
         # $(...) 치환과 따옴표를 걷어낸 뒤, 명령 위치에서 approve 를 실행하는지 본다
@@ -181,6 +253,10 @@ def pre_tool(data, cfg):
     if not path:
         return
     rel = os.path.relpath(os.path.realpath(os.path.join(data.get("cwd") or root, path)), os.path.realpath(root))
+    if gate_roles:
+        owners = role_owners_for(rel, cfg)
+        if owners and agent_type not in owners:
+            role_deny(rel, owners, agent_type)
     new_text = ti.get("content") or ti.get("new_string") or ti.get("new_source") or ""
     if not new_text and isinstance(ti.get("edits"), list):
         new_text = "\n".join(e.get("new_string", "") for e in ti["edits"])
@@ -212,6 +288,9 @@ def task_completed(data, cfg):
 
 
 def print_status(root, cfg):
+    if role_gate_enabled() and cfg.get("role_owners"):
+        pairs = "; ".join(f"{g} → {', '.join(o)}" for g, o in cfg["role_owners"].items())
+        print(f"[SDLC] 역할 게이트 켜짐: 메인 세션은 아래 경로를 직접 쓰지 않고 서브에이전트에 맡긴다. {pairs}")
     if auto_approve_enabled(cfg):
         print("[SDLC] 자동 승인 켜짐: 산출물을 자체 검토한 뒤 `python3 .claude/hooks/sdlc_hook.py approve --auto <파일>` 로 승인하고 다음 스테이지로 넘어간다.")
     rows = workstreams(root, cfg)

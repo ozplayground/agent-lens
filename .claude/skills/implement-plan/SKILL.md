@@ -17,7 +17,7 @@ argument-hint: "[기능-id] [단계 번호]"
 
 ## 단계마다
 1. 시작할 때 task 파일을 `Status: doing`, `Session`, `Agent`, `Updated` 로 고친다. 서브에이전트에 맡기면 넘기는 프롬프트에 task 파일 경로를 넣고, 띄우자마자 받은 agent ID 를 `Agent:` 에 적는다. implementer 는 `background: true` 라서 띄우는 즉시 ID 가 돌아온다.
-2. 단계를 구현하고 `make check` 를 돌린다.
+2. `implementer` 서브에이전트에 단계를 맡긴다. 메인 세션은 `backend/app/**`, `frontend/src/**` 를 직접 고치지 않는다 (역할 게이트가 막는다). 서로 다른 파일을 건드리는 단계는 implementer 여러 개를 동시에 띄운다. 끝나면 `make check` 를 돌린다.
 3. 끝나면 task 파일에 한 일, 바꾼 파일, 검사 결과(명령과 마지막 출력), 결정, 다음을 적고 `Status: done`.
 4. 진행할 수 없으면 '막힌 점' 에 이유를 적고 `Status: blocked` 로 두고 멈춘다.
 

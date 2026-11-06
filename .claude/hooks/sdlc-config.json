@@ -19,5 +19,22 @@
   "bench_runtimes": [
     "python3",
     "node"
-  ]
+  ],
+  "role_owners": {
+    "docs/features/*/spec.md": [
+      "spec-writer"
+    ],
+    "docs/features/*/plan.md": [
+      "planner"
+    ],
+    "backend/app/**": [
+      "implementer"
+    ],
+    "frontend/src/**": [
+      "implementer"
+    ],
+    "bench/**": [
+      "benchmarker"
+    ]
+  }
 }

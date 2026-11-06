@@ -68,4 +68,5 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 | main | `claude -n main` (저장소 루트) | 저장소 전체 (`**`) |
 
 - 단일 세션이다. 반복 역할은 서브에이전트로 부른다: researcher, benchmarker, spec-writer, planner, implementer, verifier, reviewer, triager.
+- 역할 게이트 (hook 이 강제): `docs/features/*/spec.md` 는 spec-writer, `docs/features/*/plan.md` 는 planner, `backend/app/**`·`frontend/src/**` 는 implementer, `bench/**` 는 benchmarker 서브에이전트만 쓴다. 메인 세션이 Write/Edit 나 Bash(리다이렉트, `sed -i`, `cp`/`mv`/`rm`, 스크립트로 파일 쓰기, 패치 적용)로 고치려 하면 막힌다. 메인 세션은 intent·verify·release 산출물, 통합·상세 문서, tasks 기록, 서브에이전트 조율을 맡는다. 매핑은 `.claude/hooks/sdlc-config.json` 의 `role_owners`. 사람이 끄려면 세션을 `SDLC_ROLE_GATE=0` 으로 띄운다.
 - 같은 파일을 동시에 고치는 세션을 만들지 않는다.
