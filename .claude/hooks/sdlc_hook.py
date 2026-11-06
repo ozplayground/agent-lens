@@ -34,10 +34,16 @@ APPROVAL_ANY_RE = re.compile(r"Status:\s*(accepted|approved|done)\b", re.I)
 def load_config():
     with open(os.path.join(HERE, "sdlc-config.json"), encoding="utf-8") as f:
         cfg = json.load(f)
+    # 로컬 파일은 auto_approve 하나만 읽는다. 게이트 경로·배포 패턴 같은 다른 정책은 덮어쓰지 못한다.
     local = os.path.join(HERE, "sdlc-config.local.json")
     if os.path.exists(local):
-        with open(local, encoding="utf-8") as f:
-            cfg.update(json.load(f))
+        try:
+            with open(local, encoding="utf-8") as f:
+                cfg["auto_approve"] = json.load(f).get("auto_approve") is True
+        except (OSError, ValueError, AttributeError):
+            cfg["auto_approve"] = False
+    else:
+        cfg["auto_approve"] = False
     return cfg
 
 
