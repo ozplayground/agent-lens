@@ -8,6 +8,9 @@ settings.json 의 hooks 에서 호출된다 (stdin 으로 hook 입력 JSON 을 �
 사람이 직접 실행한다 (Claude 의 도구 호출이 아니라 프롬프트의 `!` 접두어로):
   status          작업 단위별 스테이지 표
   approve <file>  산출물의 Status 를 승인 상태로 바꾸고 승인자/날짜를 남긴다
+자동 승인 (켜져 있을 때만 Claude 가 도구로 실행할 수 있다):
+  approve --auto <file>  승인자를 '자동 승인 (Claude)' 로 남긴다
+  켜는 법: 환경 변수 SDLC_AUTO_APPROVE=1, 또는 sdlc-config.local.json (git 에 올리지 않음) 에 {"auto_approve": true}
 """
 import datetime
 import fnmatch
@@ -30,7 +33,21 @@ APPROVAL_ANY_RE = re.compile(r"Status:\s*(accepted|approved|done)\b", re.I)
 
 def load_config():
     with open(os.path.join(HERE, "sdlc-config.json"), encoding="utf-8") as f:
-        return json.load(f)
+        cfg = json.load(f)
+    local = os.path.join(HERE, "sdlc-config.local.json")
+    if os.path.exists(local):
+        with open(local, encoding="utf-8") as f:
+            cfg.update(json.load(f))
+    return cfg
+
+
+def auto_approve_enabled(cfg):
+    env = os.environ.get("SDLC_AUTO_APPROVE", "").strip().lower()
+    if env in ("1", "true", "yes", "on"):
+        return True
+    if env in ("0", "false", "no", "off"):
+        return False
+    return bool(cfg.get("auto_approve"))
 
 
 def repo_root(cwd):
@@ -142,8 +159,13 @@ def pre_tool(data, cfg):
         # $(...) 치환과 따옴표를 걷어낸 뒤, 명령 위치에서 approve 를 실행하는지 본다
         norm = [re.sub(r"\$\([^)]*\)", "X", seg).replace('"', "").replace("'", "").strip()
                 for seg in re.split(r"\n|&&|\|\||;|\|", cmd)]
-        if any(re.match(r"^(\S*python3?\s+)?\S*sdlc_hook\.py\s+approve\b", seg) for seg in norm):
-            deny("Claude 는 승인 명령을 실행하지 않는다. 승인자가 프롬프트에서 `!` 로 직접 실행해야 한다.")
+        approve_segs = [seg for seg in norm if re.match(r"^(\S*python3?\s+)?\S*sdlc_hook\.py\s+approve\b", seg)]
+        if approve_segs:
+            if not auto_approve_enabled(cfg):
+                deny("Claude 는 승인 명령을 실행하지 않는다. 승인자가 프롬프트에서 `!` 로 직접 실행해야 한다. "
+                     "자동 승인을 쓰려면 SDLC_AUTO_APPROVE=1 이나 .claude/hooks/sdlc-config.local.json 의 auto_approve 를 켠다.")
+            if not all(re.search(r"\sapprove\s+--auto\b", seg) for seg in approve_segs):
+                deny("자동 승인은 `sdlc_hook.py approve --auto <파일>` 로만 실행한다 (승인자가 '자동 승인 (Claude)' 로 남는다).")
         for pat in cfg.get("deploy_patterns", []):
             if fnmatch.fnmatch(cmd.strip(), pat) and not os.environ.get("RELEASE_APPROVAL"):
                 deny(f"프로덕션 게이트: `{pat}` 는 릴리스 승인 후에만 실행한다. 릴리스 관리자가 RELEASE_APPROVAL 을 설정한 세션에서 실행해야 한다.")
@@ -184,6 +206,8 @@ def task_completed(data, cfg):
 
 
 def print_status(root, cfg):
+    if auto_approve_enabled(cfg):
+        print("[SDLC] 자동 승인 켜짐: 산출물을 자체 검토한 뒤 `python3 .claude/hooks/sdlc_hook.py approve --auto <파일>` 로 승인하고 다음 스테이지로 넘어간다.")
     rows = workstreams(root, cfg)
     if not rows:
         print(f"[SDLC] {cfg['artifact_root']}/ 에 작업 단위가 없다. 새 작업은 intent.md 부터 시작한다.")
@@ -199,13 +223,16 @@ def print_status(root, cfg):
             print(f"  tasks {done}/{len(tasks)} done" + (f" · {', '.join(open_)}" if open_ else ""))
 
 
-def approve(path):
+def approve(path, auto=False):
     if not os.path.exists(path):
         path = os.path.join(repo_root(os.getcwd()), path)
     word = APPROVE_WORD.get(os.path.basename(path), "approved")
     with open(path, encoding="utf-8") as f:
         text = f.read()
-    who = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True).stdout.strip() or os.environ.get("USER", "unknown")
+    if auto:
+        who = "자동 승인 (Claude)"
+    else:
+        who = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True).stdout.strip() or os.environ.get("USER", "unknown")
     stamp = f"Status: {word}\nApproved-by: {who} ({datetime.date.today().isoformat()})"
     text = re.sub(r"^Approved-by:.*\n?", "", text, flags=re.M)
     text, n = STATUS_RE.subn(stamp, text, count=1)
@@ -220,7 +247,14 @@ def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     cfg = load_config()
     if cmd == "approve":
-        return approve(sys.argv[2])
+        args = sys.argv[2:]
+        auto = "--auto" in args
+        files = [a for a in args if a != "--auto"]
+        if not files:
+            sys.exit("사용법: sdlc_hook.py approve [--auto] <파일>")
+        if auto and not auto_approve_enabled(cfg):
+            sys.exit("자동 승인이 꺼져 있다 (SDLC_AUTO_APPROVE 또는 sdlc-config.local.json 의 auto_approve).")
+        return approve(files[0], auto=auto)
     if cmd == "status":
         return print_status(repo_root(os.getcwd()), cfg)
     data = json.load(sys.stdin)

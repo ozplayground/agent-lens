@@ -92,3 +92,9 @@ frontend/.pnpm-store/
 **/CLAUDE.local.md
 bench/**/.venv/
 bench/**/node_modules/
+
+# SDLC 하네스 로컬 설정 (자동 승인 등)
+.claude/hooks/sdlc-config.local.json
+
+# Playwright MCP 산출물
+.playwright-mcp/
