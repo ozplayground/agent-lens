@@ -6,7 +6,7 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 - 검사: `make check` (실패 시 0 이 아닌 값으로 끝난다. 작업 완료 보고에 출력을 붙인다). backend pytest + frontend vitest·eslint·`tsc --noEmit`
 - 환경 준비: `make setup` · 프론트 빌드: `make build` · 로컬 실행: `make docker-up` / `make docker-down` / `make docker-logs`
 - `make test`, `make dev` 는 지워진 `scripts/` 를 가리켜 지금 동작하지 않는다. 검사는 `make check` 를 쓴다.
-- `make check` 는 `.env` 의 LLM 키로 외부 호출을 할 수 있다 (라이브 테스트 격리는 미정, `docs/test-strategy.md`).
+- `make check` 는 `.env` 의 LLM 키로 외부 호출을 하고, backend 테스트가 git 이 추적하는 루트 `config.json`·`sources.json` 을 고친다 (격리는 미정, `docs/test-strategy.md`). 돌린 뒤 `git status` 로 확인하고 되돌린다.
 
 ## SDLC
 작업은 기능 단위로 스테이지를 따른다. 각 스테이지는 산출물을 커밋하고, 다음 스테이지는 그것을 읽고 시작한다.
@@ -49,6 +49,13 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 | `docs/releases.md` | 하네스 생성 | `/prepare-release` (버전 문자열 위치, 이력) | `/prepare-release` |
 | `docs/research/product.md` | `/research-product` (제품 전체 조사) | 같은 스킬 (번호를 이어 추가) | `/research-product` |
 | `docs/research/tech.md` | `/research-tech` (시스템 전체 조사) | 같은 스킬 (번호를 이어 추가) | `/write-spec`, `/research-tech` |
+| `docs/functional-spec/*.md` | 코드 역분석 (2026-11-06) | `/implement-plan` (기능 동작이 바뀐 영역 문서, 새 영역이면 파일과 색인 행 추가) | `/write-intent`, `/write-spec`, `/write-plan`, `/verify-change` |
+| `docs/ui-spec.md` | 코드 역분석 | `/implement-plan` (화면·모달·상태·localStorage 가 바뀔 때) | `/write-spec`, `/write-plan` |
+| `docs/api.md` | 코드 역분석 | `/implement-plan` (엔드포인트·스키마·SSE 가 바뀔 때) | `/write-spec`, `/write-plan`, `/review-change` |
+| `docs/data-model.md` | 코드 역분석 | `/implement-plan` (테이블·열·설정 파일 구조가 바뀔 때) | `/write-spec`, `/write-plan` |
+| `docs/operations.md` | 코드 역분석 | `/implement-plan` (실행·설정·스케줄·외부 의존이 바뀔 때) | `/write-plan`, `/prepare-release`, `/triage-signal` |
+| `docs/test-cases.md` | 코드 역분석 | `/implement-plan` (테스트를 추가·삭제할 때) | `/write-plan`, `/verify-change` |
+| `docs/known-issues.md` | 코드 역분석 | `/implement-plan` (고친 문제 행 삭제), `/triage-signal` (새 문제 행 추가) | `/write-intent`, `/triage-signal` |
 
 ## 진행 기록과 이어서 하기
 - plan 의 작업 순서 단계마다 `tasks/<기능-id>/NN-<slug>.md` 에 상태(todo, doing, done, blocked), 한 일, 바꾼 파일, 결정, 막힌 점, 다음을 남긴다. `/implement-plan` 이 만들고 고친다.

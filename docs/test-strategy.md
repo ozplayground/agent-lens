@@ -1,6 +1,6 @@
 # 테스트 전략: AgentLens
 
-Updated: 2026-11-02
+Updated: 2026-11-06
 
 ## 검사 명령
 - 전체: `make check` (아래 둘을 차례로 돈다. 하나라도 실패하면 0 이 아닌 값으로 끝난다)
@@ -12,23 +12,24 @@ Updated: 2026-11-02
 ## 테스트 종류
 | 종류 | 대상 | 위치 | 언제 돈다 |
 |---|---|---|---|
-| 단위 | backend API·서비스·수집기 | `backend/tests/test_*.py` (16개, `conftest.py` 별도) | 매 변경 |
-| 단위 | frontend 컴포넌트·훅 (vitest, jsdom, MSW) | `frontend/src/tests/**/*.test.ts(x)` (24개, 설정 `frontend/src/tests/setup.ts`) | 매 변경 |
+| 단위 | backend API·서비스·수집기 | `backend/tests/test_*.py` (파일 16개, 테스트 160개, `conftest.py` 별도) | 매 변경 |
+| 단위 | frontend 컴포넌트·훅 (vitest, jsdom, MSW) | `frontend/src/tests/**/*.test.ts(x)` (파일 24개, 테스트 241개, 설정 `frontend/src/tests/setup.ts`) | 매 변경 |
 | 계약 | zod 스키마 ↔ MSW 핸들러 | `frontend/src/tests/chat/ContractAndMsw.test.ts` | 계약 변경 시 (`make check` 에 포함) |
 | 통합·회귀 | 두 앱을 함께 | 없음 | 릴리스 전 (아래 미정) |
 
-- DB 격리: `backend/tests/conftest.py` 가 `DATABASE_URL` 을 `backend/tests/test_agentlens.db` 로 바꾸고 테스트마다 스키마를 만든다. 개발 DB `agentlens.db` 는 쓰지 않는다.
+- DB 격리: `backend/tests/conftest.py` 가 `DATABASE_URL` 을 `backend/tests/test_agentlens.db` 로 바꾸고 스키마를 만든다. 데이터는 지우지 않아 실행할 때마다 쌓인다. 개발 DB `agentlens.db` 는 쓰지 않는다.
+- 테스트 목록과 영역별 커버리지는 `test-cases.md`.
 - frontend 는 `frontend/src/mocks/server.ts` 의 MSW 로 backend 를 대신한다.
 - E2E 테스트는 없다.
 
-## 외부 호출 가능성 (미확정)
-`make check` 를 돌리면 아래 테스트가 실제 외부 호출을 할 수 있다. 확인하지 않았다.
-- `backend/app/config.py` 가 `.env`, `backend/.env` 를 자동으로 읽어 LLM 키가 설정될 수 있다.
-- `llm_processor.is_test_environment()` 는 `TESTING`, `CI`, `pytest` 로드 여부로 테스트 환경을 판정한다. 이것이 모든 라이브 호출을 막는지는 확인하지 않았다.
-- `backend/tests/test_config_and_live_llm.py` 는 mock 없이 `llm_processor.answer_question` 을 부른다.
-- `backend/tests/test_deep_researcher.py`, `backend/tests/test_sources_and_research.py` 는 mock 없이 피드 탐색·URL 검사를 한다.
-- `test_sources_toggle_and_crud` 가 `sources.json` 을 고칠 수 있다.
-- 격리 방식(`TESTING=1` 강제, pytest 마커 분리)은 정하지 않았다.
+## 외부 호출과 파일 부작용
+`make check` 의 backend 테스트는 아래 외부 호출과 파일 수정을 한다 (2026-11-06 코드로 판정, 근거는 `test-cases.md` 의 '외부 호출 판정').
+- `backend/app/config.py` 가 `.env`, `backend/.env` 를 읽는다. 키가 있으면 LLM 호출이 실제로 나간다.
+- `llm_processor.is_test_environment()` 는 pytest 중 True 지만, 막는 호출은 챗 ReAct 플래너 하나뿐이다. 답변 생성·스트리밍·수집 평가는 이 값을 보지 않는다.
+- `conftest.py` 는 `DATABASE_URL` 만 바꾸고 `TESTING`·`CI` 설정이나 키 제거를 하지 않는다.
+- 외부 호출하는 테스트: 3-tier 챗 2개와 `/ask`·`/ask/stream`(키가 있으면 Anthropic), scoped 챗 4개(스크래퍼가 github.com·example.com GET), `test_probe_and_discover_feed_github`·`test_source_researcher_inspect_url`·`test_deep_research_run_and_audit`(github.com 등), `test_notion_export_page_mock`(api.notion.com), `test_email_api_endpoints`(`config.json` 의 SMTP 호스트 연결 시도).
+- git 이 추적하는 파일을 고치는 테스트: `test_briefing_settings_get_and_post` 가 루트 `config.json` 을, `test_sources_toggle_and_crud`·`test_deep_research_run_and_audit` 가 루트 `sources.json` 을 고친다.
+- 격리 방식(`TESTING=1` 강제, 키 제거, pytest 마커 분리, 설정 파일 임시 경로)은 정하지 않았다. 그때까지 테스트를 돌린 뒤 `git status` 로 `config.json`·`sources.json` 변경을 확인하고 되돌린다.
 
 ## 통과 기준
 - `make check` 종료 코드 0
