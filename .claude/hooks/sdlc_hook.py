@@ -57,6 +57,29 @@ def auto_approve_enabled(cfg):
     return bool(cfg.get("auto_approve"))
 
 
+URL_RE = re.compile(r"https?://(\[[^\]]+\]|[^/:\s\"']+)(?::(\d+))?", re.I)
+LOOPBACK = {"localhost", "127.0.0.1", "[::1]"}
+
+
+def targets_only_copies(cmd, cfg):
+    """파괴적 명령이 원본이 아닌 로컬 사본 backend 만 겨누는지 본다.
+
+    대상 URL 이 명령에 하나 이상 적혀 있고 (make 는 AGENTLENS_API_URL=..., curl 은 URL),
+    모두 루프백 주소이며 포트가 명시돼 있고 protected_ports(원본 backend 포트)가 아니면 True.
+    URL 이 없으면 기본 주소(원본)로 가므로 False.
+    """
+    protected = {str(p) for p in cfg.get("protected_ports", [])}
+    urls = URL_RE.findall(cmd)
+    if not urls:
+        return False
+    if re.search(r"\bmake\b[^;&|\n]*\breset\b", cmd) and "AGENTLENS_API_URL=" not in cmd:
+        return False
+    for host, port in urls:
+        if host.lower() not in LOOPBACK or not port or port in protected:
+            return False
+    return True
+
+
 def repo_root(cwd):
     try:
         out = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"],
@@ -244,9 +267,17 @@ def pre_tool(data, cfg):
                      "자동 승인을 쓰려면 SDLC_AUTO_APPROVE=1 이나 .claude/hooks/sdlc-config.local.json 의 auto_approve 를 켠다.")
             if not all(re.search(r"\sapprove\s+--auto\b", seg) for seg in approve_segs):
                 deny("자동 승인은 `sdlc_hook.py approve --auto <파일>` 로만 실행한다 (승인자가 '자동 승인 (Claude)' 로 남는다).")
-        for pat in cfg.get("deploy_patterns", []):
-            if fnmatch.fnmatch(cmd.strip(), pat) and not os.environ.get("RELEASE_APPROVAL"):
-                deny(f"프로덕션 게이트: `{pat}` 는 릴리스 승인 후에만 실행한다. 릴리스 관리자가 RELEASE_APPROVAL 을 설정한 세션에서 실행해야 한다.")
+        if not os.environ.get("RELEASE_APPROVAL"):
+            for pat in cfg.get("deploy_patterns", []):
+                if fnmatch.fnmatch(cmd.strip(), pat):
+                    deny(f"프로덕션 게이트: `{pat}` 는 릴리스 승인 후에만 실행한다. 릴리스 관리자가 RELEASE_APPROVAL 을 설정한 세션에서 실행해야 한다.")
+            for seg, pat in ((s.strip(), p) for s in re.split(r"\n|&&|\|\||;|\|", cmd)
+                             for p in cfg.get("destructive_patterns", [])):
+                if re.search(r"\bmake\b[^\n]*\s-(n|-dry-run|-just-print)\b", seg):
+                    continue  # make -n 은 레시피를 출력만 하고 실행하지 않는다
+                if fnmatch.fnmatch(seg, pat) and not targets_only_copies(seg, cfg):
+                    deny(f"원본 데이터 게이트: `{pat}` 가 원본 backend(기본 주소 또는 포트 {cfg.get('protected_ports')})를 지운다. "
+                         "사본 DB 로 띄운 다른 포트의 로컬 backend 를 AGENTLENS_API_URL 이나 curl URL 로 명시하면 실행된다. 원본은 RELEASE_APPROVAL 세션에서만 실행한다.")
         return
 
     path = ti.get("file_path") or ti.get("notebook_path")

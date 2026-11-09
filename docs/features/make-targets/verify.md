@@ -52,7 +52,7 @@ eslint 경고 41개는 기존 테스트 파일의 미사용 변수이고 이 기
 | V5 (a)(b) | 통과 (다시 돌리지 않음, 단계 6 근거) | `git diff --stat 2a0cf81 HEAD -- scripts/collect.py backend/app Makefile` → Makefile 의 `docker-logs` 레시피 7줄만 바뀜, `collect` 대상 영향 없음. 단계 6 로그: (a) `직접 모드: …/step6/collect.db`, `수집 완료: 수집 250건, 저장 107건`. (b) `API 모드: http://127.0.0.1:18000`, `during_exit 0`, status 최근 로그 id 115 `success` 250/108 |
 | V5 (c) | 통과 (합의한 판정) | make 종료 2, `make collect: http://127.0.0.1:9 에 backend 가 없다` + `make: *** [collect] Error 1`. 스크립트 직접 종료 1 (`V5c.log`) |
 | V5 (d) | 통과 | DB sha256 두 개가 V0 과 같다 |
-| V6 | 미실행 (게이트), 정적 확인만 | `make -n reset AGENTLENS_API_URL=http://127.0.0.1:9` 종료 0, 출력에 `127.0.0.1:9`, `localhost:8000` 없음, `/health` 사전 확인·실패 메시지·`-X POST …/api/schedule/reset-and-collect`·JSON 아님/`status != started` 종료 1 경로 있음. `test_t5_reset_uses_api_url_variable PASSED` |
+| V6 | 통과 (메인 세션 실행, 2026-11-09) | 사본 DB(`scratchpad/v6/reset.db`)로 띄운 18000 backend (`ps eww` 로 `DATABASE_URL` 확인, 8000 LISTEN 없음). (a) 종료 0, `"status": "started"`, `"deleted_count": 4734`. (b) 바로 다시: `"status": "already_running"`, `make reset: 현재 수집이 진행 중이므로 초기화할 수 없습니다. 잠시 후 다시 시도해주세요.`, make 종료 2. (c) 18001: `curl: (7) Failed to connect …`, `make reset: http://127.0.0.1:18001 에 backend 가 없다. make dev 또는 make docker-up 으로 먼저 띄운다`, make 종료 2. 뒤 서버를 내리고 18000·13000 LISTEN, uvicorn·next dev 프로세스 없음 확인. 정적 확인: `make -n reset` 출력과 T5 PASSED |
 | V7 build | 통과 | `make docker-build` 종료 0, `docker image inspect` 종료 0 (`V7-build.log`) |
 | V7 up | 통과 | 종료 0 (11초), 두 서비스 `(healthy)`, `/health`·frontend `/api/health` healthy (`V7-up.log`) |
 | V7 설정 저장 | 통과 | GET 그대로 POST → `200`, `git diff --stat config.json` 비어 있음 |
@@ -67,7 +67,7 @@ eslint 경고 41개는 기존 테스트 파일의 미사용 변수이고 이 기
 verifier 의 '실패' 는 메인 세션이 넘긴 기준 "make 종료 0" 에 대한 판정이다. 그 기준은 잘못 넘긴 것이다. 터미널 Ctrl-C 는 make 자신에게도 SIGINT 를 보내 make 가 시그널로 끝나며(GNU Make 3.81), 이는 Makefile 로 바꿀 수 없다. `docs/operations.md:45` 도 "레시피는 0 으로 끝나고 make 는 `Error` 줄을 내지 않는다. 셸이 보는 make 의 종료 상태는 SIGINT 종료(130)다" 로 적고 있다. f9394fd 가 고치려던 것(레시피 실패로 보고되는 `make: *** [docker-logs] Error 130` 줄)은 없어졌고, 레시피는 자식 SIGINT 에서 0 을 낸다. 같은 동작인 `make dev`(V4 `returncode -2`, 통과)와 같은 기준으로 받아들인다.
 
 ### 증명 6: spec 우려 기록
-- 우려 1 (V6 을 누가 돌렸나): 아무도 돌리지 않았다. 메인·단계 6·verifier 세션 모두 `RELEASE_APPROVAL` 이 없어 hook 이 막는다. 실제 (a) started 종료 0, (b) already_running 종료 1, (c) backend 없음 종료 1 경로는 확인되지 않았다.
+- 우려 1 (V6 을 누가 돌렸나): 사용자 지시로 hook 의 게이트를 원본 backend(기본 주소, 포트 8000)만 막도록 좁힌 뒤 메인 세션이 사본 DB 의 18000 backend 에 돌렸다. (a)(b)(c) 모두 기대대로다 (실패 경로는 합의한 판정대로 make 종료 2). 원본 DB 는 건드리지 않았다. 사본에서 재수집이 시작돼 외부 수집 요청이 잠깐 나갔다.
 - 우려 3 (SIGINT 출력): `make dev` 는 make 종료 -2, `Interrupt` 줄 없음, `[dev] 중지했다`. `make docker-logs -f` 는 make 종료 -2, `==> 로그 보기를 멈췄다`, `Error 130`·`Interrupt` 줄 없음.
 - 우려 6·7 (외부 호출, volume): V4 (d) 빈 DB 첫 수집이 백그라운드로 시작돼 약 1초 뒤 취소됐다 (외부 요청이 나갔을 수 있다). V5 (a)(b) 는 단계 6 에서 실제 외부 수집을 두 번 했고 이번에는 돌리지 않았다. V7 은 volume 에 기사가 있어 첫 수집이 돌지 않았고, 떠 있던 동안 스케줄 수집·Deep Research 로그가 없다. `make check` 3회는 스크래퍼·Notion·SMTP 를 실제로 부른다. volume `agentlens-data` 는 남아 있다.
 - 우려 9 (EBUSY): 고친 이미지에서도 bind mount 위 rename 은 `[Errno 16] Device or resource busy` 를 내고, 제자리 쓰기 대체 경로가 저장을 성공시킨다 (경고 한 줄, `.tmp` 없음).
@@ -76,7 +76,7 @@ verifier 의 '실패' 는 메인 세션이 넘긴 기준 "make 종료 0" 에 대
 - `docs/functional-spec/02-ai-chat.md`, `docs/functional-spec/05-sources-and-research.md`, `docs/functional-spec/06-mcp-server.md`, `docs/functional-spec/07-ui-common.md`, `docs/ui-spec.md` (00e2c0a): 이 기능의 코드 변경(`main.py`, `sources_service.py`, `next.config.ts`)으로 밀린 줄 번호 참조와 `Updated:` 를 고쳤고, 05 에는 EBUSY 제자리 쓰기 동작 한 문장, `ui-spec.md` 에는 `agentRules: false` 설정을 더했다. 상세 문서 반영 규칙(코드가 바뀌면 해당 상세 문서를 지금 코드대로 고친다)에 따른 문서 변경이고, 코드·테스트는 범위 밖 변경이 없다.
 
 ## 남은 위험
-- V6 (reset 대상 실제 실행) 미검증. `RELEASE_APPROVAL` 세션이나 사람이 plan V6 명령으로 확인해야 한다.
+- reset 대상의 backend 없음 경로는 원인 메시지 앞에 `curl: (7) Failed to connect …` 한 줄이 함께 나온다 (`curl -fsS` 의 `-S`).
 - `make dev`·`make docker-logs` 를 Ctrl-C 로 멈추면 셸이 보는 make 종료 상태는 SIGINT 종료다 (오류 출력은 없음).
 - 레시피 실패 때 make 자체 종료 코드는 2 다 (스크립트는 1 과 원인 메시지).
 - Docker 에서 `config.json` 이 `:rw` 라 인증 없는 API 로 설정 파일을 바꿀 수 있다 (기존 known-issues: 인증 없음·CORS `*`, spec 우려 4).

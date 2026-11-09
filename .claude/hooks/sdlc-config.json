@@ -8,11 +8,16 @@
     "frontend/src/**"
   ],
   "deploy_patterns": [
-    "*make reset*",
-    "*curl*reset-and-collect*",
     "*git push*-tags*",
     "*git push*refs/tags/*",
     "*git push* v[0-9]*"
+  ],
+  "destructive_patterns": [
+    "*make*reset*",
+    "*curl*reset-and-collect*"
+  ],
+  "protected_ports": [
+    8000
   ],
   "check_command": "make check",
   "high_risk": [],

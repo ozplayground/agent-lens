@@ -28,10 +28,10 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 - 문서 경로는 모두 저장소 루트 기준이다. 하위 폴더에서 시작한 세션도 루트의 `docs/`, `tasks/` 에 쓴다.
 - Research 는 선택 스테이지다. 사용자가 지시하거나, 열린 질문이 외부 사실(시장, 경쟁 제품, 기술 성능)로만 답할 수 있을 때 실행한다. 출처 없는 주장과 측정하지 않은 숫자는 쓰지 않는다. 측정 코드는 `bench/<주제>/` 에 둔다 (런타임: python3 `.venv`, node pnpm). 더 깊은 조사는 `/deep-research <질문>` (사용자가 실행)
 - 산출물의 `Status:` 를 승인 상태로 바꾸는 것은 승인자만 한다: `! python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve <파일>`
-- 자동 승인: `.claude/hooks/sdlc-config.local.json` 에 `{"auto_approve": true}` (git 에 올리지 않음) 나 환경 변수 `SDLC_AUTO_APPROVE=1` 이 있으면 켜진다 (`SDLC_AUTO_APPROVE=0` 이 우선해서 끈다). 켜져 있으면 세션 시작 메시지에 표시되고, 스킬이 '승인 명령을 알린다' 고 한 자리에서 Claude 가 산출물을 템플릿·이전 산출물과 대조해 자체 검토한 뒤 `python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve --auto <파일>` 로 승인하고 다음 스테이지로 넘어간다. 승인자는 `자동 승인 (Claude)` 로 남는다. Status 를 직접 고치는 것은 자동 승인이 켜져 있어도 막힌다. 원격 태그 push 와 파괴적 명령의 `RELEASE_APPROVAL` 게이트는 자동 승인과 상관없이 그대로다.
+- 자동 승인: `.claude/hooks/sdlc-config.local.json` 에 `{"auto_approve": true}` (git 에 올리지 않음) 나 환경 변수 `SDLC_AUTO_APPROVE=1` 이 있으면 켜진다 (`SDLC_AUTO_APPROVE=0` 이 우선해서 끈다). 켜져 있으면 세션 시작 메시지에 표시되고, 스킬이 '승인 명령을 알린다' 고 한 자리에서 Claude 가 산출물을 템플릿·이전 산출물과 대조해 자체 검토한 뒤 `python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve --auto <파일>` 로 승인하고 다음 스테이지로 넘어간다. 승인자는 `자동 승인 (Claude)` 로 남는다. Status 를 직접 고치는 것은 자동 승인이 켜져 있어도 막힌다. 원격 태그 push 와 원본 데이터 삭제 명령의 `RELEASE_APPROVAL` 게이트는 자동 승인과 상관없이 그대로다.
 - 승인된 plan.md 의 '변경 파일' 에 없는 `backend/app/**`, `frontend/src/**` 경로는 편집이 막힌다 (`frontend/src/tests/**`, `backend/app/config/sources.json` 포함). 범위를 바꾸려면 plan.md 를 고치고 재승인받는다.
 - 테스트를 고쳐 통과시키지 않는다. 코드를 고친다.
-- Deploy 는 프로덕션 배포가 없다: release.md 승인, 버전 bump, 버전 태그, releases.md 기록만 한다. 원격 태그 push(`git push --tags`, `git push … v<숫자>`)와 파괴적 명령(`make reset`, `curl … reset-and-collect`)은 `RELEASE_APPROVAL` 이 있는 세션에서만 실행된다.
+- Deploy 는 프로덕션 배포가 없다: release.md 승인, 버전 bump, 버전 태그, releases.md 기록만 한다. 원격 태그 push(`git push --tags`, `git push … v<숫자>`)는 `RELEASE_APPROVAL` 이 있는 세션에서만 실행된다. 수집 데이터 삭제(`make reset`, `curl … reset-and-collect`)는 원본 backend(기본 주소, 포트 8000)를 겨눌 때만 `RELEASE_APPROVAL` 이 필요하다. 사본 DB 로 띄운 다른 포트의 로컬 backend 를 URL 로 명시하면(`make reset AGENTLENS_API_URL=http://127.0.0.1:18000`) 바로 실행된다.
 - 계약(`backend/app/schemas/` ↔ `frontend/src/types/` ↔ `frontend/src/mocks/`)은 손으로 맞춘다. 고칠 때 `.claude/rules/contracts.md` 를 따른다.
 
 ## 문서 지도
