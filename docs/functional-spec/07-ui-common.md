@@ -436,7 +436,7 @@ Updated: 2026-11-09
 | 수집 진행 폴링 주기 | 1,200ms | `hooks/useCollector.ts:24` |
 | 수집 완료 메시지 표시 | 4,000ms | `hooks/useCollector.ts:25` |
 | 수집 요청 실패 메시지 표시 | 3,000ms | `hooks/useCollector.ts:29` |
-| 헤더 버전 표시 | `NEXT_PUBLIC_APP_VERSION` (빌드 때 `package.json` 의 `version`, 지금 `v0.3.1`), 1024px 이상, 값이 없으면 숨김. 클라이언트 번들에 `package.json` 을 넣지 않는다 | `next.config.ts:6`, `:14`, `components/Header.tsx:66` |
+| 헤더 버전 표시 | `NEXT_PUBLIC_APP_VERSION` (빌드 때 `package.json` 의 `version`, 지금 `v0.4.0`), 1024px 이상, 값이 없으면 숨김. 클라이언트 번들에 `package.json` 을 넣지 않는다 | `next.config.ts:6`, `:14`, `components/Header.tsx:66` |
 | 헤더 높이 | 56px (`h-14`) | `components/Header.tsx:122`, `components/chat/ChatHeader.tsx:98` |
 | 팔레트 명령 수 | 피드 9 (기본 5 + 선택 4), 챗 4 | `components/CommandPalette.tsx:76-159`, `components/chat/ChatWorkspace.tsx:581-621` |
 | 팔레트 위치·크기 | 768px 이상 위에서 `12dvh`, 너비 560px, 최대 높이 `85dvh` / 미만 전체 화면 | `components/ui/Dialog.tsx:91`, `:101-105` |

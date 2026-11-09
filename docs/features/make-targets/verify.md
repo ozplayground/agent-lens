@@ -67,7 +67,7 @@ eslint 경고 41개는 기존 테스트 파일의 미사용 변수이고 이 기
 verifier 의 '실패' 는 메인 세션이 넘긴 기준 "make 종료 0" 에 대한 판정이다. 그 기준은 잘못 넘긴 것이다. 터미널 Ctrl-C 는 make 자신에게도 SIGINT 를 보내 make 가 시그널로 끝나며(GNU Make 3.81), 이는 Makefile 로 바꿀 수 없다. `docs/operations.md:45` 도 "레시피는 0 으로 끝나고 make 는 `Error` 줄을 내지 않는다. 셸이 보는 make 의 종료 상태는 SIGINT 종료(130)다" 로 적고 있다. f9394fd 가 고치려던 것(레시피 실패로 보고되는 `make: *** [docker-logs] Error 130` 줄)은 없어졌고, 레시피는 자식 SIGINT 에서 0 을 낸다. 같은 동작인 `make dev`(V4 `returncode -2`, 통과)와 같은 기준으로 받아들인다.
 
 ### 증명 6: spec 우려 기록
-- 우려 1 (V6 을 누가 돌렸나): 사용자 지시로 hook 의 게이트를 원본 backend(기본 주소, 포트 8000)만 막도록 좁힌 뒤 메인 세션이 사본 DB 의 18000 backend 에 돌렸다. (a)(b)(c) 모두 기대대로다 (실패 경로는 합의한 판정대로 make 종료 2). 원본 DB 는 건드리지 않았다. 사본에서 재수집이 시작돼 외부 수집 요청이 잠깐 나갔다.
+- 우려 1 (V6 을 누가 돌렸나): 사용자 지시에 따라 메인 세션이 실행했다. hook 게이트는 사용자가 지시했는지만 본다. (a)(b)(c) 모두 기대대로다 (실패 경로는 합의한 판정대로 make 종료 2). 원본 DB 는 건드리지 않았다. 사본에서 재수집이 시작돼 외부 수집 요청이 잠깐 나갔다.
 - 우려 3 (SIGINT 출력): `make dev` 는 make 종료 -2, `Interrupt` 줄 없음, `[dev] 중지했다`. `make docker-logs -f` 는 make 종료 -2, `==> 로그 보기를 멈췄다`, `Error 130`·`Interrupt` 줄 없음.
 - 우려 6·7 (외부 호출, volume): V4 (d) 빈 DB 첫 수집이 백그라운드로 시작돼 약 1초 뒤 취소됐다 (외부 요청이 나갔을 수 있다). V5 (a)(b) 는 단계 6 에서 실제 외부 수집을 두 번 했고 이번에는 돌리지 않았다. V7 은 volume 에 기사가 있어 첫 수집이 돌지 않았고, 떠 있던 동안 스케줄 수집·Deep Research 로그가 없다. `make check` 3회는 스크래퍼·Notion·SMTP 를 실제로 부른다. volume `agentlens-data` 는 남아 있다.
 - 우려 9 (EBUSY): 고친 이미지에서도 bind mount 위 rename 은 `[Errno 16] Device or resource busy` 를 내고, 제자리 쓰기 대체 경로가 저장을 성공시킨다 (경고 한 줄, `.tmp` 없음).

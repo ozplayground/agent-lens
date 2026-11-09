@@ -207,7 +207,7 @@ fixture `seed_distinct_rag_articles`(autouse): id 9001~9005(Claude, MCP 스펙, 
 | test_sql_like_fallback_ranks_by_relevance_when_fts_fails | FTS 질의가 실패하면 LIKE 대체 검색이 주제별 결과를 준다 | `retrieve` | `_sanitize_fts_query` patch |
 | test_gemini_call_restored_and_invokes_specified_model | `_call_gemini` 가 지정 모델 URL·키로 POST 하고 응답을 파싱한다 | `llm_processor._call_gemini` | `httpx.AsyncClient` 클래스 patch |
 | test_generate_live_answer_honestly_routes_to_gemini_when_requested | gemini 모델 요청이면 `_call_gemini` 를 1회 부른다 | `generate_live_answer` | `settings.GEMINI_API_KEY`, `_call_gemini` patch |
-| test_version_0_2_2_consistency | `settings.VERSION` 과 config.json `app.version` 이 0.3.1 | `config.py` | 없음 |
+| test_version_0_2_2_consistency | `settings.VERSION` 과 config.json `app.version` 이 0.4.0 | `config.py` | 없음 |
 | test_dynamic_retrieval_returns_only_relevant_articles_without_stuffing_top_k | "WinDbg MCP 서버" 는 9004 한 건만 돌려준다 | `retrieve` | 없음 |
 | test_dynamic_retrieval_returns_empty_when_no_relevant_articles_exist | 무관한 질의는 0건 | `retrieve` | 없음 |
 | test_chat_service_global_rag_returns_dynamic_source_count | `_resolve_sources` 가 1건/0건을 그대로 돌려준다 | `ChatService._resolve_sources` | 없음 |
@@ -282,7 +282,7 @@ Makefile·`docker-compose.yml` 회귀 검사. `make` 는 `-n` 으로만 부르�
 #### backend/tests/test_scoped_chat_grounding.py (6)
 | 테스트 이름 | 검증하는 동작 | 대상 코드 | mock/외부 호출 |
 |---|---|---|---|
-| test_version_is_0_2_2 | `settings.VERSION == "0.3.1"` | `config.py` | 없음 |
+| test_version_is_0_2_2 | `settings.VERSION == "0.4.0"` | `config.py` | 없음 |
 | test_mock_llm_provider_removed_from_production | `mock_provider` import 실패 | 모듈 존재 여부 | 없음 |
 | test_anthropic_payload_omits_temperature | Anthropic 요청 payload 에 temperature 가 없다 (동기 테스트 안에서 `asyncio.run`) | `generate_text_with_usage` | `httpx.AsyncClient.post` patch |
 | test_scoped_chat_prompt_injects_focused_article_and_no_mock_fallback | scoped 프롬프트에 기사 제목·요약·본문·질문이 들어가고 응답에 mock 문구가 없다 | `ChatService.stream_chat`, `_build_grounding_prompt` | DB 세션 AsyncMock, `get_article_content`·`persist_turn`·`stream_tokens` mock |
@@ -1362,7 +1362,7 @@ node 환경에서 파일 글자를 읽는 정적 검사다. 판정식은 `/\p{Em
 - `llm_processor.check_provider_available` patch (`test_agentic_workflow.py:268, 324`): 테스트가 `ChatService.stream_chat` 을 직접 부르는데 서비스는 이 함수를 부르지 않는다 (호출은 `api/chat.py:349`).
 
 ### 이름·설명과 실제 단언의 불일치
-- `test_version_0_2_2_consistency`, `test_version_is_0_2_2` 는 0.3.1 을 단언한다. `test_config_json_found_and_loaded` 는 허용 버전 튜플을 하드코딩한다. 버전을 바꾸면 이 세 곳을 함께 고쳐야 한다.
+- `test_version_0_2_2_consistency`, `test_version_is_0_2_2` 는 0.4.0 을 단언한다. `test_config_json_found_and_loaded` 는 허용 버전 튜플을 하드코딩한다. 버전을 바꾸면 이 세 곳을 함께 고쳐야 한다.
 - `test_article_scraper_l1_l2_cache_and_db_persistence` 의 세 번째 단계는 "새 인스턴스는 L2(DB)에서 읽는다" 고 설명하지만 L1 캐시가 클래스 속성이라 새 인스턴스도 L1 에서 읽는다 (`scraper.py:35`, `136-138`). 단언(HTTP 1회)은 L1/L2 를 구분하지 못한다.
 - `test_chat_query_scoped_with_agentic_workflow_success` 의 docstring 은 "dual sources, supplementary_count>=1" 이지만 단언은 `supplementary_count == 0` 이다.
 - `test_unit_test_mock_provider` 는 테스트 파일 안에 정의한 클래스만 검증한다.

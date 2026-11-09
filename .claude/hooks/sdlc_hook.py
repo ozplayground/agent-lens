@@ -82,6 +82,8 @@ def current_user_prompt(data):
             if isinstance(p, str) and not p.lstrip().startswith("<"):
                 texts.append(p)
             continue
+        if d.get("isSidechain") or d.get("isCompactSummary"):
+            continue  # 서브에이전트 대화와 압축 요약은 사용자 지시가 아니다
         if d.get("type") != "user" or d.get("isMeta"):
             continue
         c = (d.get("message") or {}).get("content")
@@ -108,8 +110,14 @@ def is_make_dry_run(seg):
         toks = toks[1:]  # 앞의 환경 변수 대입
     if not toks or os.path.basename(toks[0]) not in ("make", "gmake"):
         return False
-    return any(t in ("-n", "--dry-run", "--just-print", "--recon") or re.match(r"^-[A-Za-z]*n[A-Za-z]*$", t) and not t.startswith("--")
-               for t in toks[1:])
+    takes_arg = {"-C", "-f", "-I", "-o", "-W", "-j", "-l", "-E", "--eval", "--directory", "--file", "--makefile",
+                 "--include-dir", "--old-file", "--assume-old", "--what-if", "--new-file", "--assume-new"}
+    args = toks[1:]
+    if "--" in args:
+        args = args[:args.index("--")]  # -- 뒤는 옵션이 아니라 대상이다
+    # 단독 -n 류만 인정하고, 인자를 받는 옵션 바로 뒤의 -n 은 그 옵션의 값이라 인정하지 않는다
+    return any(t in ("-n", "--dry-run", "--just-print", "--recon") and (i == 0 or args[i - 1] not in takes_arg)
+               for i, t in enumerate(args))
 
 
 def mentions(prompt, keywords):

@@ -305,7 +305,7 @@ config.json 은 git 에 커밋되어 있다 (`.gitignore` 에 없음). 값은 `S
 | 키 | 타입 | 코드 기본값 | 매핑 Settings 필드 | 읽는 코드 |
 |---|---|---|---|---|
 | `app.project_name` | string | `"AgentLens"` | PROJECT_NAME | `main.py:49` (FastAPI title) |
-| `app.version` | string | `"0.3.1"` | VERSION | `main.py:49,73,77` |
+| `app.version` | string | `"0.4.0"` | VERSION | `main.py:49,73,77` |
 | `app.host` | string | — | 없음 | 읽는 코드 없음 |
 | `app.port` | int | — | 없음 | 읽는 코드 없음 |
 | `app.frontend_port` | int | — | 없음 | 읽는 코드 없음 |

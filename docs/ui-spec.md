@@ -22,7 +22,7 @@ frontend 는 Next.js 16 App Router 앱이다 (`frontend/`, React 19, Tailwind 4,
   | `session_id` | 저장된 대화를 불러온다. 있으면 다른 파라미터는 보지 않는다 |
   | `sourceId` | 정수 기사 id. `GET /api/chat/sources/{id}` 로 기사를 읽어 `단일 기사` 범위(scoped)로 시작한다. 못 찾으면 경고 토스트(`요청하신 기사를 찾을 수 없어 전체 소식 모드로 시작합니다.`) 후 `전체 소식` 범위(global) |
   | `q` | 시작하자마자 이 질문을 보낸다 (`sourceId` 와 함께면 그 기사 범위로) |
-- `/api/health` 응답: `{"status":"healthy","service":"agentlens-frontend","version":"0.3.1","timestamp":<ISO>}`. Docker `HEALTHCHECK` 와 compose healthcheck 가 `http://127.0.0.1:3001/api/health` 를 부른다 (`frontend/Dockerfile`, `docker-compose.yml`). rewrite 규칙 `/api/:path*` 와 경로가 겹치지만 Route Handler 로 응답한다는 전제로 healthcheck 가 짜여 있다 (실제 우선순위는 실행해서 확인하지 않았다).
+- `/api/health` 응답: `{"status":"healthy","service":"agentlens-frontend","version":"0.4.0","timestamp":<ISO>}`. Docker `HEALTHCHECK` 와 compose healthcheck 가 `http://127.0.0.1:3001/api/health` 를 부른다 (`frontend/Dockerfile`, `docker-compose.yml`). rewrite 규칙 `/api/:path*` 와 경로가 겹치지만 Route Handler 로 응답한다는 전제로 healthcheck 가 짜여 있다 (실제 우선순위는 실행해서 확인하지 않았다).
 - 이 밖의 페이지(404 커스텀, `loading.tsx`, `error.tsx`)는 없다.
 
 ## 화면: 뉴스 피드 (`/`)
@@ -31,7 +31,7 @@ frontend 는 Next.js 16 App Router 앱이다 (`frontend/`, React 19, Tailwind 4,
 ### 와이어프레임: 데스크톱 (1024px 이상)
 ```
 ┌─ Header (sticky top-0, z-30, h-14, 한 줄) ──────────────────────────────────────────────────┐
-│ [>_] AgentLens [v0.3.1]  [피드] [🤖 AI 챗]   [🕘 다음 수집 5h 14m 후] [⟳ 즉시 수집] [⌘ 검색·명령 ⌘K] [☀▾] [⋯] │
+│ [>_] AgentLens [v0.4.0]  [피드] [🤖 AI 챗]   [🕘 다음 수집 5h 14m 후] [⟳ 즉시 수집] [⌘ 검색·명령 ⌘K] [☀▾] [⋯] │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
  수집 진행 줄 (메시지 있을 때만, h-9): ⟳ 실시간 소식 수집 중...                 피드 실시간 반영 중
  main#main (max-w-7xl, 가운데)
@@ -400,7 +400,7 @@ RootLayout (app/layout.tsx)  ── <head> 테마 인라인 스크립트
 4. **쓰지 않는 코드가 있다.** `WebhookSettingsModal`(렌더되지 않음, `agentlens_webhook_url` 키 포함), `ThemeToggle`(헤더가 `ThemeMenu` 로 바뀌어 렌더하는 곳이 없음), `askQuestionAboutNews`, `deleteAllNews`, `discoverSources`, `registerCandidate`, `sendBriefingToWebhook`(미사용 모달에서만 사용).
 5. **챗 API 호출에 시간 제한이 없다.** `api.ts` 밖의 챗 호출 6곳은 `fetchWithTimeout` 을 쓰지 않는다. 세션 목록·상세 조회가 멈추면 로딩 상태가 계속될 수 있다.
 6. **챗 세션 상세 캐시가 쌓인다.** 세션 목록을 30개로 자를 때 밀려난 세션의 `agentlens_chat_session_{id}` 키는 지우지 않는다. `resetSessions` 도 목록 키만 지운다. localStorage 용량이 계속 늘 수 있다.
-7. **`/api/health` 의 버전이 고정 문자열이다.** 헤더 배지는 빌드 때 `next.config.ts` 가 `package.json` 의 `version` 을 `NEXT_PUBLIC_APP_VERSION` 으로 넘긴 값을 그리지만 (`next.config.ts:6`, `:14`, `Header.tsx:66`, 값이 없으면 배지를 숨긴다), `/api/health` 의 `0.3.1` 은 `package.json` 을 읽지 않는 고정 문자열이다 (`app/api/health/route.ts:9`). 버전을 올릴 때 따로 고쳐야 한다.
+7. **`/api/health` 의 버전이 고정 문자열이다.** 헤더 배지는 빌드 때 `next.config.ts` 가 `package.json` 의 `version` 을 `NEXT_PUBLIC_APP_VERSION` 으로 넘긴 값을 그리지만 (`next.config.ts:6`, `:14`, `Header.tsx:66`, 값이 없으면 배지를 숨긴다), `/api/health` 의 `0.4.0` 은 `package.json` 을 읽지 않는 고정 문자열이다 (`app/api/health/route.ts:9`). 버전을 올릴 때 따로 고쳐야 한다.
 8. **`/api/health` 와 rewrite 경로가 겹친다.** rewrites 는 배열로 반환되어 파일 시스템 라우트 뒤에 적용되는 방식이라 Route Handler 가 먼저 응답하는 것으로 보이지만, 실행해서 확인하지 않았다. 이 순서가 바뀌면 프론트 healthcheck 가 backend 로 넘어간다.
 9. **스케줄 대화상자 문구에 수집 시각이 고정돼 있다.** `매일 4회(0, 6, 12, 18시 UTC)` 와 UTC·KST 시각을 문자열로 박아 두어, backend 스케줄이 바뀌면 화면이 따라가지 않는다 (`ScheduleModal.tsx:30`, `:47-48`).
 10. **MCP 대화상자의 설정 예시가 고정 문자열이다.** `"cwd": "/path/to/agentlens/backend"` 자리표시를 그대로 복사하게 한다 (`McpModal.tsx:15-23`).

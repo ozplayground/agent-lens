@@ -22,6 +22,8 @@ Type: bugfix
 경로 게이트 대상 (`backend/app/**`, implementer 만 고친다):
 - `backend/app/main.py` — lifespan: 기사 0건이면 `collector_manager.collect_all()` 을 `asyncio.create_task` 로 띄우고 바로 `yield`, 종료 때 끝나지 않은 태스크를 `cancel()` 하고 기다림. `session=s` 인자 제거, 시작 로그에 "백그라운드로" (spec 1.9, R10)
 - `backend/app/services/sources_service.py` — `save_sources`: `temp_path.replace(p)` 가 `OSError` 를 내면 대상 파일에 제자리로 쓰고 임시 파일을 지운다 (spec 1.9, 우려 9). **단계 1 에서 EBUSY 가 재현되지 않으면 이 줄과 `test_sources_write_fallback.py` 를 빼고 plan 을 고쳐 재승인받는다**
+- `backend/app/config.py` — `Settings.VERSION` 기본값 0.3.1 → 0.4.0 (릴리스 bump)
+- `frontend/src/app/api/health/route.ts` — 응답 `version` 0.3.1 → 0.4.0 (릴리스 bump)
 
 새 회귀 테스트 (게이트 밖, 범위를 밝힌다. spec 2절 T1~T8):
 - `backend/tests/test_make_targets.py` — T1~T5 (대상 집합 = `.PHONY`, `SHELL`, 위험 줄 부재 뒤 `make -n` 12개, `test` = `check`, 참조 파일, `|| true`·`config.json:ro` 부재, `docker compose config -q`, `reset` URL 변수)
@@ -50,7 +52,7 @@ make·스크립트·설정 (게이트 밖):
 - `docs/test-cases.md` — 새 테스트 T1~T8 행, `:1244` 부근 lifespan '없음' 행
 - `CLAUDE.md` — 루트. '명령' 절과 'SDLC' 파괴적 명령 목록 (spec 10절). **메인 세션이 고친다** (단계 7)
 
-바꾸지 않는 것: `backend/Dockerfile`, `frontend/Dockerfile`, `.claude/**` (특히 `.claude/hooks/sdlc-config.json` 의 `deploy_patterns`), `docs/product.md`, 기존 테스트 파일 17개와 `conftest.py`·`llm_fakes.py`, `backend/app/**` 의 위 두 파일 밖 전부, `frontend/src/**` 전부, 계약(`schemas`·`types`·`mocks`). 이 plan 에 `.claude/` 아래 설정을 바꾸는 단계는 없다 (사람 승인 필요 단계 없음).
+바꾸지 않는 것: `backend/Dockerfile`, `frontend/Dockerfile`, `.claude/**` (특히 `.claude/hooks/sdlc-config.json` 의 `deploy_patterns`), `docs/product.md`, 기존 테스트 파일 17개와 `conftest.py`·`llm_fakes.py`, `backend/app/**` 의 위 네 파일 밖 전부, `frontend/src/**` 의 `frontend/src/app/api/health/route.ts` 밖 전부, 계약(`schemas`·`types`·`mocks`). 이 plan 에 `.claude/` 아래 설정을 바꾸는 단계는 없다 (사람 승인 필요 단계 없음).
 
 ## 작업 순서
 단계마다 `tasks/make-targets/NN-<slug>.md` 진행 기록이 하나씩 생긴다 (괄호 안이 파일 이름). 담당 이름은 implementer 서브에이전트 인스턴스를 가른다.
@@ -256,6 +258,8 @@ docker run -d --name agentlens-repro -p 18001:8000 \
   - 나머지 문서는 spec 10절 표대로.
 - 메인 세션: 루트 `CLAUDE.md` '명령' 절 (`make test`·`make dev` 깨짐 줄 삭제, `make dev`(로컬 동시 실행, Ctrl-C 로 종료)·`make test`(= `make check`) 추가, `make check` 서술을 `docs/operations.md:31` 과 같게: LLM 은 흉내, 설정 파일은 임시 사본, 스크래퍼 등은 실제 호출, 돌린 뒤 `git status` 확인), 'SDLC' 파괴적 명령 목록에서 없는 대상 이름 삭제. implementer 는 바꿀 문장을 task 기록 '다음' 에 적어 넘긴다.
 - 끝 기준: 증명 4 의 grep 0건, spec 10절 표의 행마다 고친 문서가 커밋에 있다, 문서만 바뀐 커밋 (implementer 1개, 메인 세션 1개).
+
+### 8. 릴리스 v0.4.0 버전 bump: '변경 파일' 의 `backend/app/config.py`, `frontend/src/app/api/health/route.ts` 의 버전 기본값을 0.4.0 으로. 나머지 버전 문자열 위치(docs/releases.md 표)는 게이트 밖이라 릴리스 단계에서 함께 바꾼다
 
 ## 위험
 - **가장 위험한 단계는 3 (`dev.sh`).** 프로세스 그룹 정리가 틀리면 uvicorn `--reload` 의 감시·작업 프로세스나 `next dev` 의 node 자식이 고아로 남아 8000·3000 을 붙잡고, 다음 `make dev`·`make docker-up` 이 포트 충돌로 실패한다. 대책: `set -m` 으로 그룹을 나누고 그룹째 TERM→KILL, 확인은 `pgrep -f`·`lsof` 로 남은 프로세스 0 을 본다 (V4 (b)(c)). 고아가 남으면 `pkill -f "uvicorn app.main:app"`, `pkill -f "next dev"` 로 치우고 결함으로 기록한다. make 3.81 이 SIGINT 를 받으면 dev.sh 의 정리를 기다린 뒤 스스로 `Interrupt` 줄과 시그널 종료를 낼 수 있다 (spec 우려 3, 승인자 판단). 그래서 V4 는 `make dev` 와 `./scripts/dev.sh` 를 따로 재서 스크립트 자체의 종료 0 을 증명한다.

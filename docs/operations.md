@@ -109,7 +109,7 @@ compose 가 컨테이너에 넣는 환경 변수 (`${VAR:-기본}` 은 루트 `.
 | 서비스 | 변수 | 값 |
 |---|---|---|
 | backend | `PROJECT_NAME` | `AgentLens` |
-| backend | `VERSION` | `${VERSION:-0.3.1}` |
+| backend | `VERSION` | `${VERSION:-0.4.0}` |
 | backend | `HOST`, `PORT` | `0.0.0.0`, `8000` (backend 코드는 읽지 않는다. 포트는 Dockerfile CMD 고정) |
 | backend | `DATABASE_URL` | `sqlite+aiosqlite:///./data/agentlens.db` (고정) |
 | backend | `SECRET_KEY` | `${SECRET_KEY:-agentlens-default-secret-key-32chars-minimum-safe-value}` |
@@ -171,7 +171,7 @@ env 이름은 필드 이름과 같다. "사용" 열이 "없음"이면 그 필드
 | 필드 | 코드 기본값 | config.json 키 | 사용 |
 |---|---|---|---|
 | PROJECT_NAME | `AgentLens` | `app.project_name` | `main.py:49` |
-| VERSION | `0.3.1` | `app.version` | `main.py:49, 73, 77` |
+| VERSION | `0.4.0` | `app.version` | `main.py:49, 73, 77` |
 | DATABASE_URL | `sqlite+aiosqlite:///./agentlens.db` | `app.database_url` | `database.py:7-17` |
 | CRAWL_SCHEDULE_HOURS | `0,6,12,18` | `scheduler.crawl_hours` (배열 → 쉼표 문자열) | `scheduler.py:9` (다음 실행 계산 폴백·상태 표시만) |
 | CRAWL_TIMEZONE | `UTC` | `scheduler.timezone` | `api/schedule.py:34` (표시만) |
@@ -313,7 +313,7 @@ LLM 이 하나도 없을 때:
 |---|---|---|
 | backend 헬스 | `curl http://localhost:8000/health` | `{"status": "healthy", "version": <VERSION>, "running": <수집 중 여부>}` (`main.py:75-77`) |
 | backend 정보 | `curl http://localhost:8000/` | `{"service": "AgentLens API", "version", "docs": "/docs"}` (`main.py:71-73`) |
-| frontend 헬스 | `curl http://localhost:3001/api/health` | `{"status": "healthy", "service": "agentlens-frontend", "version": "0.3.1"(하드코딩), "timestamp"}` |
+| frontend 헬스 | `curl http://localhost:3001/api/health` | `{"status": "healthy", "service": "agentlens-frontend", "version": "0.4.0"(하드코딩), "timestamp"}` |
 | 수집 상태 | `GET /api/schedule/status`, `GET /api/schedule/progress` | 다음 실행, 최근 `crawl_logs` 5개, 진행 단계 |
 | 소스 파일 위치 | `GET /api/sources` 의 `sources_file` | 실제로 읽는 sources.json 경로 (`api/sources.py:32`) |
 | MCP 연결 정보 | `GET /api/mcp/info` | Claude Desktop 설정 예 (python 경로, cwd) |
@@ -356,7 +356,7 @@ LLM 이 하나도 없을 때:
 - **첫 수집 취소**: 빈 DB 의 첫 수집 도중 서버를 내리면 태스크가 취소되고 그때까지의 배치 저장은 롤백될 수 있다 (`main.py:40-45`).
 - **프로세스 로컬 상태**: 수집·딥 리서치 실행 플래그, LLM 캐시, 스케줄러 job 이 메모리에만 있다. uvicorn 을 여러 worker 로 띄우면 스케줄 작업이 worker 수만큼 중복된다고 코드상 판단한다 (worker 옵션은 현재 CMD 에 없음).
 - **동기 네트워크 호출**: `has_live_provider()` 가 Anthropic·OpenAI 키가 없고 Ollama 주소가 있으면 async 경로에서 `httpx.Client` 로 Ollama 를 최대 1초 동기 호출한다 (`llm_processor.py:176-178, 319`). 수집 평가에서 항목마다 불릴 수 있다 (`llm_processor.py:619`).
-- **frontend 버전 하드코딩**: `/api/health` 의 `version` 이 `"0.3.1"` 문자열이다 (`frontend/src/app/api/health/route.ts:9`).
+- **frontend 버전 하드코딩**: `/api/health` 의 `version` 이 `"0.4.0"` 문자열이다 (`frontend/src/app/api/health/route.ts:9`).
 - **`src/lib/env.ts` 미사용**: 정의만 있고 import 하는 곳이 없어 env 검증이 실행되지 않는다.
 - **`NEXT_PUBLIC_API_URL` 빌드 시점**: frontend Docker builder 에 이 값을 넘기는 `ARG` 가 없다 (`frontend/Dockerfile:17-31`). Next.js 는 `NEXT_PUBLIC_*` 를 빌드 때 번들에 넣으므로 compose 의 런타임 값(`docker-compose.yml:63`)은 브라우저 코드에 반영되지 않는다(프레임워크 동작, 실행 확인 안 함).
 - **RSS 링크 하드코딩**: `/api/news/feed/rss.xml` 의 채널 링크가 `http://localhost:3000` 이다 (`api/news.py:192`).
