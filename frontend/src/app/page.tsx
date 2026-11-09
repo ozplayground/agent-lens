@@ -1,32 +1,41 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Flame, Clock, Star, Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
-import Header from '@/components/Header';
-import CategoryFilter from '@/components/CategoryFilter';
-import SourceFilter from '@/components/SourceFilter';
+import { Search } from 'lucide-react';
+import Header, { CollectorStatusLine } from '@/components/Header';
 import NewsCard from '@/components/NewsCard';
 import NewsDetailModal from '@/components/NewsDetailModal';
 import DailyBriefingModal from '@/components/DailyBriefingModal';
-import DailyBriefingBanner from '@/components/DailyBriefingBanner';
 import ScheduleModal from '@/components/ScheduleModal';
 import McpModal from '@/components/McpModal';
 import SourcesModal from '@/components/SourcesModal';
-import { TechRadar } from '@/components/TechRadar';
+import InsightsBar from '@/components/feed/InsightsBar';
+import FeedToolbar from '@/components/feed/FeedToolbar';
+import FeedStatusBar from '@/components/feed/FeedStatusBar';
+import FeedPagination from '@/components/feed/FeedPagination';
+import NewsCardSkeleton from '@/components/feed/NewsCardSkeleton';
+import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { useToast } from '@/components/ui/Toast';
 import { BriefingSettingsModal } from '@/components/BriefingSettingsModal';
 import HotkeyListener from '@/components/HotkeyListener';
 import { useTheme } from '@/context/ThemeContext';
 import { NewsItem } from '@/types/news';
 import { useBookmarks } from '@/hooks/useBookmarks';
 import { useNewsFeed } from '@/hooks/useNewsFeed';
+import { useOverlayOpen } from '@/lib/overlay-stack';
+import { findRepeatedInsights } from '@/lib/feed-insights';
 
 export default function HomePage() {
   const router = useRouter();
   const { toggleTheme } = useTheme();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const { bookmarkedIds, bookmarkedItems, toggleBookmark } = useBookmarks();
+  const overlayOpen = useOverlayOpen();
 
   const {
     category,
@@ -49,6 +58,7 @@ export default function HomePage() {
     loading,
     error,
     setError,
+    reloadError,
     stats,
     briefing,
     techRadar,
@@ -57,6 +67,28 @@ export default function HomePage() {
     loadStatsAndBriefing,
     resetFilters,
   } = useNewsFeed({ bookmarkedItems });
+
+  // 같은 시사점 문장이 반복되는 카드는 요약을 대신 보인다 (R18).
+  const repeatedInsights = useMemo(() => findRepeatedInsights(news), [news]);
+
+  // 같은 조건 다시 읽기가 실패하면 목록은 그대로 두고 알림만 띄운다 (R22). 실패마다 id 가 바뀐다.
+  const toast = useToast();
+  const shownReloadErrorId = useRef(0);
+  useEffect(() => {
+    if (!reloadError || reloadError.id === shownReloadErrorId.current) return;
+    shownReloadErrorId.current = reloadError.id;
+    toast.show({ message: reloadError.message, tone: 'danger' });
+  }, [reloadError, toast]);
+
+  // 목록(페이지·필터·정렬·검색어)이 바뀌면 j/k 포커스를 처음으로 되돌린다 (렌더 중 이전 값 비교).
+  const listKey = JSON.stringify([page, category, source, search, sort, highSignalOnly]);
+  const [focusListKey, setFocusListKey] = useState(listKey);
+  if (focusListKey !== listKey) {
+    setFocusListKey(listKey);
+    setFocusedIndex(-1);
+  }
+
+  const isFiltered = category !== 'all' || source !== 'all' || search.trim() !== '' || highSignalOnly;
 
   // Modal Dialog States
   const [selectedItem, setSelectedItem] = useState<NewsItem | null>(null);
@@ -72,14 +104,17 @@ export default function HomePage() {
     setDetailModalOpen(true);
   };
 
+  // j/k: 다음/이전 카드로 포커스 상태와 실제 DOM 포커스(카드 제목 버튼)를 함께 옮긴다.
   const handleNavigateFeed = (delta: 1 | -1) => {
     if (!news || news.length === 0) return;
-    setFocusedIndex((prev) => {
-      const next = prev + delta;
-      if (next < 0) return 0;
-      if (next >= news.length) return news.length - 1;
-      return next;
-    });
+    const next = Math.min(Math.max(focusedIndex + delta, 0), news.length - 1);
+    setFocusedIndex(next);
+    const card = document.querySelectorAll<HTMLElement>('[data-feed-card]')[next];
+    if (card) {
+      const target = card.querySelector<HTMLElement>('h3 button') ?? card;
+      target.focus({ preventScroll: true });
+      card.scrollIntoView({ block: 'nearest' });
+    }
   };
 
   const handleOpenDetailModal = () => {
@@ -100,25 +135,22 @@ export default function HomePage() {
     }
   };
 
-  const handleCloseOverlays = () => {
-    setDetailModalOpen(false);
-    setBriefingModalOpen(false);
-    setSchedOpen(false);
-    setMcpOpen(false);
-    setWebhookModalOpen(false);
-    setSourcesModalOpen(false);
-  };
-
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0d1117] text-slate-900 dark:text-[#f0f6fc] flex flex-col font-sans">
+    <div className="flex min-h-dvh flex-col bg-canvas text-fg">
       <HotkeyListener
         onNavigateFeed={handleNavigateFeed}
         onOpenDetailModal={handleOpenDetailModal}
         onHandoverChat={handleHandoverChat}
         onToggleBookmark={handleToggleBookmarkCurrent}
-        onFocusSearch={() => searchInputRef.current?.focus()}
+        onFocusSearch={() => {
+          // 검색 영역은 sticky 가 아니다: 포커스는 스크롤 없이 주고, 영역을 sticky 헤더 아래로 보이게 한다 (scroll-mt-20).
+          const input = searchInputRef.current;
+          if (!input) return;
+          input.focus({ preventScroll: true });
+          input.closest('[data-feed-search]')?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+        }}
         onToggleTheme={toggleTheme}
-        onCloseOverlays={handleCloseOverlays}
+        blockSingleKeys={overlayOpen}
       />
       <Header
         onRefresh={() => {
@@ -130,213 +162,79 @@ export default function HomePage() {
         onOpenWebhook={() => setWebhookModalOpen(true)}
         onOpenSources={() => setSourcesModalOpen(true)}
       />
+      <CollectorStatusLine />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
-        {/* Daily Intelligence Briefing Banner */}
-        <DailyBriefingBanner briefing={briefing} onOpen={() => setBriefingModalOpen(true)} />
+      <main
+        id="main"
+        tabIndex={-1}
+        className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-4 pt-3 pb-8 outline-none md:gap-4 md:px-6 md:pt-6 lg:px-8"
+      >
+        <h1 className="sr-only">AI 에이전트 소식</h1>
 
-        {/* Overview Header */}
-        <div className="rounded-xl bg-white border border-slate-200 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
-              <span className="font-bold text-blue-600">agentlens</span>
-              <span>/</span>
-              <span className="text-slate-700 font-semibold">feed</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold">
-                Live Stream
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-3xl">
-              글로벌 AI 소식 · Agent 아키텍처 · SWE-bench/하네스 평가 · MCP 생태계를 LLM으로 선별하고 3줄 핵심 요약과 개발자 시사점을 추출합니다.
-            </p>
+        <InsightsBar
+          briefing={briefing}
+          onOpenBriefing={() => setBriefingModalOpen(true)}
+          radar={techRadar}
+          loadingRadar={loadingRadar}
+          activeTag={selectedTag}
+          onSelectTag={handleSelectTag}
+        />
+
+        <FeedToolbar
+          category={category}
+          source={source}
+          search={search}
+          highSignalOnly={highSignalOnly}
+          categoryCounts={stats?.category_counts}
+          sourceCounts={stats?.source_counts}
+          bookmarkCount={bookmarkedItems.length}
+          onCategoryChange={setCategory}
+          onSourceChange={setSource}
+          onHighSignalChange={setHighSignalOnly}
+          onSearchChange={setSearch}
+          onSearchSubmit={loadNews}
+          onPageChange={setPage}
+          searchInputRef={searchInputRef}
+        />
+
+        <FeedStatusBar
+          ref={statusRef}
+          total={total}
+          totalNews={stats?.total_news}
+          filtered={isFiltered}
+          isBookmarks={source === 'bookmarks'}
+          highSignalOnly={highSignalOnly}
+          page={page}
+          totalPages={totalPages}
+          sort={sort}
+          onSortChange={setSort}
+          onPageChange={setPage}
+        />
+
+        {loading ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+            <p className="sr-only">소식을 불러오는 중...</p>
+            {Array.from({ length: 6 }, (_, i) => (
+              <NewsCardSkeleton key={i} />
+            ))}
           </div>
+        ) : null}
 
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-            <span className="text-xs font-mono px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 font-medium">
-              전체 <strong className="text-slate-900 font-bold">{stats?.total_news || total}</strong>건
-            </span>
-            <span className="text-xs font-mono px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1.5 font-semibold">
-              <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-              Must-Read
-            </span>
-          </div>
-        </div>
-
-        {/* Tech Radar */}
-        <section>
-          <TechRadar
-            data={techRadar}
-            activeTag={selectedTag}
-            onSelectTag={handleSelectTag}
-            isLoading={loadingRadar}
-          />
-        </section>
-
-        {/* Category Filter */}
-        <section>
-          <CategoryFilter
-            currentCategory={category}
-            onSelectCategory={(c) => {
-              setCategory(c);
-              setSource('all');
-              setPage(1);
+        {!loading && error ? (
+          <ErrorState
+            title={error}
+            message="백엔드 서버(포트 8000) 연결 상태를 확인해주세요."
+            onRetry={() => {
+              setError(null);
+              loadNews();
             }}
-            counts={stats?.category_counts}
+            className="rounded-xl border border-dashed border-border bg-surface"
           />
-        </section>
+        ) : null}
 
-        {/* Toolbar: Source Filter & Search */}
-        <section className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-3 shadow-sm">
-          <SourceFilter
-            currentSource={source}
-            onSelectSource={(s) => {
-              setSource(s);
-              setPage(1);
-            }}
-            sourceCounts={stats?.source_counts}
-            bookmarkCount={bookmarkedItems.length}
-            highSignalOnly={highSignalOnly}
-            onToggleHighSignal={() => {
-              setHighSignalOnly(!highSignalOnly);
-              setPage(1);
-            }}
-          />
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
-            {/* Search */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                setPage(1);
-                loadNews();
-              }}
-              className="relative flex-1 max-w-md"
-              suppressHydrationWarning
-            >
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="키워드 검색 (SWE-bench, MCP, LangGraph, Claude 5.5 등)..."
-                autoComplete="off"
-                suppressHydrationWarning
-                className="w-full bg-slate-50 border border-slate-300 focus:border-blue-500 focus:bg-white focus:outline-none rounded-lg pl-10 pr-16 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 transition-colors"
-              />
-              <button
-                type="submit"
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1 bg-slate-200 hover:bg-slate-300 text-xs font-semibold text-slate-800 rounded-md cursor-pointer transition-colors"
-              >
-                검색
-              </button>
-            </form>
-
-            {/* Sort options */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0 self-start sm:self-auto">
-              <button
-                onClick={() => {
-                  setSort('hot');
-                  setPage(1);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-                  sort === 'hot'
-                    ? 'bg-white text-orange-600 shadow-xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Flame className="w-3.5 h-3.5 text-orange-500" />
-                <span>인기순</span>
-              </button>
-              <button
-                onClick={() => {
-                  setSort('quality');
-                  setPage(1);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-                  sort === 'quality'
-                    ? 'bg-white text-blue-600 shadow-xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>품질순</span>
-              </button>
-              <button
-                onClick={() => {
-                  setSort('latest');
-                  setPage(1);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-                  sort === 'latest'
-                    ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>최신순</span>
-              </button>
-              <button
-                onClick={() => {
-                  setSort('top');
-                  setPage(1);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors ${
-                  sort === 'top'
-                    ? 'bg-white text-amber-600 shadow-xs border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                <span>추천순</span>
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* Status bar */}
-        <div className="flex items-center justify-between text-xs text-slate-500 px-1 font-medium">
-          <div>
-            총 <strong className="text-slate-900 font-mono font-bold">{total}</strong>건의 소식
-            {source === 'bookmarks' && <span className="text-blue-600 font-bold"> (북마크)</span>}
-            {highSignalOnly && <span className="text-amber-700 font-bold"> (Must-Read 필터링)</span>}
-          </div>
-          <div>
-            페이지 <strong className="text-slate-900 font-mono font-bold">{page}</strong> / {totalPages || 1}
-          </div>
-        </div>
-
-        {/* Loading */}
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-500 space-y-2">
-            <Loader2 className="w-7 h-7 animate-spin text-blue-600" />
-            <p className="text-xs font-mono font-medium">소식을 불러오는 중...</p>
-          </div>
-        )}
-
-        {/* Error State */}
-        {!loading && error && (
-          <div className="text-center py-16 border border-dashed border-red-300 rounded-xl bg-red-50/50 space-y-3">
-            <div className="w-10 h-10 rounded-full bg-red-100 border border-red-200 flex items-center justify-center mx-auto text-red-600">
-              <AlertCircle className="w-5 h-5" />
-            </div>
-            <h3 className="text-sm font-bold text-red-700">{error}</h3>
-            <p className="text-xs text-slate-600">백엔드 서버(포트 8000) 연결 상태를 확인해주세요.</p>
-            <button
-              onClick={() => {
-                setError(null);
-                loadNews();
-              }}
-              className="px-4 py-2 rounded-lg bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 border border-slate-300 shadow-xs transition-colors cursor-pointer"
-            >
-              다시 시도
-            </button>
-          </div>
-        )}
-
-        {/* News Grid */}
-        {!loading && !error && news.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {!loading && !error && news.length > 0 ? (
+          // 카드(`h-full`)가 같은 줄의 가장 높은 카드에 맞춰 늘어난다.
+          <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
             {news.map((item, idx) => (
               <NewsCard
                 key={item.id}
@@ -345,56 +243,33 @@ export default function HomePage() {
                 isBookmarked={bookmarkedIds.includes(item.id)}
                 onToggleBookmark={toggleBookmark}
                 isFocused={idx === focusedIndex}
+                preferSummary={repeatedInsights.has(item.id)}
               />
             ))}
           </div>
-        )}
+        ) : null}
 
-        {/* Empty State */}
-        {!loading && !error && news.length === 0 && (
-          <div className="text-center py-16 border border-dashed border-slate-300 rounded-xl bg-white space-y-3 shadow-xs">
-            <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto text-slate-500">
-              <Search className="w-6 h-6" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-900">조건에 일치하는 소식이 없습니다</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              다른 카테고리를 선택하거나 검색어 및 필터를 초기화해 보세요.
-            </p>
-            <button
-              onClick={resetFilters}
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-semibold text-white transition-colors cursor-pointer shadow-xs"
-            >
-              필터 전체 초기화
-            </button>
-          </div>
-        )}
+        {!loading && !error && news.length === 0 ? (
+          <EmptyState
+            icon={<Search />}
+            title="조건에 일치하는 소식이 없습니다"
+            description="다른 카테고리를 선택하거나 검색어 및 필터를 초기화해 보세요."
+            action={
+              <Button variant="primary" onClick={resetFilters}>
+                필터 전체 초기화
+              </Button>
+            }
+            className="rounded-xl border border-dashed border-border bg-surface"
+          />
+        ) : null}
 
-        {/* Pagination */}
-        {!loading && totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 pt-4 pb-8">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs"
-            >
-              &larr; 이전
-            </button>
-            <span className="text-xs font-mono font-bold text-slate-700 px-3">
-              {page} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs"
-            >
-              다음 &rarr;
-            </button>
-          </div>
-        )}
+        {!loading ? (
+          <FeedPagination page={page} totalPages={totalPages} onPageChange={setPage} statusRef={statusRef} />
+        ) : null}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-500">
-        <p>AgentLens &copy; 2026. AI Agent · 하네스(Harness) · MCP 생태계 인텔리전스 대시보드.</p>
+      <footer className="border-t border-border px-4 py-4 text-center text-xs text-fg-subtle">
+        AgentLens © 2026 · AI 에이전트 · 하네스 · MCP 생태계 소식
       </footer>
 
       {/* Modals */}

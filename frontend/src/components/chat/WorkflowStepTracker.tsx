@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { ChatStatusPayload, ChatStatusStep } from '@/types/chat';
+import { cn } from '@/lib/cn';
 
 export interface WorkflowStepTrackerProps {
   currentStatus: ChatStatusPayload | null;
@@ -27,13 +28,13 @@ export interface WorkflowStepTrackerProps {
 }
 
 const STEP_ICONS: Record<ChatStatusStep, React.ReactNode> = {
-  thinking: <Sparkles className="w-3.5 h-3.5 text-purple-600 animate-pulse" />,
-  tool_calling: <Search className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />,
-  observing: <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 animate-pulse" />,
-  extracting_source: <Globe className="w-3.5 h-3.5 text-blue-600 animate-pulse" />,
-  evaluating_sufficiency: <Scale className="w-3.5 h-3.5 text-amber-600 animate-pulse" />,
-  agentic_searching: <Search className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />,
-  synthesizing: <FileText className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />,
+  thinking: <Sparkles aria-hidden="true" className="size-3.5 shrink-0 text-accent motion-safe:animate-pulse" />,
+  tool_calling: <Search aria-hidden="true" className="size-3.5 shrink-0 text-success motion-safe:animate-pulse" />,
+  observing: <CheckCircle2 aria-hidden="true" className="size-3.5 shrink-0 text-accent motion-safe:animate-pulse" />,
+  extracting_source: <Globe aria-hidden="true" className="size-3.5 shrink-0 text-accent motion-safe:animate-pulse" />,
+  evaluating_sufficiency: <Scale aria-hidden="true" className="size-3.5 shrink-0 text-warning motion-safe:animate-pulse" />,
+  agentic_searching: <Search aria-hidden="true" className="size-3.5 shrink-0 text-success motion-safe:animate-pulse" />,
+  synthesizing: <FileText aria-hidden="true" className="size-3.5 shrink-0 text-accent motion-safe:animate-pulse" />,
 };
 
 export default function WorkflowStepTracker({
@@ -66,20 +67,20 @@ export default function WorkflowStepTracker({
 
   // 1. When streaming is in progress and not done: show live progress animation
   if (isStreaming && !isDone) {
-    const icon = currentStatus ? STEP_ICONS[currentStatus.step] : <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />;
+    const icon = currentStatus ? STEP_ICONS[currentStatus.step] : <Loader2 aria-hidden="true" className="size-3.5 shrink-0 animate-spin text-accent" />;
 
     return (
       <div
         role="region"
         aria-label="에이전틱 워크플로우 진행 상태"
-        className={`mb-3 p-2.5 rounded-xl bg-slate-50/90 border border-slate-200 text-xs shadow-2xs ${className}`}
+        className={cn('mb-3 rounded-xl border border-border bg-surface-muted p-2.5 text-xs', className)}
       >
         <div className="flex items-center justify-between gap-2 mb-1.5">
-          <div className="flex items-center gap-2 font-medium text-slate-700 truncate">
+          <div className="flex items-center gap-2 font-medium text-fg min-w-0">
             {icon}
             <span className="truncate">{activeLabel}</span>
           </div>
-          <span className="text-[11px] font-mono font-semibold text-slate-500 shrink-0">
+          <span className="shrink-0 font-semibold tabular-nums text-fg-muted">
             {progress}%
           </span>
         </div>
@@ -90,17 +91,18 @@ export default function WorkflowStepTracker({
           aria-valuenow={progress}
           aria-valuemin={0}
           aria-valuemax={100}
-          className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden"
+          aria-label="심층 분석 진행률"
+          className="h-1.5 w-full overflow-hidden rounded-full bg-border"
         >
           <div
             style={{ width: `${progress}%` }}
-            className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 rounded-full transition-all duration-300 ease-out"
+            className="h-full rounded-full bg-accent transition-[width] duration-300 ease-standard"
           />
         </div>
 
         {currentStatus?.query && (
-          <div className="mt-1.5 text-[11px] text-slate-500 flex items-center gap-1 truncate">
-            <Search className="w-3 h-3 text-emerald-600 shrink-0" />
+          <div className="mt-1.5 flex min-w-0 items-center gap-1 text-fg-muted">
+            <Search aria-hidden="true" className="size-3 shrink-0 text-success" />
             <span className="truncate">검색어: &quot;{currentStatus.query}&quot;</span>
           </div>
         )}
@@ -110,22 +112,21 @@ export default function WorkflowStepTracker({
 
   // 2. When completed (isDone): 28px slim folding accordion
   return (
-    <div className={`mb-3 rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden text-xs ${className}`}>
+    <div className={cn('mb-3 overflow-hidden rounded-lg border border-border bg-surface-muted text-xs', className)}>
       {/* 28px Slim Accordion Header */}
       <button
         type="button"
-        role="button"
         aria-expanded={isExpanded}
         onClick={handleToggle}
-        className="w-full h-7 px-2.5 flex items-center justify-between text-[11px] font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition-colors cursor-pointer select-none"
+        className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 px-2.5 text-xs font-medium text-fg-muted transition-colors duration-150 ease-standard select-none hover:bg-surface hover:text-fg md:min-h-7"
       >
-        <div className="flex items-center gap-1.5">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+        <div className="flex min-w-0 items-center gap-1.5">
+          <CheckCircle2 aria-hidden="true" className="size-3.5 shrink-0 text-success" />
           <span>[✓] 심층 분석 과정 {stepCount}단계 완료</span>
         </div>
-        <div className="flex items-center gap-1 text-slate-400">
+        <div className="flex shrink-0 items-center gap-1 text-fg-subtle">
           <span>{isExpanded ? '접기' : '펼치기'}</span>
-          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          {isExpanded ? <ChevronUp aria-hidden="true" className="size-3" /> : <ChevronDown aria-hidden="true" className="size-3" />}
         </div>
       </button>
 
@@ -133,11 +134,11 @@ export default function WorkflowStepTracker({
       {isExpanded && (
         <div
           data-testid="workflow-history-details"
-          className="p-2.5 pt-1 border-t border-slate-200/70 bg-white/50 space-y-1.5 animate-in fade-in duration-150"
+          className="space-y-1.5 border-t border-border bg-surface p-2.5 pt-1.5 motion-safe:animate-fade-in"
         >
           {fallbackNotice && (
-            <div className="flex items-center gap-1.5 p-1.5 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
-              <AlertCircle className="w-3 h-3 text-amber-600 shrink-0" />
+            <div className="flex items-center gap-1.5 rounded-md bg-warning-soft p-1.5 text-warning">
+              <AlertCircle aria-hidden="true" className="size-3 shrink-0" />
               <span>{fallbackNotice}</span>
             </div>
           )}
@@ -145,18 +146,18 @@ export default function WorkflowStepTracker({
           {stepHistory.map((item, idx) => (
             <div
               key={idx}
-              className="flex items-start justify-between gap-2 text-[11px] text-slate-600 py-0.5"
+              className="flex items-start justify-between gap-2 py-0.5 text-fg-muted"
             >
-              <div className="flex items-center gap-1.5 truncate">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />
                 <span className="truncate">{item.label}</span>
                 {item.query && (
-                  <span className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[10px]">
+                  <span className="max-w-full truncate rounded bg-success-soft px-1.5 font-mono text-success">
                     &quot;{item.query}&quot;
                   </span>
                 )}
               </div>
-              <span className="text-slate-400 font-mono text-[10px] shrink-0">
+              <span className="shrink-0 tabular-nums text-fg-subtle">
                 {item.progress ? `${item.progress}%` : '완료'}
               </span>
             </div>

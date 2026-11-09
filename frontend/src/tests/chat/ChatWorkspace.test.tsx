@@ -52,7 +52,7 @@ describe('ChatWorkspace Container', () => {
     render(<ChatWorkspace />);
 
     await waitFor(() => {
-      expect(screen.getByText(/요청하신 기사를 찾을 수 없어 전체 뉴스 모드로 시작합니다/i)).toBeInTheDocument();
+      expect(screen.getByText(/요청하신 기사를 찾을 수 없어 전체 소식 모드로 시작합니다/i)).toBeInTheDocument();
     });
   });
 
@@ -139,7 +139,7 @@ describe('ChatWorkspace Container', () => {
     const capsule = screen.getByRole('button', { name: /지식 검색 포커스 필터/i });
     fireEvent.click(capsule);
 
-    const harnessBtn = await screen.findByRole('button', { name: /하네스·평가/i });
+    const harnessBtn = await screen.findByRole('button', { name: /하네스 & 벤치마크/ });
     fireEvent.click(harnessBtn);
 
     const dialog = screen.getByRole('dialog', { name: /수집 소식 타깃팅 포커스 필터/i });
@@ -258,7 +258,7 @@ describe('ChatWorkspace Container', () => {
 
     const suppCitations = screen.getAllByRole('button', { name: /보충.*출처.*S1/i });
     expect(suppCitations.length).toBeGreaterThan(0);
-    expect(suppCitations[0].className).toContain('emerald');
+    expect(suppCitations[0]).toHaveAttribute('data-tone', 'supplementary'); expect(suppCitations[0].className).toContain('text-success');
   });
 
   it('switches Claude model mid-session and renders ModelChangeDivider in timeline', async () => {
@@ -292,32 +292,28 @@ describe('ChatWorkspace Container', () => {
     expect(divider).toHaveTextContent(/Claude Haiku 5.5로 모델 변경됨/i);
   });
 
-  it('synchronizes selectedTier bidirectionally between ChatHeader and ChatPromptInput with 0ms delay (REQ-UI-008, POL-UI-006)', async () => {
+  it('shows a single model selector under the composer and reflects tier changes immediately (R39)', async () => {
     render(<ChatWorkspace />);
 
-    // Initial state: both header and composer display Sonnet 5.5
+    // 모델 선택은 입력창 아래 한 곳이다 (헤더에 없다)
     const modelTriggers = screen.getAllByRole('button', { name: /Claude 모델 선택/i });
-    expect(modelTriggers.length).toBe(2); // One in Header, one in Composer
-    expect(modelTriggers[0]).toHaveTextContent(/Sonnet 5.5/i);
-    expect(modelTriggers[1]).toHaveTextContent(/Sonnet 5.5/i);
+    expect(modelTriggers.length).toBe(1);
+    const modelTrigger = modelTriggers[0];
+    expect(modelTrigger).toHaveTextContent(/Sonnet 5.5/i);
 
-    // 1. Change model from Header trigger -> Haiku
-    fireEvent.click(modelTriggers[0]);
-    const haikuOption = screen.getByRole('radio', { name: /Haiku 5.5/i });
-    fireEvent.click(haikuOption);
+    // 트리거는 질문 입력창 뒤에 있다 (DOM 순서)
+    const textarea = screen.getByRole('textbox', { name: /질문 입력|메시지 입력/i });
+    expect(textarea.compareDocumentPosition(modelTrigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    // Both triggers should immediately reflect Haiku 5.5
-    expect(modelTriggers[0]).toHaveTextContent(/Haiku 5.5/i);
-    expect(modelTriggers[1]).toHaveTextContent(/Haiku 5.5/i);
+    // 1. Haiku 로 바꾸면 즉시 반영
+    fireEvent.click(modelTrigger);
+    fireEvent.click(screen.getByRole('radio', { name: /Haiku 5.5/i }));
+    expect(modelTrigger).toHaveTextContent(/Haiku 5.5/i);
 
-    // 2. Change model from Composer trigger -> Opus
-    fireEvent.click(modelTriggers[1]);
-    const opusOption = screen.getByRole('radio', { name: /Opus 5.5/i });
-    fireEvent.click(opusOption);
-
-    // Both triggers should immediately reflect Opus 5.5
-    expect(modelTriggers[0]).toHaveTextContent(/Opus 5.5/i);
-    expect(modelTriggers[1]).toHaveTextContent(/Opus 5.5/i);
+    // 2. Opus 로 바꾸면 즉시 반영
+    fireEvent.click(modelTrigger);
+    fireEvent.click(screen.getByRole('radio', { name: /Opus 5.5/i }));
+    expect(modelTrigger).toHaveTextContent(/Opus 5.5/i);
   });
 
   it('correctly sends scope: scoped and source_id when article is focused, and renders customized response', async () => {

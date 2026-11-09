@@ -112,8 +112,10 @@ class LLMProcessor:
 
     def __init__(self):
         self.gemini_key = getattr(settings, "GEMINI_API_KEY", "")
-        self.openai_key = getattr(settings, "OPENAI_API_KEY", "")
-        self.ollama_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
+        # 명시 덮어쓰기: None 이면 설정 원천 순서를 따르고, 문자열이면 그 값만 쓴다.
+        self.openai_key: Optional[str] = None
+        self.ollama_url: Optional[str] = None
+        self._unavailable_reason: Optional[str] = None
         self._qa_cache: Dict[str, Tuple[str, str]] = {}
         self._eval_cache: Dict[str, Dict[str, Any]] = {}
         self.anthropic_provider = AnthropicLLMProvider()
@@ -123,6 +125,73 @@ class LLMProcessor:
             "cache_read_input_tokens": None,
             "cache_creation_input_tokens": None,
         }
+
+    def _resolve_openai_key(self) -> str:
+        """OpenAI 키: 덮어쓰기 → settings → config.json → 환경 변수 → 빈 값."""
+        if self.openai_key is not None:
+            return self.openai_key
+        llm_cfg = load_json_config().get("llm", {})
+        return (
+            getattr(settings, "OPENAI_API_KEY", "")
+            or llm_cfg.get("openai_api_key", "")
+            or os.environ.get("OPENAI_API_KEY", "")
+            or ""
+        )
+
+    def _resolve_openai_chat_model(self) -> str:
+        """OpenAI 모델: settings → config.json → gpt-4o-mini."""
+        llm_cfg = load_json_config().get("llm", {})
+        return (
+            getattr(settings, "OPENAI_MODEL", "")
+            or llm_cfg.get("openai_model", "")
+            or "gpt-4o-mini"
+        )
+
+    def _resolve_ollama_url(self) -> str:
+        """Ollama 주소: 덮어쓰기 → settings → config.json → 빈 값. 끝의 / 는 뗀다."""
+        if self.ollama_url is not None:
+            return self.ollama_url.rstrip("/")
+        llm_cfg = load_json_config().get("llm", {})
+        url = (
+            getattr(settings, "OLLAMA_BASE_URL", "")
+            or llm_cfg.get("ollama_base_url", "")
+            or ""
+        )
+        return url.rstrip("/")
+
+    def _resolve_ollama_generate_model(self) -> str:
+        """Ollama 모델: settings → config.json → llama3.2:latest."""
+        llm_cfg = load_json_config().get("llm", {})
+        return (
+            getattr(settings, "OLLAMA_MODEL", "")
+            or llm_cfg.get("ollama_model", "")
+            or "llama3.2:latest"
+        )
+
+    def _ollama_status(self, url: str, model: str) -> Tuple[bool, str]:
+        """Ollama 가용성 판정: /api/tags 한 번 (1초) 으로 응답과 설정 모델 설치를 본다. (가능 여부, 이유)."""
+        if not url:
+            return False, "Ollama 주소 없음"
+        target = model if ":" in model else f"{model}:latest"
+        try:
+            with httpx.Client(timeout=1.0) as client:
+                resp = client.get(f"{url}/api/tags")
+        except Exception:
+            return False, "Ollama 연결 실패"
+        if resp.status_code != 200:
+            return False, f"Ollama /api/tags 응답 {resp.status_code}"
+        try:
+            entries = resp.json().get("models", [])
+            installed = set()
+            for entry in entries:
+                for k in ("name", "model"):
+                    if entry.get(k):
+                        installed.add(entry[k])
+        except Exception:
+            return False, "Ollama 응답 해석 실패"
+        if target in installed:
+            return True, ""
+        return False, f"Ollama 설정 모델 미설치 ({model})"
 
     async def _call_gemini(self, prompt: str, model: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
         """
@@ -177,20 +246,10 @@ class LLMProcessor:
         return None, None
 
     async def _call_openai(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
-        json_cfg = load_json_config()
-        key = (
-            getattr(settings, "OPENAI_API_KEY", "")
-            or json_cfg.get("llm", {}).get("openai_api_key", "")
-            or os.environ.get("OPENAI_API_KEY", "")
-            or self.openai_key
-        )
+        key = self._resolve_openai_key()
         if not key:
             return None, None
-        model = (
-            getattr(settings, "OPENAI_MODEL", "")
-            or json_cfg.get("llm", {}).get("openai_model", "")
-            or "gpt-4o-mini"
-        )
+        model = self._resolve_openai_chat_model()
         url = "https://api.openai.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
         payload = {
@@ -210,11 +269,11 @@ class LLMProcessor:
         return None, None
 
     async def _call_ollama(self, prompt: str) -> Tuple[Optional[str], Optional[str]]:
-        base_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434") or self.ollama_url
+        base_url = self._resolve_ollama_url()
         if not base_url:
             return None, None
-        model = getattr(settings, "OLLAMA_MODEL", "llama3.2:latest")
-        url = f"{base_url.rstrip('/')}/api/generate"
+        model = self._resolve_ollama_generate_model()
+        url = f"{base_url}/api/generate"
         payload = {"model": model, "prompt": prompt, "stream": False, "options": {"num_predict": 4096}}
         try:
             async with httpx.AsyncClient(timeout=90.0) as client:
@@ -254,25 +313,15 @@ class LLMProcessor:
         if self.anthropic_provider.is_available():
             return True
 
-        json_cfg = load_json_config()
-        openai_key = (
-            getattr(settings, "OPENAI_API_KEY", "")
-            or json_cfg.get("llm", {}).get("openai_api_key", "")
-            or os.environ.get("OPENAI_API_KEY", "")
-            or self.openai_key
-        )
-        if openai_key:
+        if self._resolve_openai_key():
             return True
 
-        ollama_url = getattr(settings, "OLLAMA_BASE_URL", "") or json_cfg.get("llm", {}).get("ollama_base_url", "")
-        if ollama_url:
-            try:
-                with httpx.Client(timeout=1.0) as client:
-                    resp = client.get(f"{ollama_url}/api/tags")
-                    if resp.status_code == 200:
-                        return True
-            except Exception:
-                pass
+        ollama_ok, ollama_reason = self._ollama_status(self._resolve_ollama_url(), self._resolve_ollama_generate_model())
+        if ollama_ok:
+            return True
+
+        self._unavailable_reason = f"Anthropic 키 없음 · OpenAI 키 없음 · {ollama_reason}"
+        logger.debug(f"LLM 프로바이더 판정 False: {self._unavailable_reason}")
         return False
 
     def check_provider_available(self, target_provider: Optional[str] = None) -> bool:
@@ -280,9 +329,11 @@ class LLMProcessor:
         Check LLM availability.
         Raises LLMProviderUnavailableException (HTTP 503) if no live provider is configured.
         """
+        self._unavailable_reason = None
         if self.has_live_provider(target_provider=target_provider):
             return True
 
+        logger.warning(f"가용한 LLM 프로바이더 없음: {self._unavailable_reason or '판정 이유 없음'}")
         raise LLMProviderUnavailableException("가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)")
 
 
@@ -327,13 +378,7 @@ class LLMProcessor:
                 logger.warning(f"Anthropic call failed in generate_live_answer: {e}")
 
         # 2. OpenAI
-        json_cfg = load_json_config()
-        openai_key = (
-            getattr(settings, "OPENAI_API_KEY", "")
-            or json_cfg.get("llm", {}).get("openai_api_key", "")
-            or os.environ.get("OPENAI_API_KEY", "")
-            or self.openai_key
-        )
+        openai_key = self._resolve_openai_key()
         if openai_key:
             try:
                 ans, o_model = await self._call_openai(prompt)
@@ -399,18 +444,12 @@ class LLMProcessor:
         # Note: Google Gemini streaming is permanently decommissioned per POL-LLM-005, REQ-LLM-002, and ADR-012.
 
         # 2. Try OpenAI SDK streaming
-        json_cfg = load_json_config()
-        openai_key = (
-            getattr(settings, "OPENAI_API_KEY", "")
-            or json_cfg.get("llm", {}).get("openai_api_key", "")
-            or os.environ.get("OPENAI_API_KEY", "")
-            or self.openai_key
-        )
+        openai_key = self._resolve_openai_key()
         if openai_key:
             try:
                 import openai
                 openai_client = openai.AsyncOpenAI(api_key=openai_key)
-                o_model = getattr(settings, "OPENAI_MODEL", "") or json_cfg.get("llm", {}).get("openai_model", "") or "gpt-4o-mini"
+                o_model = self._resolve_openai_chat_model()
                 stream = await openai_client.chat.completions.create(
                     model=o_model,
                     messages=[{"role": "user", "content": prompt}],
@@ -434,9 +473,9 @@ class LLMProcessor:
                 logger.warning(f"OpenAI SDK stream failed: {e}")
 
         # 3. Try Ollama streaming
-        ollama_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434") or json_cfg.get("llm", {}).get("ollama_base_url", "")
+        ollama_url = self._resolve_ollama_url()
         if ollama_url:
-            ol_m = getattr(settings, "OLLAMA_MODEL", "") or json_cfg.get("llm", {}).get("ollama_model", "") or "qwen2.5:latest"
+            ol_m = self._resolve_ollama_generate_model()
             try:
                 async with httpx.AsyncClient(timeout=120.0) as client:
                     async with client.stream("POST", f"{ollama_url}/api/generate", json={"model": ol_m, "prompt": prompt, "stream": True, "options": {"num_predict": 4096}}) as resp:
@@ -854,7 +893,6 @@ class LLMProcessor:
             f"4. 실무 개발팀이 바로 실행해볼 수 있는 구체적인 액션 아이템이나 주의점(Caution)을 1~2개 제시해주세요."
         )
 
-        json_cfg = load_json_config()
         stream_succeeded = False
         full_text = ""
         model_used = ""
@@ -881,17 +919,12 @@ class LLMProcessor:
 
         # 2. Try OpenAI Official SDK streaming if Anthropic wasn't used or failed
         if not stream_succeeded:
-            openai_key = (
-                getattr(settings, "OPENAI_API_KEY", "")
-                or json_cfg.get("llm", {}).get("openai_api_key", "")
-                or os.environ.get("OPENAI_API_KEY", "")
-                or self.openai_key
-            )
+            openai_key = self._resolve_openai_key()
             if openai_key:
                 try:
                     import openai
                     openai_client = openai.AsyncOpenAI(api_key=openai_key)
-                    o_model = getattr(settings, "OPENAI_MODEL", "") or json_cfg.get("llm", {}).get("openai_model", "") or "gpt-4o-mini"
+                    o_model = self._resolve_openai_chat_model()
                     stream = await openai_client.chat.completions.create(
                         model=o_model,
                         messages=[{"role": "user", "content": prompt}],

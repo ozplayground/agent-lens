@@ -115,3 +115,24 @@ describe('CommandPalette Component (Cycle 3 - TDD)', () => {
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('CommandPalette — 360 자리표시 길이 (ui-redesign 29, R16)', () => {
+  it('검색 입력 자리표시가 짧은 문구이고 ESC 안내를 담지 않는다', () => {
+    render(
+      <ThemeProvider defaultTheme="light">
+        <CommandPalette
+          isOpen
+          onClose={vi.fn()}
+          onOpenSources={vi.fn()}
+          onOpenMcp={vi.fn()}
+          onTriggerCollect={vi.fn()}
+        />
+      </ThemeProvider>
+    );
+
+    const input = screen.getByRole('combobox', { name: '명령어 검색' });
+    const placeholder = input.getAttribute('placeholder');
+    expect(placeholder).toBe('명령어 검색 또는 바로가기');
+    expect(placeholder).not.toMatch(/ESC/i);
+  });
+});

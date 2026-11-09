@@ -9,10 +9,10 @@ export const metadata: Metadata = {
 
 export default function ChatPage() {
   return (
-    <main className="w-full max-w-full h-[100dvh] bg-slate-50 overflow-hidden overflow-x-hidden">
+    <main className="w-full max-w-full h-[100dvh] bg-canvas text-fg overflow-hidden overflow-x-hidden">
       <Suspense
         fallback={
-          <div className="w-full h-[100dvh] flex items-center justify-center text-xs text-slate-400 font-mono">
+          <div className="w-full h-[100dvh] flex items-center justify-center text-sm text-fg-muted">
             워크스페이스 환경을 초기화하는 중...
           </div>
         }

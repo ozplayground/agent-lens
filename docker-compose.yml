@@ -35,7 +35,7 @@ services:
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
     volumes:
       - agentlens-data:/app/data
-      - ./config.json:/app/config.json:ro
+      - ./config.json:/app/config.json:rw
       - ./sources.json:/app/sources.json:rw
     extra_hosts:
       - "host.docker.internal:host-gateway"

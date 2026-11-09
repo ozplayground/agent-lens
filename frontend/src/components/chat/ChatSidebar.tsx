@@ -19,6 +19,7 @@ export interface ChatSidebarProps {
   onToggleCollapse: () => void;
   onRetryLoad?: () => void;
   isStreaming?: boolean;
+  /** 표시 방식(`display`)을 포함한 클래스. 기본 `flex`, 챗 화면은 `hidden lg:flex`. */
   className?: string;
 }
 
@@ -36,7 +37,7 @@ export default function ChatSidebar({
   onToggleCollapse,
   onRetryLoad,
   isStreaming = false,
-  className = '',
+  className = 'flex',
 }: ChatSidebarProps) {
   const filteredSessions = useMemo(() => {
     const trimmed = searchQuery.trim().toLowerCase();
@@ -50,9 +51,10 @@ export default function ChatSidebar({
 
   return (
     <aside
+      id="chat-history-sidebar"
       role="navigation"
       aria-label="대화 기록 목록"
-      className={`w-64 lg:w-72 border-r border-slate-200 bg-white h-full shrink-0 flex flex-col transition-all duration-300 z-20 ${className}`}
+      className={`w-72 border-r border-border bg-surface h-full shrink-0 flex-col z-20 ${className}`}
     >
       <ChatSidebarHeader
         searchQuery={searchQuery}

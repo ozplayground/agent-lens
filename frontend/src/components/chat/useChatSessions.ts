@@ -53,63 +53,72 @@ export function useChatSessions(): UseChatSessionsReturn {
     return [];
   });
 
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  // 마운트하자마자 목록을 불러오므로 첫 상태는 로딩 중이다.
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const isMountedRef = useRef<boolean>(true);
 
   // 1. Fetch sessions from API and sync with LocalStorage (Dual-Layer)
+  // 상태 초기화 없이 요청과 결과 반영만 한다 (마운트 시 바로 부른다).
+  const loadSessions = useCallback((): Promise<void> => {
+    // 상태 반영은 모두 응답 콜백 안에서 한다.
+    return fetch(`/api/chat/sessions?limit=${MAX_SESSIONS}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`세션 목록 조회 실패 (${res.status})`);
+        }
+
+        const summaries: ChatSessionSummary[] = await res.json();
+        const metas = summaries.map(summaryToSessionMeta);
+
+        if (isMountedRef.current) {
+          setSessions(metas);
+          try {
+            localStorage.setItem(STORAGE_INDEX_KEY, JSON.stringify(metas));
+          } catch {}
+        }
+      })
+      .catch((err: unknown) => {
+        if (isMountedRef.current) {
+          // Fall back to local storage if available
+          try {
+            const cached = localStorage.getItem(STORAGE_INDEX_KEY);
+            if (cached) {
+              setSessions(JSON.parse(cached));
+            } else {
+              setError(
+                err instanceof Error ? err.message : '세션 목록을 불러오지 못했습니다.'
+              );
+            }
+          } catch {
+            setError('세션 목록을 불러오지 못했습니다.');
+          }
+        }
+      })
+      .finally(() => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
+      });
+  }, []);
+
+  // 다시 불러오기: 로딩·오류 상태를 초기화한 뒤 요청한다.
   const fetchSessions = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-
-    try {
-      const res = await fetch(`/api/chat/sessions?limit=${MAX_SESSIONS}`);
-      if (!res.ok) {
-        throw new Error(`세션 목록 조회 실패 (${res.status})`);
-      }
-
-      const summaries: ChatSessionSummary[] = await res.json();
-      const metas = summaries.map(summaryToSessionMeta);
-
-      if (isMountedRef.current) {
-        setSessions(metas);
-        try {
-          localStorage.setItem(STORAGE_INDEX_KEY, JSON.stringify(metas));
-        } catch {}
-      }
-    } catch (err: unknown) {
-      if (isMountedRef.current) {
-        // Fall back to local storage if available
-        try {
-          const cached = localStorage.getItem(STORAGE_INDEX_KEY);
-          if (cached) {
-            setSessions(JSON.parse(cached));
-          } else {
-            setError(
-              err instanceof Error ? err.message : '세션 목록을 불러오지 못했습니다.'
-            );
-          }
-        } catch {
-          setError('세션 목록을 불러오지 못했습니다.');
-        }
-      }
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
-    }
-  }, []);
+    await loadSessions();
+  }, [loadSessions]);
 
   useEffect(() => {
     isMountedRef.current = true;
-    fetchSessions();
+    loadSessions();
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [fetchSessions]);
+  }, [loadSessions]);
 
   // 2. Load Session Detail (with L1 Local Cache + L2 Server Fetch)
   const loadSessionDetail = useCallback(

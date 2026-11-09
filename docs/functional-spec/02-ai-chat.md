@@ -1,18 +1,21 @@
 # 기능명세: AI 챗
 
-Updated: 2026-11-06
+Updated: 2026-11-09
 
 ## 개요
 AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는 대화 화면이다. 사용자는 `/chat` 페이지에서 질문을 입력하고, 백엔드 `POST /api/chat/stream` 이 SSE 로 진행 단계(status), 출처(sources), 답변 토큰(token), 완료(done) 또는 오류(error)를 보낸다. 모드는 두 가지다.
 
-- 전체 코퍼스(global): ReAct 방식의 플래너가 검색 여부를 정한다. 검색하면 SQLite FTS5(BM25) + 품질 + 최신성 점수로 기사를 고르고, 답변을 다 받은 뒤 실제로 인용된 출처만 보낸다.
+- 전체 소식(global): ReAct 방식의 플래너가 검색 여부를 정한다. 검색하면 SQLite FTS5(BM25) + 품질 + 최신성 점수로 기사를 고르고, 답변을 다 받은 뒤 실제로 인용된 출처만 보낸다.
 - 단일 기사(scoped): 뉴스 피드에서 넘겨받은 기사 1건만 근거로 4단 구조 리포트를 만든다. 본문이 없으면 원문을 스크래핑한다.
 
 화면 구성 (`frontend/src/components/chat/ChatWorkspace.tsx`):
-- 왼쪽: 대화 기록 사이드바 (`ChatSidebar`, 1024px 이상에서만 보임). 1024px 미만은 슬라이드 드로어 (`ChatHistoryDrawer`).
-- 위: 헤더 (`ChatHeader`) — 피드로 돌아가기, 스코프 토글(Scoped/Global), 기사 칩(`ActiveSourceChip`), 모델 선택기(헤더용), 기록 토글, 새 대화.
+- 왼쪽: 대화 기록 사이드바 (`ChatSidebar`, 1024px 이상에서만 보임, 접을 수 있다). 머리 영역은 두 줄(새 대화 줄 56px + 검색 줄 44px)이라 아래 경계가 오른쪽의 헤더 + 맥락 줄 아래 경계와 같다. 1024px 미만은 왼쪽 드로어 (`ChatHistoryDrawer`).
+- 위: 헤더 (`ChatHeader`, 56px 한 줄) — 왼쪽부터 피드로 돌아가기(맨 왼쪽), 기록 버튼, 제목 `AI 챗`, 새 대화, 커맨드 팔레트(768px 이상), 더보기 메뉴(테마, `뉴스 피드로 이동`, 768px 미만은 `커맨드 팔레트`).
+- 헤더 아래: 맥락 줄 (`ChatContextBar`) — 스코프 토글(`단일 기사`/`전체 소식`)과 기사 칩(`ActiveSourceChip`). 넘치면 가로로 스크롤하는 한 줄(`ScrollRow`)이다.
 - 가운데: 메시지 타임라인 (`ChatMessageList`) — 빈 상태면 환영 화면과 추천 질문 4개, 메시지가 있으면 메시지와 모델 변경 구분선.
-- 아래: 포커스 캡슐(`FocusCapsule`)과 입력창(`ChatPromptInput`, 모델 선택기 포함). 캡슐을 누르면 포커스 필터 시트(`FocusBottomSheet`)가 열린다.
+- 아래: 포커스 캡슐(`FocusCapsule`)과 입력창(`ChatPromptInput`, 모든 폭에서 화면의 유일한 모델 선택기 포함). 캡슐을 누르면 포커스 필터 대화상자(`FocusBottomSheet`, 768px 미만은 바텀시트)가 열린다.
+- 겹치는 층: 챗 커맨드 팔레트(`CommandPalette`, 명령 4개), 알림(입력 영역 바로 위의 `composer` 알림 영역, CHAT-18).
+- 열 맞춤: 맥락 줄 안쪽, 메시지 열(빈 화면 포함), 입력 영역은 같은 열 규칙(바깥 여백 768px 미만 16px·이상 24px, 안쪽 가운데 최대 폭 `max-w-3xl`)을 써서 왼쪽 끝이 맞는다.
 
 세션은 이중으로 저장한다. 브라우저 localStorage 와 서버 DB(`chat_sessions`, `chat_messages`)다. 서버는 스트림이 끝날 때 한 턴(질문+답변)을 스스로 저장하고, 프론트도 같은 턴을 `POST /api/chat/sessions` 로 다시 보낸다 (중복 문제는 '알려진 불일치·위험' 참고).
 
@@ -20,22 +23,22 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
 | ID | 기능 | 설명 | 진입점 (화면 / API) |
 |---|---|---|---|
 | CHAT-01 | 세션 목록 조회·검색 | 최근 갱신순 세션 목록, 제목 부분일치 검색 | 사이드바/드로어 / `GET /api/chat/sessions` |
-| CHAT-02 | 새 대화 | 새 세션 UUID 발급, 화면 상태 초기화 | `+ 새 대화` 버튼 / (서버 호출 없음) |
+| CHAT-02 | 새 대화 | 새 세션 UUID 발급, 화면 상태 초기화 | 사이드바·드로어 `새 대화`, 헤더 `새 대화 시작`, 커맨드 팔레트 / (서버 호출 없음) |
 | CHAT-03 | 세션 선택·복원 | 과거 세션의 메시지·스코프·기사·필터 복원 | 세션 카드, `/chat?session_id=` / `GET /api/chat/sessions/{id}` |
 | CHAT-04 | 세션 제목(이름) | 첫 질문으로 30자 자동 제목. 수동 변경 UI 없음 | — / `POST /api/chat/sessions` (title) |
 | CHAT-05 | 세션 삭제 | 확인 팝오버 후 세션과 메시지 삭제 | 카드 휴지통 버튼 / `DELETE /api/chat/sessions/{id}` |
 | CHAT-06 | 세션 저장·동기화 | 서버 자동 영속화, 프론트 업서트, localStorage 캐시, 최대 30개 FIFO | — / `POST /api/chat/sessions`, 스트림 내부 |
-| CHAT-07 | 히스토리 사이드바·드로어 | 데스크톱 사이드바 접기, 모바일 드로어 | 헤더 기록 버튼 |
+| CHAT-07 | 히스토리 사이드바·드로어 | 데스크톱(1024px 이상) 사이드바 접기, 그 미만 드로어 | 헤더 기록 버튼, 사이드바 접기 버튼, 커맨드 팔레트 `대화 기록 열기` |
 | CHAT-08 | 메시지 입력·전송 | 2,000자 제한, Enter 전송, 멀티턴 history 첨부 | 입력창, 추천 질문 / `POST /api/chat/stream` |
 | CHAT-09 | SSE 스트리밍 수신 | status/sources/token/done/error 파싱과 화면 반영 | — / `POST /api/chat/stream` |
 | CHAT-10 | ReAct 검색 계획 | global 모드에서 검색 도구 호출 여부와 검색어 결정 | — / 스트림 내부 |
 | CHAT-11 | 워크플로 단계 표시 | 진행률 바, 완료 후 접는 단계 목록 | 답변 말풍선 상단 |
 | CHAT-12 | RAG 코퍼스 검색 | FTS5 BM25 + 품질 + 최신성 하이브리드 점수, 관련도 게이트, 상위 N | — / 스트림 내부, `GET /api/chat/search` |
-| CHAT-13 | 단일 기사(scoped) 질의 | 기사 1건 근거, 본문 스크래핑, 4단 리포트 프롬프트 | Scoped 모드 / 스트림 내부 |
+| CHAT-13 | 단일 기사(scoped) 질의 | 기사 1건 근거, 본문 스크래핑, 4단 리포트 프롬프트 | `단일 기사` 모드 / 스트림 내부 |
 | CHAT-14 | 인용 출처 | 답변의 `[n]` 만 남기는 출처 정리, 인용 배지·팝오버 | 답변 본문 `[1]` 배지 |
-| CHAT-15 | 모델 선택 | Haiku/Sonnet/Opus 티어 선택, 티어 배지, 모델 변경 구분선 | 헤더·입력창 모델 칩 |
-| CHAT-16 | 포커스 필터 | 카테고리·기간·정렬·고신호 필터, 0건 시 기간 자동 완화 | 포커스 캡슐 → 시트 |
-| CHAT-17 | 스코프 전환·기사 칩 | Scoped/Global 토글, 기사 컨텍스트 해제 | 헤더 토글, `ActiveSourceChip` |
+| CHAT-15 | 모델 선택 | Haiku/Sonnet/Opus 티어 선택, 티어 배지, 모델 변경 구분선 | 입력창 모델 칩 (모든 폭, 한 곳) |
+| CHAT-16 | 포커스 필터 | 카테고리·기간·정렬·고신호 필터, 0건 시 기간 자동 완화 | 포커스 캡슐 → 대화상자(768px 미만 바텀시트) |
+| CHAT-17 | 스코프 전환·기사 칩 | `단일 기사`/`전체 소식` 토글, 기사 컨텍스트 해제 | 맥락 줄 토글, `ActiveSourceChip` |
 | CHAT-18 | 핸드오버 | 뉴스 기사에서 챗으로 기사 컨텍스트와 질문 넘기기 | `HandoverCtaButton`, 피드 `c` 키 / `GET /api/chat/sources/{id}` |
 | CHAT-19 | 내보내기 | 답변 복사, 마크다운 복사, .md 다운로드, Notion 동기화(모의) | 답변 하단 `ExportToolbar` |
 | CHAT-20 | 오류·중단·재시도 | HTTP 오류, 스트림 중 오류, 사용자 중단, 다시 시도 | 중단 버튼, 오류 카드 |
@@ -43,7 +46,7 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
 | CHAT-22 | LLM 프로바이더·폴백 | Anthropic 우선, OpenAI, Ollama 폴백, 명시적 Gemini/GPT 라우팅 | — |
 | CHAT-23 | 동기 단건 질의 API | 스트림 없이 한 번에 답을 돌려주는 API (UI 미사용) | `POST /api/chat/query` |
 | CHAT-24 | 보충 웹 검색 엔진 | 충실도 평가와 DuckDuckGo 보충 검색 `[S1]` (챗 흐름에 연결되지 않음) | — |
-| CHAT-25 | 반응형·모바일 | 가상 키보드 대응 높이, 드로어, 바텀시트, iOS 줌 방지 | — |
+| CHAT-25 | 반응형·모바일 | 가상 키보드 대응 높이, 드로어, 바텀시트, 폭별 헤더·도구줄 배치 | — |
 
 ## CHAT-01 세션 목록 조회·검색
 - 진입점: 화면 진입 시 자동 조회(`useChatSessions` 마운트), 사이드바/드로어의 `대화 검색...` 입력, 오류 카드의 `다시 시도`. API `GET /api/chat/sessions?limit=&offset=`.
@@ -54,25 +57,25 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
   3. 프론트는 응답을 `summaryToSessionMeta` 로 바꿔 상태에 넣고 localStorage `agentlens_chat_sessions_index` 에 저장한다.
   4. 초기 상태는 localStorage 인덱스 캐시로 시작한다(서버 응답 전).
   5. 검색은 서버를 부르지 않는다. 앞뒤 공백을 지우고 소문자로 바꾼 검색어가 제목에 포함된 세션만 보인다 (`ChatSidebar`, `ChatHistoryDrawer` 각각 같은 필터).
-- 출력: 세션 카드 목록. 카드는 제목(말줄임), Scoped/Global 배지, 상대 시각(방금 전 / N분 전 / N시간 전 / 어제 / N일 전 / M월 D일)을 보인다. 활성 세션은 왼쪽 인디고 테두리와 `aria-current`.
+- 출력: 세션 카드 목록. 카드는 제목(말줄임), 범위 배지(scoped `단일 기사`·`Target` 아이콘 강조 톤, global `전체 소식`·`Globe` 아이콘 중립 톤), 상대 시각(방금 전 / N분 전 / N시간 전 / 어제 / N일 전 / M월 D일)을 보인다. 활성 세션은 `bg-accent-soft` 배경과 왼쪽 강조색 2px 테두리, `aria-current="true"`, `data-active="true"`. 카드 접근 이름은 `대화: <제목>, <상대 시각>, 단일 기사 모드`(global 은 `… 전체 소식 모드`)다. 범위 라벨은 `lib/labels.ts` 의 `scopeLabel` 에서 나온다.
 - 예외·엣지:
-  - 로딩 중: 스켈레톤 5줄.
-  - 조회 실패: 캐시가 있으면 캐시를 보이고 오류는 숨긴다. 캐시가 없으면 `세션 목록 조회 실패 (상태코드)` 오류 카드와 `다시 시도`.
+  - 로딩 중: 스켈레톤 5줄(`role="status"`, `대화 기록을 불러오는 중...`). 마운트하자마자 조회하므로 첫 상태가 로딩 중이다.
+  - 조회 실패: 캐시가 있으면 캐시를 보이고 오류는 숨긴다. 캐시가 없으면 `대화 기록을 불러오지 못했습니다` 제목과 `세션 목록 조회 실패 (상태코드)` 문구의 오류 상태(`ErrorState`)와 `다시 시도`.
   - 0건: `저장된 대화 기록이 없습니다` + `새 대화 시작`. 검색 결과 0건: `검색 결과가 없습니다` + `검색어 초기화`.
   - 백엔드 예외: 500 `ERR_SERVER_INTERNAL`.
-- 관련 코드: `backend/app/api/chat.py:422-441`, `backend/app/services/chat_session_service.py:58-98`, `frontend/src/components/chat/useChatSessions.ts:44-112`, `frontend/src/components/chat/ChatSidebar.tsx:41-45`, `frontend/src/components/chat/ChatHistoryDrawer.tsx:42-46`, `frontend/src/components/chat/SessionList.tsx:35-84`, `frontend/src/components/chat/SessionItemCard.tsx:15-31`, `frontend/src/components/chat/SessionEmptyState.tsx`, `frontend/src/types/chat.ts:739-751`
+- 관련 코드: `backend/app/api/chat.py:422-441`, `backend/app/services/chat_session_service.py:58-98`, `frontend/src/components/chat/useChatSessions.ts:44-122`, `frontend/src/components/chat/ChatSidebar.tsx:42-46`, `frontend/src/components/chat/ChatHistoryDrawer.tsx:48-52`, `frontend/src/components/chat/SessionList.tsx:35-76`, `frontend/src/components/chat/SessionItemCard.tsx:18-34,75-109`, `frontend/src/components/chat/SessionListSkeleton.tsx`, `frontend/src/components/chat/SessionEmptyState.tsx`, `frontend/src/types/chat.ts:740-752`
 
 ## CHAT-02 새 대화
-- 진입점: 사이드바/드로어 헤더 `새 대화` 버튼, 헤더 `새 대화` 버튼(사이드바가 닫혀 있을 때만 보임, `showNewChatButton={!isSidebarOpen}`), 빈 목록의 `새 대화 시작`.
+- 진입점: 사이드바/드로어 헤더 `새 대화` 버튼(접근 이름 `+ 새 대화`), 헤더 `새 대화 시작` 아이콘 버튼, 빈 목록의 `새 대화 시작`, 커맨드 팔레트 `새 대화 시작`. 헤더 버튼은 `!isDesktop || !isSidebarOpen` 일 때 보인다(`isDesktop` = 1024px 이상). 즉 1024px 이상에서는 사이드바를 접었을 때만, 그 미만에서는 항상 보인다.
 - 입력: 없음.
 - 처리 규칙:
   1. 진행 중인 스트림을 중단한다 (`handleStopGenerating`).
   2. `crypto.randomUUID()`(없으면 수동 v4 생성)로 새 세션 ID 를 만든다.
   3. 메시지, 모델 변경 이벤트, 입력값을 비우고 모델 티어를 `sonnet`, 기사 컨텍스트를 null, 스코프를 `global`, 포커스 필터를 기본값으로 되돌린다.
   4. 서버 호출은 없다. 세션은 첫 턴이 끝날 때 서버에 생긴다.
-- 출력: 환영 화면과 추천 질문 4개.
-- 예외·엣지: 스트리밍 중에는 사이드바·헤더의 새 대화 버튼이 비활성화된다 (`disabled={isStreaming}`). 드로어에서 누르면 드로어도 닫힌다.
-- 관련 코드: `frontend/src/components/chat/ChatWorkspace.tsx:38-47,182-193`, `frontend/src/components/chat/ChatSidebarHeader.tsx:28-37`, `frontend/src/components/chat/ChatHeader.tsx:138-149`
+- 출력: 환영 화면과 추천 질문 4개 (CHAT-08 규칙 8).
+- 예외·엣지: 스트리밍 중에는 사이드바·드로어·헤더의 새 대화 버튼이 비활성화된다 (`disabled={isStreaming}`). 빈 목록의 버튼과 팔레트 명령은 비활성화되지 않고, 누르면 스트림을 중단한 뒤 초기화한다. 드로어에서 누르면 드로어도 닫힌다.
+- 관련 코드: `frontend/src/components/chat/ChatWorkspace.tsx:44-53,191-203,603-608`, `frontend/src/components/chat/ChatSidebarHeader.tsx:29-38`, `frontend/src/components/chat/ChatHeader.tsx:77,125-127`, `frontend/src/components/chat/SessionEmptyState.tsx:43-57`
 
 ## CHAT-03 세션 선택·복원
 - 진입점: 세션 카드 클릭 또는 Enter/Space, URL `/chat?session_id=<id>` (첫 진입 1회). API `GET /api/chat/sessions/{session_id}`.
@@ -89,7 +92,7 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
   - 백엔드 없음: 404 `ERR_SESSION_NOT_FOUND` (`ID {id}에 해당하는 대화 세션을 찾을 수 없습니다.`), 그 밖의 예외 500 `ERR_SERVER_INTERNAL`.
   - 상세가 null 이면 `sessionId` 만 바뀌고 이전 화면 메시지가 그대로 남는다 (위험 항목 참고).
   - 선택해도 모델 티어와 모델 변경 이벤트는 초기화하지 않는다.
-- 관련 코드: `backend/app/api/chat.py:496-523`, `backend/app/services/chat_session_service.py:100-209`, `frontend/src/components/chat/useChatSessions.ts:115-147`, `frontend/src/components/chat/ChatWorkspace.tsx:196-222,502-511`, `frontend/src/types/chat.ts:795-822`
+- 관련 코드: `backend/app/api/chat.py:496-523`, `backend/app/services/chat_session_service.py:100-209`, `frontend/src/components/chat/useChatSessions.ts:124-156`, `frontend/src/components/chat/ChatWorkspace.tsx:205-232,511-521`, `frontend/src/types/chat.ts:796-823`
 
 ## CHAT-04 세션 제목(이름)
 - 진입점: 별도 UI 없음. 제목 수정(rename) 화면과 전용 API 는 없다. `POST /api/chat/sessions` 의 `title` 필드로만 바뀐다.
@@ -101,21 +104,21 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
   4. 서버 업서트는 `title` 이 null 이 아니면 덮어쓴다.
 - 출력: 카드 제목, `title` 속성 툴팁.
 - 예외·엣지: DB 컬럼은 `String(100)`, 백엔드 요청 스키마는 길이 제한이 없다. 프론트 zod 는 1~100자.
-- 관련 코드: `backend/app/services/chat_session_service.py:38-49,329-331`, `backend/app/models/chat_session.py:11`, `frontend/src/types/chat.ts:762-770`, `frontend/src/components/chat/useChatSessions.ts:170-177`
+- 관련 코드: `backend/app/services/chat_session_service.py:38-49,329-331`, `backend/app/models/chat_session.py:11`, `frontend/src/types/chat.ts:763-771`, `frontend/src/components/chat/useChatSessions.ts:179-186`
 
 ## CHAT-05 세션 삭제
-- 진입점: 세션 카드 휴지통 버튼(호버/포커스 시 보임) → `DeleteConfirmPopover`. API `DELETE /api/chat/sessions/{session_id}`.
+- 진입점: 세션 카드 휴지통 버튼(접근 이름 `대화 '{제목}' 삭제`. 768px 이상은 호버·포커스 때 보이고, 그 미만은 항상 보인다) → `DeleteConfirmPopover`. API `DELETE /api/chat/sessions/{session_id}`.
 - 입력: 세션 ID.
 - 처리 규칙:
-  1. 팝오버는 열리면 `취소` 버튼에 포커스를 둔다. Esc 또는 바깥 클릭으로 닫힌다.
+  1. 팝오버(`role="dialog"`, 이름 `이 대화를 삭제하시겠습니까?`, 안내 `삭제된 대화 기록과 모든 메시지는 영구 복구할 수 없습니다.`)는 열리면 `취소` 버튼에 포커스를 둔다. Escape(오버레이 스택의 맨 위일 때만, 드로어 안에서 열어도 드로어는 남는다) 또는 바깥 pointerdown 으로 닫히고, 삭제 중에는 닫히지 않는다.
   2. `삭제` 를 누르면 프론트는 목록과 localStorage 에서 먼저 지운다(낙관적 삭제).
   3. 서버에서 세션을 삭제한다. ORM `cascade="all, delete-orphan"` 과 FK `ondelete="CASCADE"` 로 메시지도 지운다. 응답 `{status: "success", message: "대화 세션 및 하위 메시지가 원자적으로 영구 삭제되었습니다.", deleted_count: 1}`.
   4. 지운 세션이 현재 세션이면 새 대화로 초기화한다.
 - 출력: 버튼이 `삭제 중...` 으로 바뀌고, 끝나면 팝오버가 닫힌다.
 - 예외·엣지:
   - 없는 세션: 404 `ERR_SESSION_NOT_FOUND`. 커밋 실패: 롤백 후 500 `ERR_SESSION_DELETE_FAILED`.
-  - 서버 실패 시 프론트는 목록을 다시 불러오고 오류를 다시 던진다. 카드 컴포넌트가 이 오류를 잡지 않아 처리되지 않은 Promise 거부가 되고, 현재 세션 초기화도 하지 않는다.
-- 관련 코드: `backend/app/api/chat.py:525-561`, `backend/app/services/chat_session_service.py:280-297`, `frontend/src/components/chat/useChatSessions.ts:243-267`, `frontend/src/components/chat/SessionItemCard.tsx:61-69,116-140`, `frontend/src/components/chat/DeleteConfirmPopover.tsx`, `frontend/src/components/chat/ChatWorkspace.tsx:225-233`
+  - 서버 실패 시 프론트는 목록을 다시 불러오고 오류를 다시 던진다. 카드 컴포넌트는 `try/finally` 로 팝오버만 닫고 오류를 잡지 않아 처리되지 않은 Promise 거부가 되고, 현재 세션 초기화도 하지 않는다.
+- 관련 코드: `backend/app/api/chat.py:525-561`, `backend/app/services/chat_session_service.py:280-297`, `frontend/src/components/chat/useChatSessions.ts:252-276`, `frontend/src/components/chat/SessionItemCard.tsx:65-73,112-132`, `frontend/src/components/chat/DeleteConfirmPopover.tsx`, `frontend/src/components/chat/ChatWorkspace.tsx:234-243`
 
 ## CHAT-06 세션 저장·동기화
 - 진입점: 자동. 서버 자동 영속화(스트림 생성기 끝), 프론트 `createOrUpdateSession`(done 이벤트, 스트림 루프 종료, 사용자 중단 시), API `POST /api/chat/sessions`.
@@ -132,37 +135,39 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
   - 본문 JSON 오류 또는 스키마 검증 실패: 400 `ERR_SESSION_INVALID_UUID`. 그 밖의 예외: 500 `ERR_SESSION_CREATE_FAILED`.
   - 프론트는 한 턴에 같은 메시지 ID 로 POST 를 두 번 보낸다(done 이벤트, 루프 종료). 서버 자동 저장과 겹쳐 중복·실패가 생길 수 있다 (위험 항목 참고).
   - 서버 업서트는 `active_source_id` 가 null 이면 기존 값을 지우지 않는다.
-- 관련 코드: `backend/app/api/chat.py:443-494`, `backend/app/services/chat_session_service.py:211-278,299-405,437-460`, `backend/app/services/chat_service.py:806-822`, `frontend/src/components/chat/useChatSessions.ts:150-240`, `frontend/src/components/chat/ChatWorkspace.tsx:400-426,439-460,462-476`, `frontend/src/types/chat.ts:827-853`
+- 관련 코드: `backend/app/api/chat.py:443-494`, `backend/app/services/chat_session_service.py:211-278,299-405,437-460`, `backend/app/services/chat_service.py:806-822`, `frontend/src/components/chat/useChatSessions.ts:159-249`, `frontend/src/components/chat/ChatWorkspace.tsx:410-436,449-470,471-486`, `frontend/src/types/chat.ts:828-854`
 
 ## CHAT-07 히스토리 사이드바·드로어
-- 진입점: 헤더 기록 버튼(`대화 기록 보기`), 사이드바 접기 버튼, 드로어 닫기 버튼, 백드롭 클릭, Esc.
+- 진입점: 헤더 기록 버튼(`대화 기록 보기`), 사이드바 헤더의 `사이드바 접기` 버튼, 커맨드 팔레트 `대화 기록 열기`, 드로어의 `대화 기록 드로어 닫기` 버튼, 배경막 클릭, Escape.
 - 입력: 없음.
 - 처리 규칙:
-  1. 사이드바는 처음에 열린 상태(`isSidebarOpen = true`)이고 CSS 로 1024px 이상에서만 보인다 (`hidden lg:flex`, 폭 `w-64 lg:w-72`). 닫으면 렌더링하지 않는다.
-  2. 헤더 기록 버튼은 `window.innerWidth >= 1024` 이면 사이드바를, 아니면 드로어를 토글한다.
-  3. 드로어는 왼쪽 슬라이드(`w-72 sm:w-80`)와 반투명 백드롭이다. 열려 있는 동안 `body` 스크롤을 막는다. 세션 선택·새 대화 후 닫힌다.
-  4. 사이드바와 드로어는 같은 `ChatSidebarHeader`(새 대화 + 검색)와 `SessionList` 를 쓴다.
+  1. 사이드바는 처음에 열린 상태(`isSidebarOpen = true`)이고 CSS 로 1024px 이상에서만 보인다 (`hidden lg:flex`, 폭 `w-72`). `<aside id="chat-history-sidebar" role="navigation" aria-label="대화 기록 목록">` 이다. 닫으면 렌더링하지 않는다.
+  2. 헤더 기록 버튼은 `isDesktop`(`useMediaQuery('(min-width: 1024px)')`)이면 사이드바를, 아니면 드로어를 토글한다. `aria-expanded` 는 그 폭의 열림 상태다. `aria-controls` 는 가리키는 요소가 DOM 에 있을 때, 즉 열려 있을 때만 단다 — 1024px 이상 `chat-history-sidebar`, 미만 `chat-history-drawer`. 닫혀 있으면(사이드바를 접었거나 드로어가 닫힘) 속성이 없다. 팔레트 `대화 기록 열기` 는 같은 기준으로 사이드바나 드로어를 연다(토글이 아니다).
+  3. 드로어는 공통 `Drawer side="left"` 다: `role="dialog"`, `aria-modal="true"`, 제목 `대화 기록` 에 `aria-labelledby` 연결, 패널 `id="chat-history-drawer"`, 폭 `min(320px, 85vw)`, 배경막, 포커스 트랩과 닫을 때 포커스 복귀, `body` 스크롤 잠금. Escape 는 오버레이 스택의 맨 위 레이어 하나만 닫는다. 안에 `nav aria-label="대화 기록 목록"` 이 있다. 세션 선택·새 대화 후 닫힌다.
+  4. 드로어는 `isDrawerOpen && !isDesktop` 일 때만 그린다. 열린 채로 1024px 이상이 되면 드로어가 사라지고 사이드바가 보인다.
+  5. 사이드바와 드로어는 같은 `ChatSidebarHeader`(새 대화 + `대화 검색` 입력 + 검색어가 있으면 `검색어 지우기`)와 `SessionList` 를 쓴다. 사이드바에서만 `사이드바 접기` 버튼을 그린다.
+  6. `ChatSidebarHeader` 는 두 줄이다. 1줄(56px, 챗 헤더 높이)에 새 대화와 `사이드바 접기`, 2줄(768px 이상 44px, 미만 최소 44px, 맥락 줄 높이)에 `대화 검색` 입력이 있고 2줄 아래에 테두리가 있다. 1024px 이상에서 머리 영역 아래 경계(100px)가 챗 헤더 + 맥락 줄 아래 경계와 같다.
 - 출력: 세션 목록 패널.
-- 예외·엣지: 기록 버튼의 `aria-controls="chat-history-drawer"` 에 해당하는 id 를 가진 요소는 없다.
-- 관련 코드: `frontend/src/components/chat/ChatSidebar.tsx`, `frontend/src/components/chat/ChatHistoryDrawer.tsx`, `frontend/src/components/chat/ChatSidebarHeader.tsx`, `frontend/src/components/chat/ChatWorkspace.tsx:80-81,590-605,633-641,691-705`, `frontend/src/components/chat/ChatHeader.tsx:124-136`
+- 예외·엣지: 사이드바 헤더의 버튼 이름은 접힌 상태용 `사이드바 펼치기` 분기가 있지만, 사이드바가 열려 있을 때만 그려지므로 항상 `사이드바 접기` 다.
+- 관련 코드: `frontend/src/components/chat/ChatSidebar.tsx:48-82`, `frontend/src/components/chat/ChatHistoryDrawer.tsx:54-108`, `frontend/src/components/chat/ChatSidebarHeader.tsx`, `frontend/src/components/ui/Drawer.tsx`, `frontend/src/components/ui/Dialog.tsx:146-166`, `frontend/src/components/chat/ChatWorkspace.tsx:63,90-91,609-618,645-661,672-679,740-755`, `frontend/src/components/chat/ChatHeader.tsx:58,111-120`
 
 ## CHAT-08 메시지 입력·전송
-- 진입점: 입력창(`질문 입력`), Enter(Shift+Enter 는 줄바꿈), `질문 전송` 버튼, 환영 화면 추천 질문 클릭, 핸드오버 `q` 파라미터. API `POST /api/chat/stream`.
+- 진입점: 입력창(`질문 입력`, 숨긴 라벨), Enter(Shift+Enter 는 줄바꿈), `질문 전송` 아이콘 버튼, 환영 화면 추천 질문 클릭, 핸드오버 `q` 파라미터. API `POST /api/chat/stream`.
 - 입력 (`ChatStreamRequest`): `question` 1~2,000자(필수), `model`(기본 `ANTHROPIC_DEFAULT_CHAT_MODEL`, 설정 기본 `claude-sonnet-5-5`), `model_tier`(`haiku`|`sonnet`|`opus`), `scope`(`scoped`|`global`, 기본 `global`), `source_id`, `session_id`, `history`(`{role, content}[]`), `top_k` 1~10(기본 5), `filters`(`ChatFocusFilter`).
 - 처리 규칙:
-  1. 입력창: 글자 수 `N / 2000` 을 보이고 넘으면 빨간색이 된다. 공백만 있거나 스트리밍 중이거나 2,000자를 넘으면 전송하지 않는다. IME 조합 중 Enter 는 무시한다(한글 이중 전송 방지). 높이는 내용에 맞춰 최대 180px.
+  1. 입력창: 글자 수 `N / 2000` 을 보이고 넘으면 위험색과 `aria-invalid` 가 된다. 공백만 있거나 스트리밍 중이거나 2,000자를 넘으면 전송하지 않고 `질문 전송` 버튼도 비활성화된다. 스트리밍 중에는 입력창 자체가 비활성화된다. IME 조합 중 Enter 는 무시한다(한글 이중 전송 방지). 높이는 내용에 맞춰 최대 180px.
   2. `handleSendMessage`: 앞뒤 공백을 지운다. 스코프는 옵션 값이 있으면 그 값, 없으면 기사 컨텍스트(ID 또는 상세)가 있을 때 `scoped`, 없으면 현재 스코프 상태다.
   3. 사용자 메시지(`msg-user-<랜덤7자>`, 상태 `sent`)와 빈 어시스턴트 메시지(`msg-asst-<랜덤7자>`, 상태 `streaming`, 선택 티어와 모델 ID)를 추가하고 입력창을 비운다.
   4. history: 기존 메시지 중 상태가 `completed` 또는 `sent` 인 것만 `{role, content}` 로 만들고 `applySlidingWindow` 를 적용한다 — 최근 20개(10턴)를 남기고, 전체 글자 수 / 2.5 가 3,000 을 넘으면 남은 메시지가 2개가 될 때까지 앞에서 2개씩 지운다.
   5. 요청 본문: `question, scope, source_id, session_id, history, filters(toChatFocusFilter), model(TIER_TO_MODEL[티어]), model_tier`. `top_k` 는 보내지 않는다(서버 기본 5). URL 은 상대 경로 `/api/chat/stream` 이라 Next.js rewrite 를 거친다.
   6. 백엔드 사전 검사(스트림 열기 전): JSON 파싱(400 `ERR_INVALID_PAYLOAD`), 빈 질문(400 `ERR_CHAT_PAYLOAD_EMPTY`), 2,000자 초과(400 `ERR_CHAT_PAYLOAD_TOO_LARGE`), scope 값(400 `ERR_INVALID_SCOPE_PARAM`), scoped 인데 `source_id` 가 없거나 기사가 없음(404 `ERR_HANDOVER_SOURCE_NOT_FOUND`), LLM 프로바이더 가용성(`check_provider_available`, 없으면 503 `ERR_LLM_PROVIDER_UNAVAILABLE`).
   7. 백엔드 프롬프트의 history 는 마지막 4개 메시지만 쓴다 (`history[-4:]`).
-  8. 추천 질문 4개: `💡 FastMCP로 파이썬 기반 경량 MCP 서버 구축하는 방법`, `🔄 LangGraph v0.2의 분기 제어 및 시간 여행 디버깅 원리`, `📊 SWE-bench Multimodal 하네스의 주요 평가 지표`, `⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 동향`. 이모지 포함 문자열 그대로 보낸다.
+  8. 추천 질문 4개(아이콘·글자): `Server` `FastMCP로 파이썬 기반 경량 MCP 서버 구축하는 방법`, `GitBranch` `LangGraph v0.2의 분기 제어 및 시간 여행 디버깅 원리`, `ChartColumn` `SWE-bench Multimodal 하네스의 주요 평가 지표`, `TrendingUp` `최근 24시간 내 가장 주목받은 에이전트 오픈소스 동향`. 카드마다 글자 앞에 lucide 아이콘(`aria-hidden`, 강조색)을 그리고, 누르면 아이콘 없는 글자 그대로 보낸다 (글자에 이모지가 없다). 버튼(640px 미만 1열, 이상 2열)의 글자는 두 줄까지 왼쪽 정렬이다.
 - 출력: SSE 스트림 (`text/event-stream; charset=utf-8`, `Cache-Control: no-cache, no-transform`, `Connection: keep-alive`, `X-Accel-Buffering: no`).
 - 예외·엣지:
   - `ChatStreamRequest(**body)` 는 try 밖에 있어 `top_k`, `filters`, `history.role`, `model_tier` 값이 스키마에 맞지 않으면 전역 예외 처리기로 가서 500 `{"detail", "error"}` 가 된다.
-  - 입력창 placeholder 는 scoped 일 때 `선택된 기사 본문을 기반으로 심층 질문을 입력하세요...`, global 일 때 `전체 AI 에이전트 뉴스 코퍼스에 대해 자유롭게 질문하세요...`.
-- 관련 코드: `backend/app/api/chat.py:276-416`, `backend/app/schemas/chat.py:28-37`, `backend/app/services/chat_service.py:295-303`, `frontend/src/components/chat/ChatPromptInput.tsx`, `frontend/src/components/chat/ChatWorkspace.tsx:236-314`, `frontend/src/components/chat/ChatMessageList.tsx:20-25`, `frontend/src/types/chat.ts:777-790`
+  - 입력창 placeholder 는 scoped 일 때 `선택한 기사 본문을 바탕으로 질문하세요`, global 일 때 `수집된 AI 에이전트 소식 전체에 대해 질문하세요`.
+- 관련 코드: `backend/app/api/chat.py:276-416`, `backend/app/schemas/chat.py:28-37`, `backend/app/services/chat_service.py:295-303`, `frontend/src/components/chat/ChatPromptInput.tsx`, `frontend/src/components/chat/ChatWorkspace.tsx:245-324`, `frontend/src/components/chat/ChatMessageList.tsx:21-27`, `:66-83`, `frontend/src/types/chat.ts:778-791`
 
 ## CHAT-09 SSE 스트리밍 수신
 - 진입점: `POST /api/chat/stream` 응답 본문.
@@ -174,9 +179,9 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
   4. 이벤트별 처리: `status`(`step` 필수) → `current_status` 갱신, `step_history` 에 추가. `sources`(`sources` 필수) → 출처, `applied_filters`, `is_relaxed`, `primary_count`, `supplementary_count` 갱신. `token`(문자열) → 내용에 이어 붙임. `done` → 상태 `completed`, 모델(없으면 선택 모델), 티어, `latency_ms`, `usage` 기록 후 세션 저장. `error` → 오류를 던진다. 그 밖의 이벤트와 JSON 파싱 오류는 무시한다.
   5. 루프가 끝나면 아직 `streaming` 인 어시스턴트 메시지를 `completed` 로 바꾸고 세션을 다시 저장한다.
   6. 런타임에서 zod 스키마(`parseChatSseEvent` 등)는 쓰지 않고 `JSON.parse` 결과를 그대로 쓴다.
-- 출력: 토큰이 들어올 때마다 말풍선이 갱신되고, 스트리밍 중에는 커서 막대가 깜빡인다. 원문/보충 건수 배지는 `completed` 이고 내용과 출처가 있을 때만 보인다. 새 메시지·타임라인 변경마다 맨 아래로 부드럽게 스크롤한다.
-- 예외·엣지: 이벤트 순서와 필드는 'SSE 이벤트 목록' 절을 따른다. global 검색 모드에서는 출처가 토큰 뒤에 오므로 스트리밍 중 본문의 `[1]` 은 회색 '출처 없음' 배지로 보이다가 sources 이벤트 뒤에 파란 배지로 바뀐다.
-- 관련 코드: `frontend/src/components/chat/ChatWorkspace.tsx:316-460`, `frontend/src/components/chat/ChatMessageItem.tsx:133-159,336-338`, `frontend/src/components/chat/ChatMessageList.tsx:39-41`, `frontend/src/types/chat.ts:553-573`
+- 출력: 토큰이 들어올 때마다 답변이 갱신되고, 스트리밍 중에는 커서 막대가 깜빡인다(`motion-safe` 일 때). 메시지 목록은 `role="log"`, `aria-live="polite"` 다. 원문/보충 건수 배지는 `completed` 이고 내용과 출처가 있을 때만 보인다. 새 메시지·타임라인 변경마다 맨 아래로 부드럽게 스크롤한다.
+- 예외·엣지: 이벤트 순서와 필드는 'SSE 이벤트 목록' 절을 따른다. global 검색 모드에서는 출처가 토큰 뒤에 오므로 스트리밍 중 본문의 `[1]` 은 회색 '출처 없음' 표시로 보이다가 sources 이벤트 뒤에 강조색 배지로 바뀐다.
+- 관련 코드: `frontend/src/components/chat/ChatWorkspace.tsx:326-470`, `frontend/src/components/chat/ChatMessageItem.tsx:168-183,289-294`, `frontend/src/components/chat/ChatMessageList.tsx:39-45`, `frontend/src/types/chat.ts:554-574`
 
 ## CHAT-10 ReAct 검색 계획 (global)
 - 진입점: global 모드 질의마다 (`_plan_react_action`). scoped 모드는 항상 `action: none` 이다.
@@ -191,19 +196,19 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
   7. 위에서 정하지 못하면 `search_news_corpus` 와 기본 검색어.
 - 출력: `{action: "none"|"search_news_corpus", search_query, thought}`. `thought` 는 화면에 보내지 않는다.
 - 예외·엣지: 도메인 신호는 부분 문자열 비교라 `o1`, `o3`, `rag`, `agent` 같은 짧은 키가 다른 단어 안에서도 걸린다.
-- 관련 코드: `backend/app/services/chat_service.py:305-445`, `backend/app/services/llm_processor.py:40-84,229-240`
+- 관련 코드: `backend/app/services/chat_service.py:305-445`, `backend/app/services/llm_processor.py:40-84,288-299`
 
 ## CHAT-11 워크플로 단계 표시 (WorkflowStepTracker)
 - 진입점: 어시스턴트 말풍선 상단. `current_status` 나 `step_history` 가 있을 때만 보인다.
 - 입력: `currentStatus`, `stepHistory`, `isStreaming`(해당 메시지가 스트리밍 중이고 상태가 `streaming`), `isDone`(상태 `completed`).
 - 처리 규칙:
   1. 스트리밍 중이고 완료 전: 현재 단계 아이콘, `label`, 진행률(`progress`, 없으면 50)% 와 진행 바. `query` 가 있으면 `검색어: "<query>"`.
-  2. 그 밖의 경우: 높이 28px(`h-7`) 접이식 헤더 `[✓] 심층 분석 과정 {N}단계 완료`(N = `step_history` 길이, 없으면 현재 상태 1). 펼치면 단계별 라벨, 검색어 칩, `progress%`(없으면 `완료`)를 보인다.
-  3. 단계 아이콘: thinking(보라 반짝임), tool_calling·agentic_searching(돋보기), observing(체크), extracting_source(지구), evaluating_sufficiency(저울), synthesizing(문서).
+  2. 그 밖의 경우: 접이식 헤더 `[✓] 심층 분석 과정 {N}단계 완료`(N = `step_history` 길이, 없으면 현재 상태 1)와 `펼치기`/`접기`, `aria-expanded`. 높이는 768px 이상 28px(`md:min-h-7`), 미만 44px. 펼치면 단계별 라벨, 검색어 칩, `progress%`(없으면 `완료`)를 보인다.
+  3. 단계 아이콘: thinking(강조색 반짝임), tool_calling·agentic_searching(돋보기), observing(체크), extracting_source(지구), evaluating_sufficiency(저울), synthesizing(문서). 아이콘 깜빡임은 `motion-safe` 일 때만.
 - 출력: 진행 영역(`role="region"`, `progressbar`) 또는 접이식 목록.
 - 예외·엣지: 오류나 중단으로 끝난 메시지도 `isStreaming` 이 거짓이므로 '단계 완료' 아코디언으로 보인다. `fallbackNotice` prop 은 있지만 워크스페이스에서 넘기지 않는다.
 - 백엔드가 실제로 보내는 단계: scoped = `extracting_source`(30) → `synthesizing`(85). global 검색 = `thinking`(25) → `tool_calling`(50, `query`) → `synthesizing`(80). global 직접 답변 = `thinking`(25) → `synthesizing`(75). `observing`, `evaluating_sufficiency`, `agentic_searching` 은 스키마에만 있고 백엔드가 보내지 않는다.
-- 관련 코드: `frontend/src/components/chat/WorkflowStepTracker.tsx`, `frontend/src/components/chat/ChatMessageItem.tsx:186-192`, `backend/app/services/chat_service.py:610-741`, `backend/app/schemas/chat.py:54-71`
+- 관련 코드: `frontend/src/components/chat/WorkflowStepTracker.tsx`, `frontend/src/components/chat/ChatMessageItem.tsx:245-251`, `backend/app/services/chat_service.py:610-741`, `backend/app/schemas/chat.py:54-71`
 
 ## CHAT-12 RAG 코퍼스 검색 (retriever)
 - 진입점: global 모드에서 플래너가 `search_news_corpus` 를 고를 때 (`_resolve_sources` → `KnowledgeRetrieverFacade.search_knowledge_with_meta`). 미리보기 API `GET /api/chat/search` (UI 미사용).
@@ -259,102 +264,101 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
 - 처리 규칙 (프론트):
   1. `p`, `li`, `blockquote`, `h1~h4`, `strong` 의 직계 문자열 자식에서 `[S숫자]` 또는 `[숫자]` 를 찾아 `CitationBadge` 로 바꾼다.
   2. 출처가 없으면 회색 `[n]` 텍스트(클릭 불가)로 둔다.
-  3. 출처가 있으면 원문은 파란, 보충(`type: supplementary` 또는 `S` 로 시작)은 초록 배지. 클릭하면 팝오버(배지 위 가운데, 폭 320px, 최대 90vw)를 연다. Esc·바깥 클릭·닫기 버튼으로 닫는다.
-  4. 팝오버: `출처 [n]` 또는 `보충 검색 [Sn]` 라벨, 원문이면 카테고리, 보충이면 도메인(`domain` 또는 URL 호스트), 제목 2줄, 스니펫 3줄, `원문 보기`/`웹 문서 보기` 새 탭 링크. `기사 상세` 버튼은 `onOpenSourceDetail` 이 있을 때만 보인다.
+  3. 출처가 있으면 버튼 배지를 그린다. 원문은 `accent-soft` 배경, 보충(`type: supplementary` 또는 `S` 로 시작)은 `success-soft` 배경 + `text-success` 이고 `data-tone` 이 `primary`/`supplementary` 다. 접근 이름은 `출처 {n}번: {제목}` 또는 `보충 웹 검색 출처 [Sn]: {제목}`, `aria-haspopup="dialog"`, `aria-expanded`. 768px 미만은 누르는 영역이 44px 이다. 클릭하면 팝오버(`Popover role="dialog"`, 이름 `출처 기사 상세 프리뷰`/`보충 검색 출처 상세 프리뷰`, 배지 위, 폭 320px, 최대 `100vw - 2rem`)를 연다. Escape(오버레이 스택의 맨 위일 때만)·바깥 pointerdown·`팝오버 닫기` 버튼으로 닫는다.
+  4. 팝오버: `출처 [n]` 또는 `보충 검색 [Sn]` 라벨, 원문이면 카테고리 짧은 라벨(`lib/labels.ts` 의 `categoryShortLabel`: `하네스`, `MCP`, `에이전트`, `AI 동향`, 모르는 값은 원값), 보충이면 도메인(`domain` 또는 URL 호스트), 제목 2줄, 스니펫 3줄, `원문 보기`/`웹 문서 보기` 새 탭 링크. `기사 상세` 버튼은 `onOpenSourceDetail` 이 있을 때만 보인다.
   5. 말풍선 헤더에 `원문 N건`, `보충 N건` 배지(`primary_count`/`supplementary_count`, 없으면 출처 type 으로 셈)를 완료 후에만 보인다.
 - 출력: 인용 배지와 팝오버.
 - 예외·엣지: 표 셀(`td`, `th`)과 `em`, 링크 안 텍스트의 `[n]` 은 배지로 바뀌지 않는다. 워크스페이스는 `onOpenSourceDetail` 을 넘기지 않아 `기사 상세` 버튼은 보이지 않는다.
-- 관련 코드: `backend/app/services/chat_service.py:240-244,276-293,447-476,773-786`, `frontend/src/components/chat/ChatMessageItem.tsx:41,64-92,133-159,249-330`, `frontend/src/components/chat/CitationBadge.tsx`, `frontend/src/components/chat/CitationPopover.tsx`
+- 관련 코드: `backend/app/services/chat_service.py:240-244,276-293,447-476,773-786`, `frontend/src/components/chat/ChatMessageItem.tsx:41,51-79,98-166,168-183`, `frontend/src/components/chat/CitationBadge.tsx`, `frontend/src/components/chat/CitationPopover.tsx`, `frontend/src/lib/labels.ts:15-20,49-51`
 
 ## CHAT-15 모델 선택
-- 진입점: 헤더 모델 칩(`header-chip`), 입력창 왼쪽 아래 모델 칩(`inline-chip`). 둘은 같은 상태(`selectedTier`)를 쓴다.
+- 진입점: 입력창 왼쪽 아래 모델 칩(`inline-chip`). 모든 폭에서 화면에 모델 선택은 이 하나뿐이고 챗 헤더에는 없다. 모델 선택은 다음에 보낼 질문에 적용되므로 전송 버튼과 같은 줄에 둔다. 트리거 접근 이름은 `Claude 모델 선택: {이름}`.
 - 입력: 티어 `haiku` | `sonnet` | `opus`. 기본 `sonnet`.
 - 처리 규칙:
   1. 트리거는 스트리밍 중 비활성화되고 툴팁 `답변 생성 중에는 모델을 변경할 수 없습니다` 를 보인다. 평소 툴팁은 `<이름> (<비용>)`.
-  2. 드롭다운(`radiogroup`)은 헤더용은 아래로, 입력창용은 위로 열린다. 화살표 위/아래/좌/우로 포커스 이동(순환), Enter/Space 선택, Esc 닫기, 바깥 클릭·터치 닫기.
-  3. 티어 정보(`TIER_META`): Haiku 5.5 ⚡ `$` `~0.3s` `초고속 탐색 & 간결 질의` / Sonnet 5.5 🎯 `$$` `~0.6s` `심층 분석 & RAG 최적화`(추천 표시) / Opus 5.5 🧠 `$$$` `~1.8s` `최대 추론 & 복합 아키텍처`. 지연 값은 고정 문구다.
+  2. 드롭다운은 `Popover role="radiogroup"`(이름 `Claude AI 모델 선택`)이다. 입력창 칩에서 위·왼쪽 정렬로 열린다. (부품 `ChatModelSelector` 에는 아래·오른쪽으로 여는 `header-chip`·`header-compact` 변형이 남아 있으나 화면에서 쓰지 않는다.) 화살표 위/아래/좌/우로 포커스 이동(순환), Home/End 처음·끝, Enter/Space 선택, Escape(오버레이 스택의 맨 위일 때만) 닫기, 바깥 pointerdown 닫기. 선택하면 닫고 트리거로 포커스를 돌린다. 트리거의 `추천` 표시는 640px 이상에서만 보인다.
+  3. 티어 정보(`TIER_META`): Haiku 5.5 `Zap` `$` `~0.3s` `초고속 탐색 & 간결 질의` / Sonnet 5.5 `Target` `$$` `~0.6s` `심층 분석 & RAG 최적화`(추천 표시) / Opus 5.5 `Brain` `$$$` `~1.8s` `최대 추론 & 복합 아키텍처`. 지연 값은 고정 문구다. 아이콘은 lucide 컴포넌트이고 `TierIcon`(`ModelTierBadge.tsx`)이 `aria-hidden="true"`·`data-tier-icon="<티어>"` 로 그린다. 모델 칩 트리거(이름 앞), 드롭다운 항목, 답변 모델 배지가 같은 `TierIcon` 을 쓴다. Claude 밖 티어 이름(이력)은 이름에 `gemini` 가 있으면 `Sparkles`, `gpt` 가 있으면 `Bot`, 그 밖 `Target`.
   4. 티어를 바꾸고 메시지가 1개 이상이면 `ModelSwitchEvent`(이전 티어, 새 티어, 시각)를 추가한다. 타임라인은 메시지와 이벤트를 시각순으로 섞어 `ModelChangeDivider`(`이전 ➔ Claude <새 이름>로 모델 변경됨 · HH:MM`, `role="separator"`)를 보인다. 이벤트는 저장하지 않고 새 대화 때 지운다.
   5. 요청에는 `model = TIER_TO_MODEL[티어]`(`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`)와 `model_tier` 를 보낸다.
   6. 백엔드 `resolve_model_and_tier`: 값이 없으면 기본 모델·`sonnet`. `gemini`/`google` 이 들어 있으면 기본 모델로 바꾼다. 설정 매핑(티어 이름 또는 설정된 모델 ID 소문자)에 있으면 그 값. 없으면 `haiku`/`opus`/`sonnet` 단어 포함 여부로 티어를 정하되 `claude-` 로 시작하면 요청 문자열을 그대로 모델 ID 로 쓴다. 나머지는 요청 문자열과 `sonnet`.
-  7. 답변 말풍선 헤더는 `formatModelDisplayName(model_used || model_tier)` 로 표시한다(Claude 는 `Claude Sonnet 5.5` 형식, Gemini·GPT 이력은 원래 이름 보존). 하단 `ModelTierBadge`(footer)는 티어 아이콘·이름과 `· {latency_ms}ms`.
+  7. 답변 말풍선 헤더는 `formatModelDisplayName(model_used || model_tier)` 로 표시한다(Claude 는 `Claude Sonnet 5.5` 형식, Gemini·GPT 이력은 원래 이름 보존). 하단 `ModelTierBadge`(footer)는 티어 lucide 아이콘·이름과 `· {latency_ms}ms`.
 - 출력: 선택 티어 표시, 구분선, 메시지별 모델 표시.
 - 예외·엣지: done 의 `model` 은 실제 사용 모델 ID(OpenAI/Ollama 폴백 시 `OpenAI gpt-4o-mini` 같은 문자열)이고 `model_tier` 는 요청 값으로 계산한 티어다. 폴백해도 티어 배지는 요청 티어를 보인다.
-- 관련 코드: `frontend/src/components/chat/ChatModelSelector.tsx`, `frontend/src/components/chat/ModelTierBadge.tsx`, `frontend/src/components/chat/ModelChangeDivider.tsx`, `frontend/src/components/chat/ChatWorkspace.tsx:76-77,138-179,310-311`, `frontend/src/components/chat/ChatMessageItem.tsx:43-44,340-350`, `frontend/src/types/chat.ts:110-231`, `backend/app/services/llm_providers/anthropic_provider.py:29-122`
+- 관련 코드: `frontend/src/components/chat/ChatModelSelector.tsx`, `frontend/src/components/chat/ModelTierBadge.tsx`, `frontend/src/components/chat/ModelChangeDivider.tsx`, `frontend/src/components/chat/ChatWorkspace.tsx:86-87,147-189,320-321`, `frontend/src/components/chat/ChatPromptInput.tsx:103-109`, `frontend/src/components/chat/ChatMessageItem.tsx:43-44,296-306`, `frontend/src/types/chat.ts:111-232`, `backend/app/services/llm_providers/anthropic_provider.py:29-122`
 
 ## CHAT-16 포커스 필터
-- 진입점: 입력창 위 포커스 캡슐(`Focus: <요약>`) 클릭 또는 Enter/Space → `FocusBottomSheet`. 캡슐의 X 는 필터 초기화.
-- 입력 (`FocusFilters` ↔ API `ChatFocusFilter`): 카테고리 `all`(전체 소식) | `harness`(하네스·평가) | `mcp_plugins_skills`(MCP·도구) | `agent_tech`(에이전트 기술) | `ai_news`(AI 뉴스), 기간 `all` | `24h` | `7d` | `30d`, 정렬 `hot`(화제순) | `latest`(최신순) | `quality`(품질순), `high_signal_only` 토글(`Must-Read 고신호만 (품질 7.8+)`). 기본값 all/all/hot/false.
+- 진입점: 입력창 위 포커스 캡슐 버튼(`포커스: <요약>`, 접근 이름 `지식 검색 포커스 필터 설정 열기. 현재 설정: <요약>`, `aria-haspopup="dialog"`, `aria-expanded`) → `FocusBottomSheet`. 필터가 기본값이 아니거나 기사 컨텍스트가 있으면 캡슐 옆에 형제 버튼 `포커스 필터 초기화`(X)가 보인다. 두 버튼은 768px 미만 44px, 이상 32px.
+- 입력 (`FocusFilters` ↔ API `ChatFocusFilter`): 카테고리 `all`(전체 소식) | `harness`(하네스 & 벤치마크) | `mcp_plugins_skills`(MCP & 생태계) | `agent_tech`(에이전트 아키텍처) | `ai_news`(최신 AI 동향), 기간 `all` | `24h` | `7d` | `30d`, 정렬 `hot`(화제순) | `latest`(최신순) | `quality`(품질순), `high_signal_only` 토글(`Must-Read 고신호만 (품질 7.8+)`). 기본값 all/all/hot/false.
 - 처리 규칙:
-  1. 시트는 초안(draft) 상태로 고르고 `적용하기` 를 눌러야 반영된다. `초기화` 는 초안과 실제 필터를 함께 기본값으로 돌린다. Esc, 백드롭, 닫기 버튼, 모바일에서 아래로 100px 이상 스와이프하면 닫힌다(적용 안 함).
-  2. 캡슐 요약: 기사 컨텍스트가 있으면 기사 제목 앞 25자, 필터가 기본값이 아니면 카테고리·기간·`고신호` 를 ` · ` 로 이은 문자열(비면 `맞춤 필터`), 그 밖에는 `전체 소식`. 정렬만 바꾼 경우 `맞춤 필터`.
-  3. 시트의 건수 표시는 마지막 어시스턴트 메시지의 출처 수(`actualSourceCount`)다. 값이 있으면 `약 N건 매칭 소식`, 0 이면 기간을 넓히라는 경고.
+  1. 필터 창은 `Dialog size="sm" mobile="sheet"`(제목 `수집 소식 타깃팅 포커스 필터`, 설명 `RAG 지식 검색 대상 소식을 고릅니다.`)다. 768px 미만은 아래에 붙는 바텀시트(손잡이 표시), 이상은 가운데 작은 대화상자다. 절은 `도메인 카테고리`·`수집 기간`·`정렬 기준` 칩 묶음과 `신호 품질 필터` 스위치(`Must-Read 고신호 전용 토글`)다. 초안(draft) 상태로 고르고 바닥의 `적용하기` 를 눌러야 반영된다. `초기화` 는 초안과 실제 필터를 함께 기본값으로 돌린다. Escape(오버레이 스택의 맨 위일 때만), 배경막, `필터 닫기` 버튼, 바텀시트에서 아래로 100px 이상 스와이프하면 닫힌다(적용 안 함).
+  2. 캡슐 요약: 기사 컨텍스트가 있으면 기사 제목 앞 25자, 필터가 기본값이 아니면 카테고리·기간·`고신호` 를 ` · ` 로 이은 문자열(비면 `맞춤 필터`), 그 밖에는 `전체 소식`(`ALL_CATEGORY_LABEL`, 피드 `전체 소식` 칩·필터 창 `전체 소식` 칩과 같은 말). 정렬만 바꾼 경우 `맞춤 필터`. 카테고리는 짧은 라벨(`lib/labels.ts` 의 `categoryShortLabel`: `하네스`, `MCP`, `에이전트`, `AI 동향`)로 쓴다.
+  3. 필터 창의 건수 표시는 마지막 어시스턴트 메시지의 출처 수(`actualSourceCount`)다. 값이 있으면 `약 N건 매칭 소식` 배지, 0 이면 경고 `선택 조건의 소식이 없습니다. 기간을 [최근 30일] 또는 [전체 기간]으로 넓혀보세요.`, 값이 없으면(출처 있는 답변 없음) 아무것도 보이지 않는다.
   4. 필터는 매 요청 `filters` 로 보낸다. 백엔드는 global 검색에만 적용한다(CHAT-12). 0건이고 기간이 `all` 이 아니면 기간을 `all` 로 완화하고 `is_relaxed: true` 를 보낸다.
-  5. `is_relaxed` 면 답변 위에 `[안내: 선택 조건에 부합하는 소식이 없어 전체 기간으로 확장 검색했습니다]` 배지를 보인다.
+  5. `is_relaxed` 면 답변 위에 `[안내: 선택 조건에 부합하는 소식이 없어 전체 기간으로 확장 검색했습니다]` 경고 알림(`InlineAlert`)을 보인다.
 - 출력: 캡슐 요약, 완화 안내 배지.
-- 예외·엣지: `actualSourceCount` 는 출처가 1건 이상인 메시지만 세므로 0 이 되지 않아 0건 경고는 워크스페이스에서 나오지 않는다. 고신호는 백엔드에서 품질 점수가 아니라 `is_high_signal` 열로 거른다. 캡슐의 `matchedCount` prop 은 받지만 그리지 않는다. 기사 컨텍스트가 있을 때 캡슐 X 는 필터만 초기화하고 기사는 해제하지 않는다.
-- 관련 코드: `frontend/src/components/chat/FocusCapsule.tsx`, `frontend/src/components/chat/FocusBottomSheet.tsx`, `frontend/src/components/chat/ChatWorkspace.tsx:92-101,666-673,708-715`, `frontend/src/components/chat/ChatMessageItem.tsx:194-200`, `frontend/src/types/chat.ts:245-295`, `backend/app/schemas/chat.py:22-26`, `backend/app/services/retriever.py:569-586`
+- 예외·엣지: `actualSourceCount` 는 출처가 1건 이상인 메시지만 세므로 0 이 되지 않아 0건 경고는 워크스페이스에서 나오지 않는다. 고신호는 백엔드에서 품질 점수가 아니라 `is_high_signal` 열로 거른다. 캡슐의 `matchedCount` prop 은 받지만 그리지 않는다. 기사 컨텍스트가 있을 때 캡슐 X 는 필터만 초기화하고 기사는 해제하지 않는다. 필터 창의 카테고리 칩(그룹 `도메인 카테고리`)은 `전체 소식`(`ALL_CATEGORY_LABEL`)과 피드 카테고리 칩과 같은 긴 라벨(`categoryLabel`) 4개를 이 순서로 쓴다: `전체 소식`, `하네스 & 벤치마크`, `MCP & 생태계`, `에이전트 아키텍처`, `최신 AI 동향`. 칩 줄은 줄바꿈 묶음이라 360px 시트에서 긴 라벨이 여러 줄로 감긴다. 캡슐은 자리가 좁아 짧은 라벨을 쓴다.
+- 관련 코드: `frontend/src/components/chat/FocusCapsule.tsx`, `frontend/src/components/chat/FocusBottomSheet.tsx`, `frontend/src/components/ui/Dialog.tsx:25,179-191,214-218`, `frontend/src/components/chat/ChatWorkspace.tsx:102-111,715-722,757-765`, `frontend/src/lib/labels.ts:15-20,50-58,71`, `frontend/src/components/chat/ChatMessageItem.tsx:253-258`, `frontend/src/types/chat.ts:246-296`, `backend/app/schemas/chat.py:22-26`, `backend/app/services/retriever.py:569-586`
 
 ## CHAT-17 스코프 전환·기사 칩
-- 진입점: 헤더 `단일 기사 (Scoped)` / `전체 코퍼스 (Global)` 토글(`aria-pressed`), 기사 칩의 X(`기사 컨텍스트 해제`).
+- 진입점: 헤더 아래 맥락 줄(`ChatContextBar`)의 `단일 기사`(scoped) / `전체 소식`(global) 토글(`SegmentedControl`, 그룹 이름 `검색 스코프 모드`, 버튼 `aria-pressed`, 접근 이름은 글자와 같다. 라벨은 `lib/labels.ts` 의 `SCOPE_LABELS`·`scopeLabel`), 기사 칩의 X(`기사 컨텍스트 해제`). 모든 폭에서 같은 자리다.
 - 입력: 스코프 값.
 - 처리 규칙:
-  1. 토글은 `scopeMode` 상태만 바꾼다.
-  2. 기사 칩은 기사 컨텍스트가 있을 때 헤더에 보인다. 카테고리(대문자)와 제목 앞 35자. 스트리밍 중 X 는 비활성.
+  1. 토글은 `scopeMode` 상태만 바꾼다. 화면의 검색 범위 용어는 모드 탭, 대화 목록 배지, 대화 항목 접근 이름, 없는 기사 알림, 빈 화면 안내(`수집된 소식 기반의`)가 모두 `단일 기사`·`전체 소식` 하나로 같고 영어(`Scoped`, `Global`)나 `코퍼스` 를 쓰지 않는다. 두 탭은 360px 폭에서도 기사 칩이 없으면 줄이 넘치지 않는다.
+  2. 맥락 줄은 한 줄(768px 이상 높이 44px, 아래 테두리 포함, 미만 최소 44px)이고 공통 가로 스크롤 줄(`ScrollRow`, 줄 이름 `검색 스코프`)이다. 넘치면 넘친 쪽 끝을 흐리게 하고, 768px 이상은 넘친 쪽에 `검색 스코프 이전 항목 보기`/`검색 스코프 다음 항목 보기` 버튼을, 768px 미만은 오른쪽으로 넘칠 때 줄 오른쪽에 장식 넘침 표시(화살표, 보조기술에서 숨김)를 둔다. 줄 안 요소가 포커스를 받으면 보이게 스크롤한다. 기사 칩은 기사 컨텍스트가 있을 때 토글 오른쪽에 보인다. 카테고리 짧은 라벨(`categoryShortLabel`, 예 `MCP`, 모르는 값은 원값)과 제목 앞 35자(넘으면 `...`, 전체 제목은 `title` 툴팁). 스트리밍 중 X 는 비활성.
   3. X 를 누르면 기사 컨텍스트를 null, 스코프를 `global` 로 바꾼다.
   4. 전송 시 스코프는 CHAT-08 의 2번 규칙으로 정한다(기사 컨텍스트가 있으면 토글과 무관하게 `scoped`).
-  5. 입력창 왼쪽 아래에 `🎯 Scoped Focus` / `🌐 Global RAG` 를 보인다(640px 이상).
-- 출력: 헤더 상태, 전송 스코프.
-- 예외·엣지: 기사 없이 Scoped 를 누르고 보내면 `source_id` 없이 scoped 요청이 가서 404 `지정된 기사를 찾을 수 없습니다.` 오류 카드가 된다. 기사가 있는 상태에서 Global 을 눌러도 요청은 scoped 로 간다.
-- 관련 코드: `frontend/src/components/chat/ChatHeader.tsx:66-111`, `frontend/src/components/chat/ActiveSourceChip.tsx`, `frontend/src/components/chat/ChatWorkspace.tsx:248-250,567-570,627-631`, `frontend/src/components/chat/ChatPromptInput.tsx:106-108`
+  5. 입력창 placeholder 가 스코프에 따라 바뀐다(CHAT-08). 입력창 아래의 별도 스코프 표시는 없다.
+- 출력: 맥락 줄 상태, 전송 스코프.
+- 예외·엣지: 기사 없이 `단일 기사` 를 누르고 보내면 `source_id` 없이 scoped 요청이 가서 404 `지정된 기사를 찾을 수 없습니다.` 오류 카드가 된다. 기사가 있는 상태에서 `전체 소식` 을 눌러도 요청은 scoped 로 간다.
+- 관련 코드: `frontend/src/components/chat/ChatContextBar.tsx`, `frontend/src/components/chat/ActiveSourceChip.tsx`, `frontend/src/components/ui/ScrollRow.tsx`, `frontend/src/lib/labels.ts:15-20,49-51`, `frontend/src/components/chat/ChatHeader.tsx:143-149`, `frontend/src/components/chat/ChatWorkspace.tsx:258-260,623-626,666-670`, `frontend/src/components/chat/ChatPromptInput.tsx:43-47`
 
 ## CHAT-18 핸드오버 (뉴스 기사 → 챗)
 - 진입점:
-  - 뉴스 카드 `전용 챗에서 분석` 버튼(`HandoverCtaButton` `card-compact`).
-  - 기사 상세 모달 배너 `전용 AI 챗으로 이동`(`modal-banner`, 모달의 질문 입력값을 `draftQuestion` 으로 넘김).
-  - 피드에서 포커스된 기사에 `c`/`C` 키(`HotkeyListener`).
-  - 커맨드 팔레트 `AI 챗 워크스페이스 이동`(단축키 표시 `C`)과 헤더 링크는 기사 없이 `/chat` 으로 간다.
+  - 뉴스 카드 `AI 챗에서 분석` 버튼(`HandoverCtaButton` `card-compact`, 접근 이름 = 보이는 글자).
+  - 기사 상세 모달 배너 `AI 챗에서 분석`(`modal-banner`, 보조 문구 `이 기사를 단일 기사 모드로 열어 질의응답`, 모달의 질문 입력값을 `draftQuestion` 으로 넘김).
+  - 피드에서 포커스된 기사에 `c` 키(`HotkeyListener`, `e.key` 소문자 또는 `e.code` `KeyC` 로 판정해 한글 입력 상태에서도 동작, 열린 오버레이가 없을 때만).
+  - 피드 커맨드 팔레트 `AI 챗 워크스페이스 이동`(단축키 표시 없음)과 피드 헤더 `AI 챗` 링크는 기사 없이 `/chat` 으로 간다.
   - API `GET /api/chat/sources/{source_id}`.
 - 입력: URL `/chat?sourceId=<id>&q=<인코딩된 질문>`. `q` 는 질문이 공백이 아닐 때만 붙는다.
 - 처리 규칙:
   1. 버튼 클릭은 이벤트 전파를 막고 `onHandoverComplete` 를 부른 뒤 `router.push`.
   2. 챗 첫 렌더 1회: `session_id` 파라미터가 있으면 세션 복원만 하고 끝낸다(CHAT-03).
   3. `sourceId`(또는 prop `initialSourceId`)가 숫자면 `GET /api/chat/sources/{id}` 로 기사 상세를 받아 기사 컨텍스트로 넣고 스코프를 `scoped` 로 바꾼다. `q` 가 있으면 그 기사로 바로 전송한다.
-  4. 404 이거나 네트워크 오류면 노란 안내 바 `요청하신 기사를 찾을 수 없어 전체 뉴스 모드로 시작합니다.` 를 보이고 global 로 시작한다. `q` 가 있으면 global 로 전송한다.
+  4. 404 이거나 네트워크 오류면 경고 알림(`useToast`, `warning` 톤) `요청하신 기사를 찾을 수 없어 전체 소식 모드로 시작합니다.` 를 보이고 global 로 시작한다. `q` 가 있으면 global 로 전송한다.
   5. `sourceId` 가 없고 `q` 만 있으면 현재 상태로 전송한다.
   6. 백엔드 기사 상세: `tldr_bullets` 는 JSON 배열 파싱(배열이 아니면 문자열 1개 배열, 실패 시 빈 배열), `tech_stack`·`tags` 는 쉼표 분리, `quality_score` 없으면 6.0, `full_content`, `scraped_at` 포함.
 - 출력: 기사 칩, scoped 모드, (질문이 있으면) 자동 답변 시작.
-- 예외·엣지: 기사 없음은 404 `ERR_HANDOVER_SOURCE_NOT_FOUND` (`기사 ID {id}를 데이터베이스에서 찾을 수 없습니다.`). 안내 바는 X 로 닫는다.
-- 관련 코드: `frontend/src/components/chat/HandoverCtaButton.tsx`, `frontend/src/components/NewsCard.tsx:171-175`, `frontend/src/components/NewsDetailModal.tsx:295-302`, `frontend/src/app/page.tsx:91-95`, `frontend/src/components/HotkeyListener.tsx:126-129`, `frontend/src/components/CommandPalette.tsx:38-50`, `frontend/src/components/chat/ChatWorkspace.tsx:502-565,609-624`, `backend/app/api/chat.py:48-63`, `backend/app/services/chat_service.py:86-125`
+- 예외·엣지: 기사 없음은 404 `ERR_HANDOVER_SOURCE_NOT_FOUND` (`기사 ID {id}를 데이터베이스에서 찾을 수 없습니다.`). 알림은 3.5초 뒤 저절로 닫히거나 `알림 닫기` 로 닫는다. 알림은 입력 영역 바로 위(8px 위)의 `composer` 알림 영역에 뜨고, 폭은 메시지 열과 같은 `max-w-3xl` 열 안이다. 루트 레이아웃의 전역 알림 영역도 마운트돼 있지만 한 번에 한 영역만 그린다: 모달 대화상자가 없고 `composer` 영역이 있으면 `composer`, 모달 대화상자가 열려 있으면 전역 영역(768px 미만 화면 아래, 이상 오른쪽 위)이다.
+- 관련 코드: `frontend/src/components/chat/HandoverCtaButton.tsx`, `frontend/src/components/NewsCard.tsx:218-222`, `frontend/src/components/NewsDetailModal.tsx:336-344`, `frontend/src/app/page.tsx:126-130`, `frontend/src/components/HotkeyListener.tsx:152-155`, `frontend/src/components/CommandPalette.tsx:77-83`, `frontend/src/components/chat/ChatWorkspace.tsx:42,511-578,702-705`, `frontend/src/components/ui/Toast.tsx:25,91-135,178-231`, `backend/app/api/chat.py:48-63`, `backend/app/services/chat_service.py:86-125`
 
 ## CHAT-19 내보내기 (ExportToolbar)
-- 진입점: 오류가 아니고 내용이 있는 어시스턴트 말풍선 하단(`4단 리포트 익스포트:`), 말풍선 헤더 `복사` 버튼.
+- 진입점: 오류가 아니고 내용이 있는 어시스턴트 답변 하단의 도구줄(`role="group"`, 이름 `리포트 익스포트 툴바`, 768px 이상은 앞에 `리포트 내보내기` 표시), 답변 머리줄 `복사` 버튼(접근 이름 `답변 복사`). 768px 미만은 모든 버튼이 글자를 숨긴 44px 아이콘 버튼이고 접근 이름(`답변 복사`, `마크다운 복사`, `.md 다운로드`, `Notion 동기화`)은 같다.
 - 입력: 메시지 ID, 마크다운 본문, 첫 번째 출처 제목(파일명용, 없으면 `AgentLens_Engineering_Report`).
 - 처리 규칙:
-  1. 헤더 `복사`: `navigator.clipboard.writeText`, 2초간 `복사됨`. 실패는 무시한다.
-  2. `마크다운 복사`: 클립보드 API, 실패하면 숨긴 textarea + `document.execCommand('copy')` 폴백. 2초간 `복사됨`.
-  3. `.md 다운로드`: Blob(`text/markdown;charset=utf-8`), 파일명 = 제목에서 영숫자·한글·`_-` 외 문자를 `_` 로 바꾸고 50자로 자른 값 + `_YYYY-MM-DD.md`.
-  4. `Notion 동기화`: 서버를 부르지 않는다. 300ms 기다린 뒤 3초간 `Notion 연동됨` 을 보이고 `https://notion.so/agentlens/report-<messageId>` 를 콜백으로 넘긴다(워크스페이스는 콜백을 넘기지 않는다).
-  5. 스트리밍 중에는 툴바가 반투명·클릭 불가다.
+  1. 머리줄 `복사`와 `마크다운 복사` 는 같은 `useCopyToClipboard` 를 쓴다: `navigator.clipboard.writeText`, 없거나 실패하면 숨긴 textarea + `document.execCommand('copy')`. 결과에 따라 2초간 `복사됨` 또는 `복사 실패` 를 보이고(`aria-live="polite"`) `복사`/`마크다운 복사` 로 돌아간다.
+  2. `.md 다운로드`: Blob(`text/markdown;charset=utf-8`), 파일명 = 제목에서 영숫자·한글·`_-` 외 문자를 `_` 로 바꾸고 50자로 자른 값 + `_YYYY-MM-DD.md`.
+  3. `Notion 동기화`: 서버를 부르지 않는다. 300ms 동안 `Notion 연동 중...` 후 3초간 `Notion 연동됨` 을 보이고 `https://notion.so/agentlens/report-<messageId>` 를 콜백으로 넘긴다(워크스페이스는 콜백을 넘기지 않는다).
+  4. 스트리밍 중에는 툴바가 반투명·클릭 불가이고 버튼이 비활성화된다.
 - 출력: 클립보드, 파일 다운로드, 버튼 상태 표시.
 - 예외·엣지: Notion 동기화는 실제 연동이 아니다(위험 항목 참고). 워크스페이스의 `onCopyMessage` 는 빈 함수다.
-- 관련 코드: `frontend/src/components/chat/ExportToolbar.tsx`, `frontend/src/components/chat/ChatMessageItem.tsx:54-62,162-183,340-358`, `frontend/src/components/chat/ChatWorkspace.tsx:658`
+- 관련 코드: `frontend/src/components/chat/ExportToolbar.tsx`, `frontend/src/hooks/useCopyToClipboard.ts`, `frontend/src/components/chat/ChatMessageItem.tsx:46-49,223-242,296-315`, `frontend/src/components/chat/ChatWorkspace.tsx:699`
 
 ## CHAT-20 오류·중단·재시도
-- 진입점: 스트리밍 중 입력창의 빨간 `중단` 버튼(`답변 생성 중단`), 오류 카드의 `다시 시도`.
+- 진입점: 스트리밍 중 전송 자리에 나오는 위험 톤 중단 아이콘 버튼(접근 이름 `답변 생성 중단`), 오류 카드의 `다시 시도`(접근 이름 `답변 다시 시도`).
 - 입력: 없음.
 - 처리 규칙:
   1. 중단: `AbortController.abort()`, 스트리밍 상태 해제, `streaming` 인 메시지를 `aborted` 로 바꾼다. fetch 가 `AbortError` 를 던지면 해당 어시스턴트 메시지를 `aborted` 로 두고 그때까지의 부분 답변을 세션에 저장한다(`createOrUpdateSession`).
   2. HTTP 오류(스트림 시작 전): 응답 JSON `message` 를 오류 문구로 쓴다. 메시지 상태 `error`, `errorMessage` 저장. 세션 저장은 하지 않는다.
   3. 스트림 중 오류: 백엔드는 토큰 생성 중 어떤 예외든 잡아 `event: error` (`ERR_LLM_STREAM_FAILED`, `LLM 스트리밍 도중 외부 프로바이더 오류가 발생했습니다.`, `status_code: 502`, `step: "synthesizing"`, `retryable: true`)를 보내고 끝낸다. done 과 서버 영속화는 하지 않는다. 프론트는 `message` 로 오류 카드를 만든다.
   4. 네트워크 오류 등 기타: `err.message`, 없으면 `네트워크 지연으로 응답이 중단되었습니다.`.
-  5. 오류 카드: 빨간 말풍선, 경고 아이콘과 문구, `다시 시도` 버튼. 오류 메시지에는 복사·내보내기를 보이지 않는다.
+  5. 오류 카드: `danger-soft` 배경 카드, 경고 아이콘과 문구, `다시 시도` 버튼. 오류 메시지에는 복사·내보내기를 보이지 않는다.
   6. 다시 시도: 해당 어시스턴트 메시지와 바로 앞 사용자 메시지를 지우고 같은 질문을 다시 보낸다(옵션 없이 현재 상태 기준).
 - 출력: `aborted`/`error` 메시지 상태.
 - 예외·엣지:
   - `aborted` 메시지에는 별도 표시나 재시도 버튼이 없다. 내용이 비어 있으면 빈 말풍선(트래커만)으로 남는다.
   - 클라이언트가 끊으면 서버 생성기는 done 전에 멈추므로 서버 자동 영속화가 일어나지 않는다. 중단된 턴은 프론트 POST 로만 저장된다.
   - 오류 이벤트의 `retryable` 은 프론트가 쓰지 않는다. 전역 예외 처리기 응답(`{"detail","error"}`)에는 `message` 가 없어 `서버 에러 (500)` 으로 보인다.
-- 관련 코드: `backend/app/services/chat_service.py:743-769`, `frontend/src/components/chat/ChatWorkspace.tsx:123-135,316-319,427-433,461-496,572-582`, `frontend/src/components/chat/ChatMessageItem.tsx:203-222`, `frontend/src/components/chat/ChatPromptInput.tsx:124-133`
+- 관련 코드: `backend/app/services/chat_service.py:743-769`, `frontend/src/components/chat/ChatWorkspace.tsx:133-145,326-333,437-443,471-501,628-638`, `frontend/src/components/chat/ChatMessageItem.tsx:261-280`, `frontend/src/components/chat/ChatPromptInput.tsx:116-131`
 
 ## CHAT-21 토큰 한도·출력 완료
 - 진입점: 프롬프트 조립과 프로바이더 호출.
@@ -368,16 +372,16 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
   6. 백엔드 `latency_ms` 는 요청 처리 시작부터 done 직전까지의 시간이다.
 - 출력: done `usage`, `latency_ms`.
 - 예외·엣지: OpenAI·Ollama 스트림은 `last_usage` 를 갱신하지 않아 done `usage` 에 직전 호출(예: Haiku 플래너)의 값이 남을 수 있다. `llm_processor` 는 프로세스 전역 단일 인스턴스라 동시 요청끼리 `last_usage` 를 덮어쓴다.
-- 관련 코드: `backend/app/services/chat_service.py:238-239,281-292,789-804`, `backend/app/services/llm_providers/anthropic_provider.py:208-319`, `backend/app/services/llm_processor.py:151,200,218,359-460`, `frontend/src/components/chat/ChatWorkspace.tsx:439-460`
+- 관련 코드: `backend/app/services/chat_service.py:238-239,281-292,789-804`, `backend/app/services/llm_providers/anthropic_provider.py:208-319`, `backend/app/services/llm_processor.py:220,259,277,404-499`, `frontend/src/components/chat/ChatWorkspace.tsx:449-470`
 
 ## CHAT-22 LLM 프로바이더·폴백
 - 진입점: `llm_processor.stream_tokens`(스트림), `generate_live_answer`(플래너, `/query`).
 - 입력: 프롬프트, `model`, `model_tier`.
 - 처리 규칙:
-  1. 사전 가용성(`has_live_provider`): Anthropic 키(설정 → 환경변수 → `config.json` `llm.anthropic_api_key`)가 있으면 가능. 없으면 OpenAI 키. 없으면 `OLLAMA_BASE_URL`(기본 `http://localhost:11434`)에 동기 `GET /api/tags`(타임아웃 1.0초)가 200 이면 가능. 모두 아니면 `LLMProviderUnavailableException` → 스트림 전 503.
+  1. 사전 가용성(`has_live_provider`): Anthropic 키(설정 → 환경변수 → `config.json` `llm.anthropic_api_key`)가 있으면 가능. 없으면 OpenAI 키(`_resolve_openai_key`: 덮어쓰기 `llm_processor.openai_key` → 설정 → `config.json` `llm.openai_api_key` → 환경변수). 없으면 Ollama(`_ollama_status`): 주소(`_resolve_ollama_url`: 덮어쓰기 `llm_processor.ollama_url` → `OLLAMA_BASE_URL` → `config.json` `llm.ollama_base_url`)가 있으면 동기 `GET {주소}/api/tags`(타임아웃 1.0초, 한 번)가 200 이고 응답 `models[].name` 또는 `model` 에 설정 모델(`_resolve_ollama_generate_model`: `OLLAMA_MODEL` → `llm.ollama_model` → `llama3.2:latest`. 태그를 생략하면 `:latest` 를 붙여 비교)이 있어야 가능. 모두 아니면 `LLMProviderUnavailableException` → 스트림 전 503 (Ollama 만 떠 있고 설정 모델이 없어도 503). 판정 이유(`Anthropic 키 없음 · OpenAI 키 없음 · Ollama 설정 모델 미설치 (<모델>)` 등)는 서버 로그에만 남는다: `has_live_provider` 는 DEBUG, `check_provider_available` 이 예외를 낼 때 WARNING. 응답 본문은 바뀌지 않는다.
   2. 요청 모델 문자열(`model` 또는 `model_tier`)에 `gemini` 가 있으면 Gemini 를 직접 부른다(키 없으면 503). 스트림에서도 전체 응답을 한 번에 토큰 1개로 보낸다. 실패하면 `LLMUpstreamException`.
   3. 비스트림에서만 `gpt`/`openai` 가 있으면 OpenAI 를 직접 부른다.
-  4. 기본 순서 (스트림): Anthropic → OpenAI(SDK, 기본 `gpt-4o-mini`, temperature 0.3) → Ollama(`/api/generate` 스트림, 모델 `OLLAMA_MODEL`, 설정 기본 `llama3.2:latest`).
+  4. 기본 순서 (스트림): Anthropic → OpenAI(SDK, 기본 `gpt-4o-mini`, temperature 0.3) → Ollama(`/api/generate` 스트림, 주소·모델은 사전 가용성과 같은 해석 함수, 모델 기본 `llama3.2:latest`).
      - Anthropic 429 → `LLMQuotaExceededException`(폴백 안 함). 529/503 과부하, 401 키 오류 → 그대로 올림(폴백 안 함). 그 밖의 예외는 토큰을 하나도 안 보냈을 때만 다음 프로바이더로 넘어가고, 보낸 뒤면 `LLMStreamFailedException`.
      - Anthropic 이 예외 없이 토큰 0개로 끝나도 다음 프로바이더로 넘어간다.
      - OpenAI 예외 문자열에 `rate`/`429`/`quota` 가 있으면 한도 초과로 올린다.
@@ -386,7 +390,7 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
   6. 모델 ID 표기는 `sanitize_model_identifier` 가 앞뒤 공백만 지우고 보존한다(비면 기본 챗 모델).
 - 출력: `(토큰, 모델 ID)` 스트림.
 - 예외·엣지: `/api/chat/stream` 의 사전 검사에는 401/429/529/502 분기가 있지만 `check_provider_available` 은 `LLMProviderUnavailableException` 만 던지므로, 키가 틀렸거나 한도 초과면 HTTP 상태가 아니라 스트림 중 `ERR_LLM_STREAM_FAILED` 로 나타난다.
-- 관련 코드: `backend/app/services/llm_processor.py:91-100,113-125,127-227,242-460`, `backend/app/services/llm_providers/anthropic_provider.py:125-319`, `backend/app/api/chat.py:347-403`, `backend/app/config.py:48-73`
+- 관련 코드: `backend/app/services/llm_processor.py:91-100,113-127,196-286,301-499`, `backend/app/services/llm_providers/anthropic_provider.py:125-319`, `backend/app/api/chat.py:347-403`, `backend/app/config.py:48-73`
 
 ## CHAT-23 동기 단건 질의 API
 - 진입점: `POST /api/chat/query`. 프론트 화면에서는 부르지 않는다.
@@ -418,15 +422,27 @@ AI 챗은 수집한 기술 소식(`news_items`)을 근거로 질문에 답하는
 - 입력: 없음.
 - 처리 규칙:
   1. 페이지 높이 `100dvh`. `window.visualViewport` 의 resize/scroll 마다 워크스페이스 높이를 `visualViewport.height px` 로 맞춘다(가상 키보드).
-  2. 루트 viewport: `width=device-width`, `initialScale 1`, `maximumScale 1`, `userScalable false`, `interactiveWidget: resizes-content`.
-  3. 입력창 textarea 는 모바일 `text-base`(16px), 640px 이상 `text-sm`. 포커스 100ms 뒤 `scrollIntoView({block: 'end'})`. 하단 바는 `env(safe-area-inset-bottom)` 여백.
-  4. 1024px 기준: 이상은 사이드바, 미만은 드로어(CHAT-07).
-  5. 포커스 시트는 640px 미만에서 아래에 붙는 바텀시트(위 모서리 둥글게, 손잡이, 아래 스와이프 닫기), 이상에서 가운데 모달.
-  6. 가로 스크롤 방지: 레이아웃 `overflow-x-hidden`, `max-w-full`. 말풍선은 `[overflow-wrap:anywhere]`, 인라인 코드 `break-all`, 표는 자체 가로 스크롤 래퍼(최소 폭 320px).
-  7. 작은 화면에서 숨기는 요소: 전송·중단 버튼 글자, 스코프 표시, 모델 칩의 `추천` 배지(640px 미만), 단축키 안내(1024px 미만).
+  2. 루트 viewport: `width=device-width`, `initialScale 1`, `interactiveWidget: resizes-content`, `colorScheme: 'light dark'`, 테마별 `themeColor`. 확대 제한(`maximumScale`, `userScalable`)은 두지 않는다.
+  3. 입력창 textarea 는 640px 미만 `text-base`(16px, iOS 입력 확대 방지), 640px 이상 `text-sm`. 포커스 100ms 뒤 `scrollIntoView({block: 'end'})`. 하단 바는 `env(safe-area-inset-bottom)` 여백.
+  4. 1024px 기준: 이상은 사이드바, 미만은 드로어(CHAT-07). 태블릿(768~1023px)도 드로어다.
+  5. 헤더(`h-14`, 한 줄) 폭별 배치:
+     | 요소 | 1024px 이상 | 768~1023px | 768px 미만 |
+     |---|---|---|---|
+     | 피드로 (`피드로 돌아가기`, 맨 왼쪽) | 화살표 + `피드` | 같음 | 화살표만 |
+     | 기록 버튼 `대화 기록 보기` | 사이드바 토글 | 드로어 토글 | 드로어 토글 |
+     | 제목 `AI 챗` | 보임 | 보임 | 보임(말줄임) |
+     | `새 대화 시작` | 사이드바를 접었을 때만 | 항상 | 항상 |
+     | `커맨드 팔레트 열기` | 보임 | 보임 | 숨김(더보기 메뉴 `커맨드 팔레트`) |
+     | 더보기 `더보기` | 테마 라디오(`라이트`/`다크`/`시스템`), `뉴스 피드로 이동` | 같음 | + `커맨드 팔레트` |
+  6. 챗 커맨드 팔레트: ⌘K / Ctrl+K(입력창 안에서도) 또는 헤더 버튼·더보기 메뉴로 연다. 팔레트가 맨 위 레이어면 ⌘K 가 닫고, 다른 레이어가 열려 있으면 무시한다. 명령은 `뉴스 피드로 이동`, 테마 순환(제목 `다크 모드로 전환` / `시스템 모드로 전환` / `라이트 모드로 전환 (현재 시스템)`), `새 대화 시작`, `대화 기록 열기` 4개다.
+  7. 포커스 필터는 768px 미만에서 아래에 붙는 바텀시트(손잡이, 아래 100px 스와이프 닫기), 이상에서 가운데 작은 대화상자(CHAT-16).
+  8. 768px 미만 터치 영역: 헤더 버튼, 맥락 줄 토글·기사 칩 X, 포커스 캡슐, 모델 칩, 전송·중단 버튼, 인용 배지, 답변 복사·내보내기 버튼, 세션 카드·삭제 버튼, 드로어 검색창은 44px 이상이다.
+  9. 가로 스크롤 방지: 레이아웃 `overflow-x-hidden`, `max-w-full`. 답변은 말풍선 없이 바탕 위 마크다운이고 `[overflow-wrap:anywhere]`, 인라인 코드 `break-all`, 표는 자체 가로 스크롤 래퍼(최소 폭 320px). 맥락 줄은 넘치면 줄 안에서 가로로 스크롤한다.
+  10. 작은 화면에서 숨기는 요소: 답변 왼쪽 봇 아바타(640px 미만), 모델 칩의 `추천` 표시(640px 미만), 내보내기 버튼 글자와 `리포트 내보내기` 표시(768px 미만), 단축키 안내 `Enter: 전송, Shift+Enter: 줄바꿈`(1024px 미만).
+  11. 열 맞춤: 맥락 줄 안쪽, 메시지 열(빈 화면 포함), 입력 영역은 바깥 여백(768px 미만 16px, 이상 24px)과 가운데 최대 폭(`max-w-3xl`)이 같아 모든 폭에서 왼쪽 끝이 맞는다. 1024px 이상에서 사이드바 머리 영역(56px + 44px)의 아래 경계가 챗 헤더 + 맥락 줄의 아래 경계와 같다 (CHAT-07).
 - 출력: 반응형 레이아웃.
-- 예외·엣지: 모바일에서 `isSidebarOpen` 은 기본 true 이므로 헤더의 `새 대화` 버튼이 숨는다. 모바일 새 대화는 드로어에서만 할 수 있다.
-- 관련 코드: `frontend/src/app/chat/page.tsx`, `frontend/src/app/layout.tsx:9-15`, `frontend/src/components/chat/ChatWorkspace.tsx:86,103-121,584-688`, `frontend/src/components/chat/ChatPromptInput.tsx:43-48,72-76,81-92`, `frontend/src/components/chat/FocusBottomSheet.tsx:79-88,100-119`, `frontend/src/components/chat/ChatMessageItem.tsx:224-270`
+- 예외·엣지: 하드웨어 키보드가 없으면 ⌘K 대신 버튼·메뉴로 팔레트를 연다. 테마는 `/chat` 의 더보기 메뉴와 팔레트로 바꿀 수 있다.
+- 관련 코드: `frontend/src/app/chat/page.tsx`, `frontend/src/app/layout.tsx:6-15`, `frontend/src/components/chat/ChatHeader.tsx:58-59,77,97-150`, `frontend/src/components/chat/ChatContextBar.tsx:30-58`, `frontend/src/components/chat/ChatSidebarHeader.tsx:26-77`, `frontend/src/components/chat/ChatMessageList.tsx:49-91`, `frontend/src/components/chat/ChatWorkspace.tsx:96,113-131,580-621,640-775`, `frontend/src/components/chat/ChatPromptInput.tsx:71-76,80-94,107`, `frontend/src/components/ui/TextField.tsx:5-6`, `frontend/src/components/chat/FocusBottomSheet.tsx:84-92`, `frontend/src/components/chat/ChatMessageItem.tsx:98-133,189-195`, `frontend/src/components/chat/ExportToolbar.tsx:27-31,117-120`
 
 ## 처리 흐름
 global 모드, 검색이 필요한 질문 한 건 기준이다. scoped 모드 차이는 끝에 적는다.
@@ -491,7 +507,7 @@ scoped 모드: 사전 검사에서 기사를 확인하고, `extracting_source`(3
 ## 상수·설정값
 | 이름 | 값 | 위치 | 의미 |
 |---|---|---|---|
-| 질문 최대 길이 | 2000자 | `backend/app/api/chat.py:150,302`, `backend/app/schemas/chat.py:29`, `frontend/src/components/chat/ChatPromptInput.tsx:30` | 초과 시 400 / 전송 막음 |
+| 질문 최대 길이 | 2000자 | `backend/app/api/chat.py:150,302`, `backend/app/schemas/chat.py:29`, `frontend/src/components/chat/ChatPromptInput.tsx:36` | 초과 시 400 / 전송 막음 |
 | `top_k` (챗) | 기본 5, 1~10 | `backend/app/schemas/chat.py:36` | global 검색 상위 N |
 | `top_k` (`/search`) | 기본 5, 1~20 | `backend/app/api/chat.py:68` | 미리보기 API |
 | `min_quality` | 5.0 (챗 고정), `/search` 기본 5.0, 1.0~10.0 | `backend/app/services/chat_service.py:193`, `backend/app/api/chat.py:69` | 품질 하한 |
@@ -506,70 +522,76 @@ scoped 모드: 사전 검사에서 기사를 확인하고, `extracting_source`(3
 | 최종 점수 | 0.60 s_rel + 0.40 base | `backend/app/services/retriever.py:501` | `rag_score` |
 | `TAU_MAP` | 24h 86400, 7d 259200, 30d 604800, all 1209600 (초) | `backend/app/services/retriever.py:15-20` | 최신성 감쇠 상수 |
 | history (프롬프트) | 마지막 4개 메시지 | `backend/app/services/chat_service.py:297` | 백엔드 멀티턴 |
-| history (프론트) | 10턴(20개), 3,000 토큰(글자/2.5) | `frontend/src/types/chat.ts:777-790` | 요청에 담는 양 |
+| history (프론트) | 10턴(20개), 3,000 토큰(글자/2.5) | `frontend/src/types/chat.ts:778-791` | 요청에 담는 양 |
 | scoped 본문 길이 | 5000자 | `backend/app/services/chat_service.py:262` | 프롬프트에 넣는 본문 |
 | scoped snippet 폴백 | 본문 앞 400자 | `backend/app/services/chat_service.py:514,653` | 요약 없을 때 |
 | 스크래퍼 | 타임아웃 5.0초, 최소 본문 500자, L1 500건, L2 재사용 100자 이상 | `backend/app/services/scraper.py:36,74,106,121,141` | scoped 본문 확보 |
 | 세션 보존 한도 | 30 (서버 FIFO, 프론트 목록) | `backend/app/services/chat_session_service.py:277,368`, `frontend/src/components/chat/useChatSessions.ts:21` | 오래된 세션 삭제 |
 | 세션 목록 limit | 기본 30, 1~50 | `backend/app/api/chat.py:424` | `GET /sessions` |
-| 자동 제목 길이 | 30자 + `...` | `backend/app/services/chat_session_service.py:47-49`, `frontend/src/types/chat.ts:768-769` | 세션 이름 |
+| 자동 제목 길이 | 30자 + `...` | `backend/app/services/chat_session_service.py:47-49`, `frontend/src/types/chat.ts:769-770` | 세션 이름 |
 | 목록 미리보기 | 서버 100자, 프론트 캐시 60자 | `backend/app/services/chat_session_service.py:80`, `frontend/src/components/chat/useChatSessions.ts:193` | `last_message_preview` |
 | localStorage 키 | `agentlens_chat_sessions_index`, `agentlens_chat_session_<id>` | `frontend/src/components/chat/useChatSessions.ts:19-20` | 이중 저장 |
-| 기본 티어·모델 | `sonnet`, `claude-sonnet-5-5` | `frontend/src/types/chat.ts:116-129` | 프론트 기본값 |
+| 기본 티어·모델 | `sonnet`, `claude-sonnet-5-5` | `frontend/src/types/chat.ts:117-130` | 프론트 기본값 |
 | `ANTHROPIC_DEFAULT_CHAT_MODEL` | `claude-sonnet-5-5` | `backend/app/config.py:53` | 서버 기본 챗 모델 |
 | `ANTHROPIC_HAIKU_MODEL` / `SONNET` / `OPUS` | `claude-haiku-5-5` / `claude-sonnet-5-5` / `claude-opus-5-5` | `backend/app/config.py:54-56` | 티어 매핑, 플래너는 Haiku |
 | Anthropic `max_tokens` | 4096 | `backend/app/services/llm_providers/anthropic_provider.py:213,251` | 출력 상한 |
 | Anthropic 타임아웃 | 비스트림 45초, 스트림 120초 | `backend/app/services/llm_providers/anthropic_provider.py:233,279` | |
 | Anthropic 헤더 | `anthropic-version: 2023-06-01`, `anthropic-beta: prompt-caching-2024-07-31` | `backend/app/services/llm_providers/anthropic_provider.py:135-137` | |
-| OpenAI | `gpt-4o-mini`, temperature 0.3, max_tokens 4096, 타임아웃 60초(비스트림) | `backend/app/services/llm_processor.py:192-203,413-419` | 폴백 2순위 |
-| Ollama | `http://localhost:11434`, `llama3.2:latest`(설정), 스트림 기본 `qwen2.5:latest`(설정 없을 때), num_predict 4096, 타임아웃 90/120초, 가용성 확인 1.0초 | `backend/app/config.py:61-62`, `backend/app/services/llm_processor.py:212-227,267-275,437-456` | 폴백 3순위 |
-| Gemini | `gemini-3.5-flash-lite`, maxOutputTokens 2048, temperature 0.3, 타임아웃 20초 | `backend/app/config.py:58`, `backend/app/services/llm_processor.py:141-154` | 명시 요청 시만 |
+| OpenAI | `gpt-4o-mini`, temperature 0.3, max_tokens 4096, 타임아웃 60초(비스트림) | `backend/app/services/llm_processor.py:252-262,452-458` | 폴백 2순위 |
+| Ollama | `http://localhost:11434`, `llama3.2:latest`(설정, 설정·`config.json` 이 모두 비면 같은 값), num_predict 4096, 타임아웃 90/120초, 가용성 확인 1.0초(`/api/tags` 200 + 설정 모델 설치) | `backend/app/config.py:61-62`, `backend/app/services/llm_processor.py:150-169,171-194,271-286,476-495` | 폴백 3순위 |
+| Gemini | `gemini-3.5-flash-lite`, maxOutputTokens 2048, temperature 0.3, 타임아웃 20초 | `backend/app/config.py:58`, `backend/app/services/llm_processor.py:210-223` | 명시 요청 시만 |
 | 미사용 설정 | `CHAT_SESSION_MAX_LIMIT` 30, `CHAT_HISTORY_MAX_TURNS` 10, `CHAT_HISTORY_MAX_TOKENS` 3000, `SCRAPER_TIMEOUT_SECONDS` 5.0, `AGENTIC_SEARCH_MAX_QUERIES` 2 | `backend/app/config.py:68-72` | 정의만 있고 참조하는 코드가 없다 |
 | 보충 검색 | 쿼리 2개, 관련도 0.60, 상위 3, DuckDuckGo 타임아웃 3.0초 | `backend/app/services/agentic_search.py:101,118,193,199` | 챗 흐름에서 미사용 |
-| 입력창 최대 높이 | 180px | `frontend/src/components/chat/ChatPromptInput.tsx:46` | 자동 높이 |
-| 드로어/사이드바 기준 | 1024px | `frontend/src/components/chat/ChatWorkspace.tsx:634` | |
-| 바텀시트 스와이프 | 100px | `frontend/src/components/chat/FocusBottomSheet.tsx:85` | 닫기 |
+| 입력창 최대 높이 | 180px | `frontend/src/components/chat/ChatPromptInput.tsx:26` | 자동 높이 |
+| 드로어/사이드바 기준 | 1024px | `frontend/src/components/chat/ChatWorkspace.tsx:63`, `frontend/src/components/chat/ChatHeader.tsx:58` | `useMediaQuery('(min-width: 1024px)')` |
+| 헤더 폭 기준 | 768px | `frontend/src/components/chat/ChatHeader.tsx:59,92,134` | 팔레트 버튼 표시, 더보기 `커맨드 팔레트` |
+| 검색 범위 라벨 | `단일 기사`, `전체 소식` | `frontend/src/lib/labels.ts:71-82` | 모드 탭, 세션 배지·접근 이름, 없는 기사 알림, 포커스 캡슐 기본값 |
+| 바텀시트 전환 기준 | 768px | `frontend/src/components/ui/Dialog.tsx:92` | 포커스 필터 |
+| 바텀시트 스와이프 | 100px | `frontend/src/components/ui/Dialog.tsx:25` | 닫기 |
+| 알림 자동 닫힘 | 3500ms | `frontend/src/components/ui/Toast.tsx:25` | 핸드오버 실패 경고 |
+| 알림 위치 | 입력 영역 위 8px(`composer`), 모달이 열려 있으면 전역 영역 | `frontend/src/components/ui/Toast.tsx:126-135,207-216` | 핸드오버 실패 경고 |
+| 카테고리 짧은 라벨 | `하네스`, `MCP`, `에이전트`, `AI 동향` | `frontend/src/lib/labels.ts:15-20` | 기사 칩, 인용 팝오버, 포커스 캡슐 |
 
 ## 알려진 불일치·위험
 버그 의심 (코드 경로로 판단했고 실행으로 확인하지 않았다):
-1. 한 턴이 서버에 중복 저장될 수 있다. 서버는 done 뒤 `persist_turn` 으로 서버 UUID 메시지 2개를 덧붙이고, 프론트는 같은 턴을 클라이언트 ID(`msg-user-…`, `msg-asst-…`)로 `POST /api/chat/sessions` 에 보낸다. 서버 업서트는 메시지를 교체하지 않고 덧붙인다. 프론트는 한 턴에 두 번(done 처리, 루프 종료 후) POST 하므로 두 번째부터는 같은 PK 로 INSERT 하게 되어 500 `ERR_SESSION_CREATE_FAILED` 가 나고 응답은 무시된다. 다음 턴부터는 이전 메시지까지 모두 다시 보내 매번 PK 충돌이 난다. 근거: `backend/app/services/chat_service.py:806-822`, `backend/app/services/chat_session_service.py:255-274,349-366`, `frontend/src/components/chat/ChatWorkspace.tsx:416-423,451-458`, `frontend/src/components/chat/useChatSessions.ts:225-236`.
-2. `handleSendMessage` 의 `useCallback` 의존성 배열에 `selectedTier` 가 없다. 모델을 바꾼 뒤 `messages`·`focusFilters`·스코프 등이 바뀌지 않은 상태에서 보내면 이전 티어가 요청에 실릴 수 있다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:277-278,310-311,498`.
-3. 세션 상세를 서버와 캐시 어디서도 못 얻으면(`loadSessionDetail` → null) `sessionId` 만 바뀌고 이전 세션 메시지가 화면에 남는다. 그 상태로 보내면 다른 세션 ID 에 이전 대화 history 가 실린다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:202-219`.
-4. 세션을 고를 때 모델 변경 이벤트를 지우지 않아 이전 세션의 구분선이 복원된 타임라인에 섞인다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:196-222`.
-5. done 없이 스트림이 끊겨도 프론트가 `completed` 로 바꾸고, 백엔드는 `stop_reason` 을 보지 않아 4096 토큰에서 잘린 답이 완료로 보인다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:439-460`, `backend/app/services/llm_providers/anthropic_provider.py:287-319`.
-6. `llm_processor` 는 전역 단일 인스턴스이고 `last_usage` 를 요청 간에 공유한다. 동시 요청이나 OpenAI/Ollama 폴백, 플래너 호출 뒤에는 done·저장 `usage` 가 다른 호출 값일 수 있다. 근거: `backend/app/services/llm_processor.py:120-125,320,388`, `backend/app/services/chat_service.py:791`.
-7. `has_live_provider` 가 async 라우트 안에서 동기 `httpx.Client` 로 Ollama 를 확인한다(Anthropic/OpenAI 키가 없을 때). 최대 1.0초 이벤트 루프를 막는다. `OLLAMA_BASE_URL` 기본값이 비어 있지 않아 항상 시도한다. 근거: `backend/app/services/llm_processor.py:267-275`, `backend/app/config.py:61`.
-8. `/api/chat/stream` 의 `ChatStreamRequest(**body)` 가 try 밖이라 스키마 위반(예: `top_k` 11, 잘못된 카테고리)이 정의된 오류 코드 없이 500 `{"detail","error"}` 가 된다. 프론트는 `message` 가 없어 `서버 에러 (500)` 으로 보인다. 근거: `backend/app/api/chat.py:405-406`, `backend/app/main.py:37-46`.
-9. 사전 검사의 401/429/529/502 분기는 실행될 수 없다(`check_provider_available` 은 `LLMProviderUnavailableException` 만 던진다). 키 오류·한도 초과·과부하는 모두 스트림 중 `ERR_LLM_STREAM_FAILED` 로 합쳐져 구분되지 않는다. 근거: `backend/app/api/chat.py:347-403`, `backend/app/services/llm_processor.py:278-286`, `backend/app/services/chat_service.py:759-769`.
-10. 세션 삭제 실패 시 `deleteSession` 이 던진 오류를 `SessionItemCard` 와 `handleDeleteSession` 이 잡지 않는다. 근거: `frontend/src/components/chat/useChatSessions.ts:262-266`, `frontend/src/components/chat/SessionItemCard.tsx:61-69`.
+1. 한 턴이 서버에 중복 저장될 수 있다. 서버는 done 뒤 `persist_turn` 으로 서버 UUID 메시지 2개를 덧붙이고, 프론트는 같은 턴을 클라이언트 ID(`msg-user-…`, `msg-asst-…`)로 `POST /api/chat/sessions` 에 보낸다. 서버 업서트는 메시지를 교체하지 않고 덧붙인다. 프론트는 한 턴에 두 번(done 처리, 루프 종료 후) POST 하므로 두 번째부터는 같은 PK 로 INSERT 하게 되어 500 `ERR_SESSION_CREATE_FAILED` 가 나고 응답은 무시된다. 다음 턴부터는 이전 메시지까지 모두 다시 보내 매번 PK 충돌이 난다. 근거: `backend/app/services/chat_service.py:806-822`, `backend/app/services/chat_session_service.py:255-274,349-366`, `frontend/src/components/chat/ChatWorkspace.tsx:426-433,461-468`, `frontend/src/components/chat/useChatSessions.ts:232-246`.
+2. `handleSendMessage` 의 `useCallback` 의존성 배열에 `selectedTier` 가 없다. 모델을 바꾼 뒤 `messages`·`focusFilters`·스코프 등이 바뀌지 않은 상태에서 보내면 이전 티어가 요청에 실릴 수 있다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:287-288,320-321,508`.
+3. 세션 상세를 서버와 캐시 어디서도 못 얻으면(`loadSessionDetail` → null) `sessionId` 만 바뀌고 이전 세션 메시지가 화면에 남는다. 그 상태로 보내면 다른 세션 ID 에 이전 대화 history 가 실린다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:212-229`.
+4. 세션을 고를 때 모델 변경 이벤트를 지우지 않아 이전 세션의 구분선이 복원된 타임라인에 섞인다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:205-232`.
+5. done 없이 스트림이 끊겨도 프론트가 `completed` 로 바꾸고, 백엔드는 `stop_reason` 을 보지 않아 4096 토큰에서 잘린 답이 완료로 보인다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:449-470`, `backend/app/services/llm_providers/anthropic_provider.py:287-319`.
+6. `llm_processor` 는 전역 단일 인스턴스이고 `last_usage` 를 요청 간에 공유한다. 동시 요청이나 OpenAI/Ollama 폴백, 플래너 호출 뒤에는 done·저장 `usage` 가 다른 호출 값일 수 있다. 근거: `backend/app/services/llm_processor.py:122-127,371,433`, `backend/app/services/chat_service.py:791`.
+7. `has_live_provider` 가 async 라우트 안에서 동기 `httpx.Client` 로 Ollama 를 확인한다(Anthropic/OpenAI 키가 없을 때). 최대 1.0초 이벤트 루프를 막는다. `OLLAMA_BASE_URL` 기본값이 비어 있지 않아 항상 시도한다. 근거: `backend/app/services/llm_processor.py:171-194,319`, `backend/app/config.py:61`.
+8. `/api/chat/stream` 의 `ChatStreamRequest(**body)` 가 try 밖이라 스키마 위반(예: `top_k` 11, 잘못된 카테고리)이 정의된 오류 코드 없이 500 `{"detail","error"}` 가 된다. 프론트는 `message` 가 없어 `서버 에러 (500)` 으로 보인다. 근거: `backend/app/api/chat.py:405-406`, `backend/app/main.py:58-67`.
+9. 사전 검사의 401/429/529/502 분기는 실행될 수 없다(`check_provider_available` 은 `LLMProviderUnavailableException` 만 던진다). 키 오류·한도 초과·과부하는 모두 스트림 중 `ERR_LLM_STREAM_FAILED` 로 합쳐져 구분되지 않는다. 근거: `backend/app/api/chat.py:347-403`, `backend/app/services/llm_processor.py:327-337`, `backend/app/services/chat_service.py:759-769`.
+10. 세션 삭제 실패 시 `deleteSession` 이 던진 오류를 `SessionItemCard` 와 `handleDeleteSession` 이 잡지 않는다. 근거: `frontend/src/components/chat/useChatSessions.ts:271-275`, `frontend/src/components/chat/SessionItemCard.tsx:65-73`.
 11. 같은 시각으로 저장한 user/assistant 메시지는 `created_at` 이 같아 `created_at ASC` 정렬만으로 순서가 보장되지 않는다. 근거: `backend/app/services/chat_session_service.py:308,360`, `backend/app/models/chat_session.py:28`.
-12. SQLAlchemy `DateTime`(timezone 없음)과 SQLite 조합에서 `created_at.isoformat()` 이 오프셋 없는 문자열을 낼 수 있고, 브라우저 `new Date()` 는 이를 로컬 시각으로 읽는다. 이 경우 상대 시각이 시간대만큼 어긋난다. 실제 반환 형식은 실행해서 확인하지 못했다. 근거: `backend/app/models/chat_session.py:15-22`, `backend/app/services/chat_session_service.py:82-83`, `frontend/src/components/chat/SessionItemCard.tsx:15-31`.
-13. 프론트가 고정 모델 ID(`claude-*-5-5`)를 `model` 로 보내므로, 백엔드 설정에서 티어 모델 ID 를 바꿔도 `claude-` 로 시작하는 요청 문자열이 그대로 쓰인다. 근거: `frontend/src/types/chat.ts:125-129`, `backend/app/services/llm_providers/anthropic_provider.py:109-115`.
+12. SQLAlchemy `DateTime`(timezone 없음)과 SQLite 조합에서 `created_at.isoformat()` 이 오프셋 없는 문자열을 낼 수 있고, 브라우저 `new Date()` 는 이를 로컬 시각으로 읽는다. 이 경우 상대 시각이 시간대만큼 어긋난다. 실제 반환 형식은 실행해서 확인하지 못했다. 근거: `backend/app/models/chat_session.py:15-22`, `backend/app/services/chat_session_service.py:82-83`, `frontend/src/components/chat/SessionItemCard.tsx:18-34`.
+13. 프론트가 고정 모델 ID(`claude-*-5-5`)를 `model` 로 보내므로, 백엔드 설정에서 티어 모델 ID 를 바꿔도 `claude-` 로 시작하는 요청 문자열이 그대로 쓰인다. 근거: `frontend/src/types/chat.ts:126-130`, `backend/app/services/llm_providers/anthropic_provider.py:109-115`.
 14. 프론트 업서트로 저장한 메시지는 `model_tier`, `usage` 가 빠진다. 근거: `backend/app/services/chat_session_service.py:256-266`.
 15. scoped 출처는 기사 `full_content` 전문을 SSE 와 `chat_messages.sources_json` 에 그대로 싣는다. 근거: `backend/app/services/chat_service.py:654,661-668,812`.
 
 백엔드 스키마 ↔ 프론트 zod ↔ MSW 목 불일치:
-16. 이벤트 순서와 단계: MSW 스트림은 모드와 관계없이 `extracting_source`(20) → `evaluating_sufficiency`(45) → `agentic_searching`(65) → `synthesizing`(85) → sources(토큰 전, 보충 `[S1]` 포함) 순서다. 실제 백엔드는 'SSE 이벤트 목록' 대로이며 global 은 sources 가 토큰 뒤에 오고 보충 출처를 보내지 않는다. 근거: `frontend/src/mocks/handlers/chat.ts:467-532`, `backend/app/services/chat_service.py:576-805`.
-17. 세션 업서트: MSW 는 `messages` 를 교체하고, 백엔드는 덧붙인다. 근거: `frontend/src/mocks/handlers/chat.ts:997-1013`, `backend/app/services/chat_session_service.py:255-274`.
-18. 모델 검증: MSW 는 세 Claude ID 외 `model` 과 잘못된 `model_tier` 에 400 `ERR_INVALID_MODEL_TIER` 를 주지만, 백엔드는 모델 문자열을 검증하지 않고 `model_tier` 오류는 500 이 된다. 근거: `frontend/src/mocks/handlers/chat.ts:270-289`, `backend/app/schemas/chat.py:30-31`.
-19. 오류 코드 주석: zod `LlmErrorCodeSchema` 는 `ERR_CLAUDE_API_KEY_MISSING` 을 HTTP 503 으로 적지만 백엔드는 401 이다. `ERR_CHAT_STREAM_TIMEOUT`(15초), `ERR_STREAM_ABORTED_BY_USER`, `ERR_ARTICLE_EXTRACTION_FAIL`, `ERR_SONNET_SCHEMA_VALIDATION`, `ERR_SESSION_LIMIT_EXCEEDED`, `ERR_INVALID_FILTER_PARAM`, `ERR_ANTHROPIC_*` 별칭은 백엔드가 내지 않는다. 반대로 백엔드의 `ERR_INVALID_PAYLOAD`, `ERR_RETRIEVER_INDEX_ERROR` 는 enum 에 없다. 근거: `frontend/src/types/chat.ts:50-78`, `backend/app/api/chat.py`.
-20. 스트림 오류 이벤트: MSW 는 `provider: "anthropic"` 를 넣지만 백엔드는 보내지 않는다. 근거: `frontend/src/mocks/handlers/chat.ts:540-547`, `backend/app/services/chat_service.py:761-767`.
-21. zod 와 백엔드 필드: `ChatSourceDetailResponseSchema` 에 `full_content`, `scraped_at` 이 없다. `ChatSessionSummary/Detail` zod 는 제목 1~100자인데 백엔드는 빈 제목을 막지 않는다. `ChatSourceItemSchema.quality_score` 는 1.0 이상, `url` 은 URL 형식을 요구하지만 백엔드는 제약이 없다. UI 메시지 ID(`msg-user-…`)는 `ChatMessageSchema.id`(UUID)에 맞지 않는다. 런타임에서 zod 를 쓰지 않으므로 화면에는 영향이 없고 계약 테스트에서만 드러난다. 근거: `frontend/src/types/chat.ts:331-347,433-450,589-609,672-697`, `backend/app/schemas/chat.py:134-152`, `frontend/src/components/chat/ChatWorkspace.tsx:253-254`.
-22. MSW 스트림 404 문구(`ID {id}에 해당하는 기사를 찾을 수 없습니다.`)가 백엔드(`기사 ID {id}를 데이터베이스에서 찾을 수 없습니다.` / `지정된 기사를 찾을 수 없습니다.`)와 다르다. 근거: `frontend/src/mocks/handlers/chat.ts:379-383`, `backend/app/api/chat.py:326-345`.
+16. 이벤트 순서와 단계: MSW 스트림은 모드와 관계없이 `extracting_source`(20) → `evaluating_sufficiency`(45) → `agentic_searching`(65) → `synthesizing`(85) → sources(토큰 전, 보충 `[S1]` 포함) 순서다. 실제 백엔드는 'SSE 이벤트 목록' 대로이며 global 은 sources 가 토큰 뒤에 오고 보충 출처를 보내지 않는다. 근거: `frontend/src/mocks/handlers/chat.ts:474-539`, `backend/app/services/chat_service.py:576-805`.
+17. 세션 업서트: MSW 는 `messages` 를 교체하고, 백엔드는 덧붙인다. 근거: `frontend/src/mocks/handlers/chat.ts:1004-1020`, `backend/app/services/chat_session_service.py:255-274`.
+18. 모델 검증: MSW 는 세 Claude ID 외 `model` 과 잘못된 `model_tier` 에 400 `ERR_INVALID_MODEL_TIER` 를 주지만, 백엔드는 모델 문자열을 검증하지 않고 `model_tier` 오류는 500 이 된다. 근거: `frontend/src/mocks/handlers/chat.ts:277-296`, `backend/app/schemas/chat.py:30-31`.
+19. 오류 코드 주석: zod `LlmErrorCodeSchema` 는 `ERR_CLAUDE_API_KEY_MISSING` 을 HTTP 503 으로 적지만 백엔드는 401 이다. `ERR_CHAT_STREAM_TIMEOUT`(15초), `ERR_STREAM_ABORTED_BY_USER`, `ERR_ARTICLE_EXTRACTION_FAIL`, `ERR_SONNET_SCHEMA_VALIDATION`, `ERR_SESSION_LIMIT_EXCEEDED`, `ERR_INVALID_FILTER_PARAM`, `ERR_ANTHROPIC_*` 별칭은 백엔드가 내지 않는다. 반대로 백엔드의 `ERR_INVALID_PAYLOAD`, `ERR_RETRIEVER_INDEX_ERROR` 는 enum 에 없다. 근거: `frontend/src/types/chat.ts:51-79`, `backend/app/api/chat.py`.
+20. 스트림 오류 이벤트: MSW 는 `provider: "anthropic"` 를 넣지만 백엔드는 보내지 않는다. 근거: `frontend/src/mocks/handlers/chat.ts:547-554`, `backend/app/services/chat_service.py:761-767`.
+21. zod 와 백엔드 필드: `ChatSourceDetailResponseSchema` 에 `full_content`, `scraped_at` 이 없다. `ChatSessionSummary/Detail` zod 는 제목 1~100자인데 백엔드는 빈 제목을 막지 않는다. `ChatSourceItemSchema.quality_score` 는 1.0 이상, `url` 은 URL 형식을 요구하지만 백엔드는 제약이 없다. UI 메시지 ID(`msg-user-…`)는 `ChatMessageSchema.id`(UUID)에 맞지 않는다. 런타임에서 zod 를 쓰지 않으므로 화면에는 영향이 없고 계약 테스트에서만 드러난다. 근거: `frontend/src/types/chat.ts:332-348,434-451,590-610,673-698`, `backend/app/schemas/chat.py:134-152`, `frontend/src/components/chat/ChatWorkspace.tsx:263-264`.
+22. MSW 스트림 404 문구(`ID {id}에 해당하는 기사를 찾을 수 없습니다.`)가 백엔드(`기사 ID {id}를 데이터베이스에서 찾을 수 없습니다.` / `지정된 기사를 찾을 수 없습니다.`)와 다르다. 근거: `frontend/src/mocks/handlers/chat.ts:386-390`, `backend/app/api/chat.py:326-345`.
 
 죽은 코드·미구현 UI:
 23. `AgenticSearchService` 는 생성만 되고 호출되지 않는다. `observing`, `evaluating_sufficiency`, `agentic_searching` 단계, `queries`, `sources_found` 필드, `[S1]` 보충 출처, 프롬프트의 보충 출처 절은 실제 응답에서 쓰이지 않는다. 근거: `backend/app/services/chat_service.py:83,264-268`, `backend/app/services/agentic_search.py`.
-24. `Notion 동기화` 버튼은 서버를 부르지 않고 300ms 뒤 `Notion 연동됨` 을 보인다. 근거: `frontend/src/components/chat/ExportToolbar.tsx:94-107`.
+24. `Notion 동기화` 버튼은 서버를 부르지 않고 300ms 뒤 `Notion 연동됨` 을 보인다. 근거: `frontend/src/components/chat/ExportToolbar.tsx:88-101`.
 25. `POST /api/chat/query`, `GET /api/chat/search` 는 UI 에서 부르지 않는다. 테스트 외 코드에서 MSW 를 기동하는 코드도 찾지 못했다.
-26. 인용 팝오버의 `기사 상세` 버튼은 `onOpenSourceDetail` 이 전달되지 않아 보이지 않는다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:648-659`, `frontend/src/components/chat/CitationPopover.tsx:116-130`.
+26. 인용 팝오버의 `기사 상세` 버튼은 `onOpenSourceDetail` 이 전달되지 않아 보이지 않는다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:689-700`, `frontend/src/components/chat/CitationPopover.tsx:87-101`.
 27. 세션 이름 수동 변경 UI, 중단된 답변 재시도, 오류 `retryable` 활용, `FocusCapsule.matchedCount` 표시, `WorkflowStepTracker.fallbackNotice` 는 없거나 연결되지 않았다.
 28. 설정 `CHAT_SESSION_MAX_LIMIT`, `CHAT_HISTORY_MAX_TURNS`, `CHAT_HISTORY_MAX_TOKENS`, `SCRAPER_TIMEOUT_SECONDS`, `AGENTIC_SEARCH_MAX_QUERIES` 는 참조되지 않는다(값이 코드에 하드코딩되어 있다). 근거: `backend/app/config.py:68-72`.
 
 동작상 혼동 요소:
-29. 오류·중단 메시지도 워크플로 트래커가 `[✓] 심층 분석 과정 N단계 완료` 로 보인다. 근거: `frontend/src/components/chat/WorkflowStepTracker.tsx:68,111-130`.
-30. 포커스 시트의 `약 N건 매칭 소식` 은 실시간 매칭 수가 아니라 마지막 답변의 인용 출처 수다. 0건 경고는 워크스페이스에서 나오지 않는다. 고신호 라벨은 `품질 7.8+` 이지만 서버는 `is_high_signal` 열로 거른다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:93-101`, `frontend/src/components/chat/FocusBottomSheet.tsx:237,264-281`, `backend/app/services/retriever.py:296-297`.
-31. 기사 컨텍스트가 있으면 Global 토글이 무시되고, 기사 없이 Scoped 를 고르면 404 로 실패한다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:248-250`, `backend/app/api/chat.py:325-334`.
-32. 챗 SSE 는 상대 경로(`/api/chat/stream`)로 Next.js rewrite 를 거친다. 기존 기술 스펙은 챗 SSE 도 `getDirectApiBase` 로 backend 에 직접 붙는다고 적고 있으나, 그 함수를 쓰는 곳은 뉴스 질문 스트림뿐이다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:300`, `frontend/src/lib/api.ts:12-23,88-112`, `docs/tech-spec.md:18`.
-33. 프론트는 history 를 10턴까지 보내지만 백엔드 프롬프트는 마지막 4개 메시지만 쓴다. 근거: `frontend/src/types/chat.ts:777-790`, `backend/app/services/chat_service.py:297`.
+29. 오류·중단 메시지도 워크플로 트래커가 `[✓] 심층 분석 과정 N단계 완료` 로 보인다. 근거: `frontend/src/components/chat/WorkflowStepTracker.tsx:64,113-131`.
+30. 포커스 시트의 `약 N건 매칭 소식` 은 실시간 매칭 수가 아니라 마지막 답변의 인용 출처 수다. 0건 경고는 워크스페이스에서 나오지 않는다. 고신호 라벨은 `품질 7.8+` 이지만 서버는 `is_high_signal` 열로 거른다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:102-111`, `frontend/src/components/chat/FocusBottomSheet.tsx:153,163-173`, `backend/app/services/retriever.py:296-297`.
+31. 기사 컨텍스트가 있으면 `전체 소식` 토글이 무시되고, 기사 없이 `단일 기사` 를 고르면 404 로 실패한다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:258-260`, `backend/app/api/chat.py:325-334`.
+32. 챗 SSE 는 상대 경로(`/api/chat/stream`)로 Next.js rewrite 를 거친다. 기존 기술 스펙은 챗 SSE 도 `getDirectApiBase` 로 backend 에 직접 붙는다고 적고 있으나, 그 함수를 쓰는 곳은 뉴스 질문 스트림뿐이다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:310`, `frontend/src/lib/api.ts:12-23,88-112`, `docs/tech-spec.md:18`.
+33. 프론트는 history 를 10턴까지 보내지만 백엔드 프롬프트는 마지막 4개 메시지만 쓴다. 근거: `frontend/src/types/chat.ts:778-791`, `backend/app/services/chat_service.py:297`.
 34. 플래너 도메인 신호가 부분 문자열 비교라 `o1`, `o3`, `rag` 같은 짧은 키가 무관한 단어 안에서 걸려 검색 경로로 갈 수 있다. 근거: `backend/app/services/chat_service.py:349-359`, `backend/app/services/llm_processor.py:40-84`.
-35. 다시 시도는 이전 메시지를 지우는 상태 갱신 전에 만든 `messages` 클로저로 history 를 계산하므로, 지운 질문이 history 에 포함될 수 있다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:287-294,572-582`.
+35. 다시 시도는 이전 메시지를 지우는 상태 갱신 전에 만든 `messages` 클로저로 history 를 계산하므로, 지운 질문이 history 에 포함될 수 있다. 근거: `frontend/src/components/chat/ChatWorkspace.tsx:296-304,628-638`.

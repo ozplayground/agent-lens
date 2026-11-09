@@ -185,7 +185,7 @@ describe('ChatMessageItem Component', () => {
 
     expect(primaryBadge).toBeInTheDocument();
     expect(suppBadge).toBeInTheDocument();
-    expect(suppBadge.className).toContain('emerald');
+    expect(suppBadge).toHaveAttribute('data-tone', 'supplementary'); expect(suppBadge.className).toContain('text-success');
   });
 
   it('renders WorkflowStepTracker in assistant message when step_history or current_status is present', () => {
@@ -263,7 +263,7 @@ describe('ChatMessageItem Component', () => {
     expect(codeEl?.className).toContain('break-all');
     expect(codeEl?.className).toContain('font-mono');
     expect(codeEl?.className).toContain('text-[12px]');
-    expect(codeEl?.className).toContain('bg-slate-100');
+    expect(codeEl?.className).toContain('bg-surface-muted');
   });
 
   it('renders markdown table wrapped in an isolated horizontal scroll wrapper', () => {

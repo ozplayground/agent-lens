@@ -1,5 +1,5 @@
 # 데이터 모델: AgentLens
-Updated: 2026-11-06
+Updated: 2026-11-09
 
 코드에서 역으로 정리한 데이터 모델이다. 근거는 `path:line` 으로 단다. 실행 중인 DB 파일을 열어 보지 않았으므로, 인덱스 이름처럼 SQLAlchemy 가 만드는 값은 명명 규칙(`ix_<테이블>_<열>`)에 따른 이름이다.
 
@@ -10,7 +10,7 @@ Updated: 2026-11-06
 | `config.json` (저장소 루트) | 앱 설정 JSON | `backend/app/config.py:14-37` | backend (읽기, `/api/briefing/settings` 로 쓰기) |
 | `sources.json` (루트, `backend/app/config/sources.json`) | 수집 소스 목록 JSON | `backend/app/services/sources_service.py` | backend (읽기·쓰기) |
 | 브라우저 localStorage | 키 5종 | `frontend/src/...` | frontend |
-| 프로세스 메모리 | 수집 진행 상태, LLM 응답 캐시, 스크래핑 L1 캐시, 스케줄러 job | `collectors/manager.py:45-57`, `llm_processor.py:117-118`, `scraper.py` | backend (재시작하면 사라진다) |
+| 프로세스 메모리 | 수집 진행 상태, LLM 응답 캐시, 스크래핑 L1 캐시, 스케줄러 job | `collectors/manager.py:45-57`, `llm_processor.py:119-120`, `scraper.py` | backend (재시작하면 사라진다) |
 
 ## ERD
 ```mermaid
@@ -117,8 +117,8 @@ erDiagram
 | summary | TEXT | 예 | `""` | — | 요약. RSS 는 320자에서 자른다 (`rss.py:70`) |
 | author | VARCHAR(200) | 예 | NULL | — | 작성자 |
 | tags | VARCHAR(500) | 예 | `""` | — | 쉼표 구분 키워드 (`manager.py:153`) |
-| tldr_bullets | TEXT | 예 | `"[]"` | — | JSON 문자열 배열, 최대 3개 (`llm_processor.py:712`) |
-| why_it_matters | TEXT | 예 | `""` | — | 개발자 관점 의미. LLM 평가값 또는 카테고리 기본 문구 (`llm_processor.py:703-709`) |
+| tldr_bullets | TEXT | 예 | `"[]"` | — | JSON 문자열 배열, 최대 3개 (`llm_processor.py:751`) |
+| why_it_matters | TEXT | 예 | `""` | — | 개발자 관점 의미. LLM 평가값 또는 카테고리 기본 문구 (`llm_processor.py:742-748`) |
 | tech_stack | VARCHAR(500) | 예 | `""` | — | 쉼표 구분 기술·모델 이름 (`manager.py:156`) |
 | quality_score | FLOAT | 예 | 6.0 | `ix_news_items_quality_score` | 품질 점수 1.0~10.0 |
 | is_high_signal | BOOLEAN | 예 | False | `ix_news_items_is_high_signal` | 고신호 여부 (`HIGH_SIGNAL_THRESHOLD` 이상) |
@@ -141,7 +141,7 @@ erDiagram
 | DELETE 전체 | `backend/app/api/news.py:96-102`, `backend/app/api/schedule.py:80` |
 | 테스트 시드 (id=1) | `backend/tests/conftest.py:17-43` |
 
-읽는 코드: `api/news.py` (목록·상세·질문·RSS), `api/stats.py:13-15`, `api/chat.py:336`, `services/chat_service.py`, `services/chat_session_service.py:153`, `services/retriever.py:326-342`, `services/briefing_service.py:45-60`, `services/trend_service.py:42`, `services/deep_researcher.py:189`, `mcp/server.py`, `main.py:19` (시작 시 건수 확인).
+읽는 코드: `api/news.py` (목록·상세·질문·RSS), `api/stats.py:13-15`, `api/chat.py:336`, `services/chat_service.py`, `services/chat_session_service.py:153`, `services/retriever.py:326-342`, `services/briefing_service.py:45-60`, `services/trend_service.py:42`, `services/deep_researcher.py:189`, `mcp/server.py`, `main.py:29` (시작 시 건수 확인).
 
 ### news_fts — 전문 검색 인덱스 (FTS5 가상 테이블)
 - ORM 모델이 없다. `ensure_db_schema()` 가 원시 SQL 로 만든다 (`backend/app/database.py:73-114`). 같은 생성 코드가 `backend/app/services/retriever.py:65-115` 에도 있다.
@@ -231,7 +231,7 @@ erDiagram
 ## 열거형·고정 값
 | 값 | 정의 위치 | 비고 |
 |---|---|---|
-| 카테고리: `harness`, `mcp_plugins_skills`, `agent_tech`, `ai_news` | `backend/app/collectors/categorizer.py:6-11`, 주석 `models/news.py:12`, `manager.py:108`, 프론트 `frontend/src/types/news.ts:7-13`(+`all`), 챗 필터 `backend/app/schemas/chat.py:23`(+`all`) | 분류 결과 `unrelated` 는 저장하지 않는다 (`manager.py:112-115`). LLM 평가 응답의 `irrelevant` 도 저장 대상이 아니다 (`llm_processor.py:599, 624`) |
+| 카테고리: `harness`, `mcp_plugins_skills`, `agent_tech`, `ai_news` | `backend/app/collectors/categorizer.py:6-11`, 주석 `models/news.py:12`, `manager.py:108`, 프론트 `frontend/src/types/news.ts:7-13`(+`all`), 챗 필터 `backend/app/schemas/chat.py:23`(+`all`) | 분류 결과 `unrelated` 는 저장하지 않는다 (`manager.py:112-115`). LLM 평가 응답의 `irrelevant` 도 저장 대상이 아니다 (`llm_processor.py:638, 663`) |
 | `news_items.source`: `rss`, `rss_kr`, `hackernews`, `github`, `arxiv`, `huggingface`, `reddit` (기본 `web`) | `collectors/sources/rss.py:64`, `hackernews.py:35`, `github.py:40,65`, `arxiv.py:44`, `huggingface.py:29`, `reddit.py:32`, 기본값 `manager.py:84` | `rss_kr` 은 피드의 `country == "KR"` |
 | `chat_messages.role`: `user`, `assistant`, `system` | 주석 `models/chat_session.py:45`, `schemas/chat.py:19,188` | |
 | `chat_messages.status`: `pending`, `streaming`, `completed`, `error`, `aborted` | 주석 `models/chat_session.py:48`, `schemas/chat.py:192` | 서버가 직접 저장하는 값은 `completed` 뿐이다 (`chat_session_service.py:389-394`) |
@@ -240,8 +240,8 @@ erDiagram
 | 챗 필터 `time_range`: `all`, `24h`, `7d`, `30d` / `sort`: `hot`, `latest`, `quality` | `schemas/chat.py:24-25` | |
 | `source_research_logs.verdict`: `AUTO_ADOPTED`, `WATCHLIST`, `REJECTED`, `ALREADY_MONITORED` | `services/deep_researcher.py:319, 348, 355, 362, 425` | 모델 주석(`models/news.py:62`)에는 `ALREADY_MONITORED` 가 없다. 임계값: 8.2 이상 채택, 6.5 이상 워치리스트 (`deep_researcher.py:347-362`) |
 | `crawl_logs.status`: `success` | `models/news.py:48`, `manager.py:229` | |
-| 피드 `country`: `KR`, `GLOBAL` | `api/sources.py:13`, `sources_service.py:59` | |
-| 품질 임계: `QUALITY_CUTOFF_SCORE`(기본 5.0), `HIGH_SIGNAL_THRESHOLD`(기본 7.8, 루트 config.json 값 7.0) | `backend/app/config.py:64-65`, `config.json:25-26` | 사용 `llm_processor.py:528-535, 621-625` |
+| 피드 `country`: `KR`, `GLOBAL` | `api/sources.py:13`, `sources_service.py:60` | |
+| 품질 임계: `QUALITY_CUTOFF_SCORE`(기본 5.0), `HIGH_SIGNAL_THRESHOLD`(기본 7.8, 루트 config.json 값 7.0) | `backend/app/config.py:64-65`, `config.json:25-26` | 사용 `llm_processor.py:567-574, 660-664` |
 
 ## JSON 으로 저장되는 열
 | 열 | 구조 | 쓰기 / 읽기 |
@@ -255,7 +255,7 @@ erDiagram
 ## 스키마 생성·변경
 마이그레이션 도구(Alembic 등)는 없다. `requirements.txt` 에도 없다 (`backend/requirements.txt`).
 
-`ensure_db_schema()` (`backend/app/database.py:45-115`) 가 앱 시작(`main.py:15`)과 테스트 fixture(`tests/conftest.py:15`)에서 다음을 순서대로 한다.
+`ensure_db_schema()` (`backend/app/database.py:45-115`) 가 앱 시작(`main.py:25`)과 테스트 fixture(`tests/conftest.py:15`)에서 다음을 순서대로 한다.
 
 | 순서 | 동작 | 위치 |
 |---|---|---|
@@ -284,14 +284,16 @@ erDiagram
 | 실행 방식 | cwd | DB 파일 |
 |---|---|---|
 | backend 로컬 실행 (`cd backend && uvicorn app.main:app`) | `backend/` | `backend/agentlens.db` |
-| `make collect` | `backend/` (`Makefile:23`) | `backend/agentlens.db` |
+| `make collect` 직접 모드 (backend 가 없을 때, `COLLECT_MODE=direct`) | `backend/` (`Makefile:54-55`) | `backend/agentlens.db` (`DATABASE_URL` 로 바꿀 수 있다. 첫 줄에 절대 경로를 낸다) |
+| `make collect` API 모드 (backend 가 떠 있을 때) | — | 그 backend 의 DB (Docker 면 volume DB, `make dev` 면 `backend/agentlens.db`). 수집은 backend 프로세스가 한다 |
+| `make dev` | `backend/` (`scripts/dev.sh`) | `backend/agentlens.db` |
 | 저장소 루트에서 실행한 프로세스 | 루트 | `./agentlens.db` |
 | MCP 서버 (`python -m app.mcp.server`, cwd 는 `backend/`, `api/mcp.py:22-23`) | `backend/` | `backend/agentlens.db` |
 | Docker backend | `/app` | `DATABASE_URL=sqlite+aiosqlite:///./data/agentlens.db` → `/app/data/agentlens.db`, named volume `agentlens-data` (`docker-compose.yml:21, 37, 76-79`) |
 | 테스트 | — | `backend/tests/test_agentlens.db` (절대 경로, `tests/conftest.py:6-7`) |
 
 - WAL 모드라 DB 파일 옆에 `-wal`, `-shm` 파일이 생긴다. `.gitignore` 가 `*.db`, `*.db-wal`, `*.db-shm`, `test_agentlens.db` 를 제외한다 (`.gitignore:11-20`).
-- 테스트 DB 는 세션마다 지우지 않는다. fixture 는 `ensure_db_schema()` 후 id=1 행이 없을 때만 시드한다 (`tests/conftest.py:13-44`). 테스트는 실제 루트 `config.json` 과 `.env` 를 읽는다 (아래 '파일 저장소').
+- 테스트 DB 는 세션마다 지우지 않는다. fixture 는 `ensure_db_schema()` 후 id=1 행이 없을 때만 시드한다 (`tests/conftest.py:13-44`). 설정 파일은 테스트용 사본을 쓴다: 세션 fixture 가 루트 `config.json`(LLM 키 세 개와 `ollama_base_url` 을 비움)과 `sources.json` 을 세션 임시 폴더에 복사하고(`tests/conftest.py:162-180`), autouse fixture `llm_isolation` 이 `find_config_json`·`_json_data`·`sources_service._file_path`·`_mirror_path` 를 그 사본으로 돌린다(`tests/conftest.py:200-209`). 원본은 읽기만 한다 (아래 '파일 저장소').
 
 ## 파일 저장소
 
@@ -302,8 +304,8 @@ config.json 은 git 에 커밋되어 있다 (`.gitignore` 에 없음). 값은 `S
 
 | 키 | 타입 | 코드 기본값 | 매핑 Settings 필드 | 읽는 코드 |
 |---|---|---|---|---|
-| `app.project_name` | string | `"AgentLens"` | PROJECT_NAME | `main.py:28` (FastAPI title) |
-| `app.version` | string | `"0.3.1"` | VERSION | `main.py:28,52,56` |
+| `app.project_name` | string | `"AgentLens"` | PROJECT_NAME | `main.py:49` (FastAPI title) |
+| `app.version` | string | `"0.3.1"` | VERSION | `main.py:49,73,77` |
 | `app.host` | string | — | 없음 | 읽는 코드 없음 |
 | `app.port` | int | — | 없음 | 읽는 코드 없음 |
 | `app.frontend_port` | int | — | 없음 | 읽는 코드 없음 |
@@ -316,14 +318,14 @@ config.json 은 git 에 커밋되어 있다 (`.gitignore` 에 없음). 값은 `S
 | `llm.anthropic_haiku_model` | string | `"claude-haiku-5-5"` | ANTHROPIC_HAIKU_MODEL | `anthropic_provider.py:32`, `chat_service.py:397` |
 | `llm.anthropic_sonnet_model` | string | `"claude-sonnet-5-5"` | ANTHROPIC_SONNET_MODEL | `anthropic_provider.py:37` |
 | `llm.anthropic_opus_model` | string | `"claude-opus-5-5"` | ANTHROPIC_OPUS_MODEL | `anthropic_provider.py:34` |
-| `llm.gemini_api_key` | string | `""` | GEMINI_API_KEY | `llm_processor.py:131-139, 244-252` (Settings 와 별도로 config.json 을 다시 읽음) |
-| `llm.gemini_model` | string | `"gemini-3.5-flash-lite"` | GEMINI_MODEL | `llm_processor.py:141-146` |
-| `llm.openai_api_key` | string | `""` | OPENAI_API_KEY | `llm_processor.py:180-188` 외 |
-| `llm.openai_model` | string | `"gpt-4o-mini"` | OPENAI_MODEL | `llm_processor.py:189-193, 413` |
-| `llm.ollama_base_url` | string | `"http://localhost:11434"` | OLLAMA_BASE_URL | `llm_processor.py:213, 267, 437` |
-| `llm.ollama_model` | string | `"llama3.2:latest"` | OLLAMA_MODEL | `llm_processor.py:216` (스트리밍 폴백은 `qwen2.5:latest`, `llm_processor.py:439`) |
-| `llm.quality_cutoff_score` | float | 5.0 | QUALITY_CUTOFF_SCORE | `llm_processor.py:528, 621` |
-| `llm.high_signal_threshold` | float | 7.8 | HIGH_SIGNAL_THRESHOLD | `llm_processor.py:529, 622` |
+| `llm.gemini_api_key` | string | `""` | GEMINI_API_KEY | `llm_processor.py:200-208, 303-311` (Settings 와 별도로 config.json 을 다시 읽음) |
+| `llm.gemini_model` | string | `"gemini-3.5-flash-lite"` | GEMINI_MODEL | `llm_processor.py:210-215` |
+| `llm.openai_api_key` | string | `""` | OPENAI_API_KEY | `llm_processor.py:129-139` (`_resolve_openai_key`, Settings 와 별도로 config.json 을 다시 읽음) |
+| `llm.openai_model` | string | `"gpt-4o-mini"` | OPENAI_MODEL | `llm_processor.py:141-148` (`_resolve_openai_chat_model`) |
+| `llm.ollama_base_url` | string | `"http://localhost:11434"` | OLLAMA_BASE_URL | `llm_processor.py:150-160` (`_resolve_ollama_url`, Settings 가 비면 config.json 을 다시 읽음) |
+| `llm.ollama_model` | string | `"llama3.2:latest"` | OLLAMA_MODEL | `llm_processor.py:162-169` (`_resolve_ollama_generate_model`. 일괄·스트리밍 생성과 Ollama 가용 판정이 같은 값을 쓴다) |
+| `llm.quality_cutoff_score` | float | 5.0 | QUALITY_CUTOFF_SCORE | `llm_processor.py:567, 660` |
+| `llm.high_signal_threshold` | float | 7.8 | HIGH_SIGNAL_THRESHOLD | `llm_processor.py:568, 661` |
 | `scheduler.enabled` | bool | — | 없음 | 읽는 코드 없음 (스케줄러는 항상 시작) |
 | `scheduler.crawl_hours` | int[] | `[0,6,12,18]` | CRAWL_SCHEDULE_HOURS (쉼표 문자열) | `scheduler.py:9` (다음 실행 시각 계산·상태 표시만. 실제 cron 은 하드코딩) |
 | `scheduler.timezone` | string | `"UTC"` | CRAWL_TIMEZONE | `api/schedule.py:34` (표시만) |
@@ -359,22 +361,22 @@ config.json 은 git 에 커밋되어 있다 (`.gitignore` 에 없음). 값은 `S
 `POST /api/briefing/settings` 가 쓰는 키 (`backend/app/api/briefing.py:161-211`): `briefing.notion.{api_key, page_id, auto_export, enabled}`, `briefing.email.{smtp_host, smtp_port, smtp_user, smtp_password, smtp_from, smtp_to, use_tls, auto_send, enabled}`, `webhooks.{slack_webhook_url, discord_webhook_url}`. 값 `"***"` 은 비밀번호·API 키를 바꾸지 않는다는 뜻이다. 파일 전체를 다시 쓰고(`indent=2`) `settings.reload()` 를 부른다.
 
 ### sources.json
-찾는 순서 (`backend/app/services/sources_service.py:11-24`): `cwd/sources.json` → `cwd/../sources.json` → `<저장소 루트>/sources.json` → `backend/app/config/sources.json`. 모두 없으면 `backend/app/config/sources.json` 경로를 쓰고, 파일이 없으면 내장 기본값(`_default_sources`, `sources_service.py:78-99`)을 돌려준다. 파일은 읽을 때마다 다시 연다 (캐시 없음).
+찾는 순서 (`backend/app/services/sources_service.py:11-24`): `cwd/sources.json` → `cwd/../sources.json` → `<저장소 루트>/sources.json` → `backend/app/config/sources.json`. 모두 없으면 `backend/app/config/sources.json` 경로를 쓰고, 파일이 없으면 내장 기본값(`_default_sources`, `sources_service.py:79-100`)을 돌려준다. 파일은 읽을 때마다 다시 연다 (캐시 없음).
 
 구조:
 | 키 | 타입 | 내용 |
 |---|---|---|
 | `version` | string | `"1.0.0"` |
-| `updated_at` | ISO 8601 string | 저장할 때마다 갱신 (`sources_service.py:102`) |
-| `rss_feeds[]` | object[] | `{id, name, url, site_url, category_hint, country: "KR"\|"GLOBAL", enabled: bool, description, added_at?}`. `id` 는 이름을 소문자·`[^a-zA-Z0-9_]→_` 로 바꾼 값 (`sources_service.py:196`) |
+| `updated_at` | ISO 8601 string | 저장할 때마다 갱신 (`sources_service.py:103`) |
+| `rss_feeds[]` | object[] | `{id, name, url, site_url, category_hint, country: "KR"\|"GLOBAL", enabled: bool, description, added_at?}`. `id` 는 이름을 소문자·`[^a-zA-Z0-9_]→_` 로 바꾼 값 (`sources_service.py:206`) |
 | `github_sources` | object | `{enabled, search_queries: string[], monitored_repos: [{repo: "owner/name", category, enabled, description, stars_hint, added_at?}]}` |
 | `reddit_sources` | object | `{enabled, subreddits: string[], keywords: string[]}` |
 | `hackernews_sources` | object | `{enabled, queries: string[]}` |
 | `arxiv_sources` | object | `{enabled, queries: string[]}` (arXiv 검색식) |
 | `huggingface_sources` | object | `{enabled}` |
 
-- 하위 호환: `rss_feeds` 가 없으면 옛 키 `korean_sources`, `harness_and_mcp_releases`, `global_research_and_blogs` 를 `rss_feeds` 로 바꾸고, 빠진 섹션은 기본값으로 채운다 (`sources_service.py:46-76`).
-- 저장: 찾은 파일에 `.tmp` 로 쓴 뒤 교체하고, 그 경로가 `backend/app/config/sources.json` 이 아니면 그 파일에도 같은 내용을 쓴다 (`sources_service.py:101-122`).
+- 하위 호환: `rss_feeds` 가 없으면 옛 키 `korean_sources`, `harness_and_mcp_releases`, `global_research_and_blogs` 를 `rss_feeds` 로 바꾸고, 빠진 섹션은 기본값으로 채운다 (`sources_service.py:47-77`).
+- 저장: 찾은 파일에 `.tmp` 로 쓴 뒤 교체한다. 교체(`replace`)가 `OSError` 를 내면(Docker 의 단일 파일 bind mount 위 rename 은 `EBUSY`) 경고 로그를 남기고 대상 파일에 제자리로 쓴 뒤 `.tmp` 를 지운다. 그 경로가 거울 경로(`SourcesService._mirror_path`, 기본 `backend/app/config/sources.json`)가 아니면 그 파일에도 같은 내용을 쓴다 (`sources_service.py:29, 102-132`).
 - 쓰는 곳: `/api/sources` 의 RSS 추가·GitHub 레포 추가·토글·삭제 (`api/sources.py:49-90`), 후보 등록 (`source_researcher.py:385-397`), 딥 리서치 자동 채택 (`deep_researcher.py:440-450`).
 
 두 벌 비교 (2026-11-06 작업 트리 기준):
@@ -402,7 +404,7 @@ config.json 은 git 에 커밋되어 있다 (`.gitignore` 에 없음). 값은 `S
 ## 데이터 생명주기
 | 데이터 | 생성 | 갱신 | 삭제 | 보존 |
 |---|---|---|---|---|
-| news_items | 수집(`collect_all`) — 스케줄, `POST /api/schedule/trigger`, `make collect`, MCP `trigger_agentlens_crawl`, 시작 시 DB 가 비었을 때 (`main.py:18-22`). 수집 결과가 0건이면 시드 2건 저장 시도 (`manager.py:22-43, 220-221`) | 같은 `dedup_hash` 재수집 시 점수 갱신, 스크래핑 시 본문 저장 | `DELETE /api/news/all`, `POST /api/schedule/reset-and-collect` | 기간 제한 없음 |
+| news_items | 수집(`collect_all`) — 스케줄, `POST /api/schedule/trigger`, `make collect`, MCP `trigger_agentlens_crawl`, 시작 시 DB 가 비었을 때 백그라운드로 (`main.py:28-36`). 수집 결과가 0건이면 시드 2건 저장 시도 (`manager.py:22-43, 220-221`) | 같은 `dedup_hash` 재수집 시 점수 갱신, 스크래핑 시 본문 저장 | `DELETE /api/news/all`, `POST /api/schedule/reset-and-collect` | 기간 제한 없음 |
 | news_fts | 트리거로 자동 | 트리거로 자동 | 트리거로 자동 | news_items 와 같다 |
 | crawl_logs | `collect_all` 종료 시 1행 | 없음 | `reset-and-collect` 만 | 기간 제한 없음 |
 | source_research_logs | 딥 리서치(스케줄 3·15시 UTC, `POST /api/research/run-deep`) | 없음 | 없음 | 무기한 누적 |
@@ -417,7 +419,7 @@ config.json 은 git 에 커밋되어 있다 (`.gitignore` 에 없음). 값은 `S
 |---|---|---|---|---|---|
 | `DELETE /api/news/all` (`api/news.py:96-102`) | 전부 삭제 | 유지 | 유지 | 유지 (`active_source_id` 는 FK 로 NULL) | 유지 |
 | `POST /api/schedule/reset-and-collect` (`api/schedule.py:69-99`) | 전부 삭제 | 전부 삭제 | 유지 | 유지 (`active_source_id` NULL) | 유지. 이어서 백그라운드 재수집 |
-| `make reset` (`Makefile:25-27`) | `reset-and-collect` 를 `localhost:8000` 에 호출 | | | | |
+| `make reset` (`Makefile:57-73`) | `reset-and-collect` 를 `AGENTLENS_API_URL`(기본 `http://localhost:8000`) 의 backend 에 호출. 그 backend 의 DB 에서 위 행과 같다 (Docker 면 volume DB). backend 가 없거나 응답이 `started` 가 아니면 실패로 끝난다 | | | | |
 
 `reset-and-collect` 는 수집이 진행 중이면(`collector_manager.is_running`) 아무것도 지우지 않고 `already_running` 을 돌려준다 (`api/schedule.py:72-77`). `DELETE /api/news/all` 에는 이 검사가 없다.
 
@@ -426,13 +428,13 @@ config.json 은 git 에 커밋되어 있다 (`.gitignore` 에 없음). 값은 `S
 - **FTS 생성 코드 중복**: `news_fts` 와 트리거 생성 SQL 이 `database.py:73-112` 와 `services/retriever.py:65-115` 두 곳에 있다.
 - **중복 인덱스**: `chat_sessions.updated_at` 에 `index=True`(`ix_chat_sessions_updated_at`)와 명시 `idx_chat_sessions_updated_at` 이 함께 있다 (`chat_session.py:21, 32`). `news_items.id` 는 PK 인데 `index=True` 도 있다 (`models/news.py:8`).
 - **모델 주석과 코드 값 불일치**: `verdict` 주석에 `ALREADY_MONITORED` 가 빠져 있다 (`models/news.py:62` vs `deep_researcher.py:319`). `crawl_logs.error_message` 와 `status` 의 실패 값은 쓰는 코드가 없다.
-- **`HIGH_SIGNAL_THRESHOLD` 기본값 3곳 불일치**: config.py 기본 7.8 (`config.py:65`), 루트 config.json 7.0 (`config.json:26`), `getattr` 폴백 7.0 (`llm_processor.py:529`).
+- **`HIGH_SIGNAL_THRESHOLD` 기본값 3곳 불일치**: config.py 기본 7.8 (`config.py:65`), 루트 config.json 7.0 (`config.json:26`), `getattr` 폴백 7.0 (`llm_processor.py:568`).
 - **upsert 시 메시지 메타 손실**: `POST /api/chat/sessions` 의 메시지는 `model_tier`, `usage` 가 저장되지 않는다 (`chat_session_service.py:256-266`).
 - **`/api/chat/query` 비저장**: 동기 질의는 세션 DB 에 기록되지 않고 스트리밍만 기록된다 (`chat_service.py:478-575`, `806-822`).
 - **보존 정책 없음**: `news_items`, `crawl_logs`, `source_research_logs` 는 자동 삭제가 없다. `source_research_logs` 는 어떤 경로로도 지워지지 않는다.
 - **비밀값 평문 저장**: LLM 키, Notion 토큰, SMTP 비밀번호, 웹훅 URL 을 config.json 에 평문으로 저장할 수 있고 (`config.py:50-100`, `api/briefing.py:176-205`), config.json 은 git 추적 대상이다 (`.gitignore` 에 없음). `GET /api/briefing/settings` 는 웹훅 URL 을 가리지 않고 돌려준다 (`api/briefing.py:153-155`). 프론트는 웹훅 URL 을 localStorage 에 평문으로 둔다.
-- **sources.json 두 벌**: 정본이 cwd 에 따라 달라진다. Docker 에서는 동기화 사본이 컨테이너 레이어에만 남는다 (`sources_service.py:110-118`, `Dockerfile:24`).
+- **sources.json 두 벌**: 정본이 cwd 에 따라 달라진다. Docker 에서는 동기화 사본이 컨테이너 레이어에만 남는다 (`sources_service.py:120-128`, `Dockerfile:24`).
 - **DB 경로가 cwd 상대**: 실행 위치에 따라 다른 DB 파일을 쓴다. 현재 작업 트리에 `agentlens.db` 와 `backend/agentlens.db` 가 둘 다 있다(둘 다 git 제외).
-- **테스트 DB 비격리**: `test_agentlens.db` 는 실행 사이에 지우지 않으며, 테스트가 루트 config.json·`.env` 를 그대로 읽는다 (`tests/conftest.py`, `config.py:8-10, 14-25`).
-- **테스트가 루트 config.json 을 덮어쓴다**: `test_briefing_settings_get_and_post` 가 `POST /api/briefing/settings` 를 실제로 호출하고 (`tests/test_briefing_notion_email.py:145-150`), `save_json_config` 는 cwd `backend/` 의 부모인 루트 `config.json` 에 쓴다 (`config.py:161-169`). 커밋된 `config.json` 의 `briefing.notion.page_id`, `briefing.email.smtp_host`, `smtp_to` 값이 이 테스트 입력값과 같은 형태다.
+- **테스트 DB 비격리**: `test_agentlens.db` 는 실행 사이에 지우지 않는다 (`tests/conftest.py:13-44`). 설정은 격리된다: `llm_isolation` 이 LLM 환경 변수를 지우고 `settings` 의 LLM 필드를 고정하며(`tests/conftest.py:196-198`), `settings.reload()` 가 `.env` 를 다시 읽지 않게 `env_file` 을 끄고(`:204-205`), `config.json`·`sources.json` 은 세션 임시 사본을 쓴다(`:200-209`). `.env` 는 `config.py:8-10` 이 import 때 읽지만 테스트의 LLM 설정에는 반영되지 않는다.
+- **테스트의 설정 저장은 세션 사본에 간다**: `test_briefing_settings_get_and_post` 가 `POST /api/briefing/settings` 를 실제로 호출하고 (`tests/test_briefing_notion_email.py:145-150`), `save_json_config` 는 `find_config_json()` 이 돌려주는 경로에 쓴다 (`config.py:161-169`). 테스트에서는 그 경로가 세션 사본이라 루트 `config.json` 은 바뀌지 않는다 (`tests/conftest.py:201`). 커밋된 루트 `config.json` 의 `briefing.notion.page_id`, `briefing.email.smtp_host`, `smtp_to` 값은 예전 실행이 남긴 이 테스트 입력값과 같은 형태다.
 - **설정 저장 후 반영 범위**: `settings.reload()` 는 `__init__()` 을 다시 부르지만(`config.py:153-157`), 필드 기본값은 클래스 정의 시점에 읽은 config.json 값으로 정해진다(`config.py:39-100`). `merge_json_and_env` 가 다시 채우는 필드(LLM 키, 웹훅 URL 이 비어 있을 때 등, `config.py:108-142`) 밖의 Notion·SMTP 필드는 프로세스를 재시작해야 바뀐다고 코드상 판단한다. 실행해 확인하지 않았다.

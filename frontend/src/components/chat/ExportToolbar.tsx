@@ -1,7 +1,11 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Copy, Check, Download, Share2, Loader2, FileText } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Copy, Check, Download, Share2, TriangleAlert, FileText } from 'lucide-react';
+import { cn } from '@/lib/cn';
+import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 
 export interface ExportToolbarProps {
   /** 어시스턴트 메시지 고유 식별자 */
@@ -20,6 +24,12 @@ export interface ExportToolbarProps {
   className?: string;
 }
 
+/**
+ * 버튼 하나에 아이콘 + 글자. 768px 미만은 글자를 숨긴 44px 아이콘 버튼이다 (접근 이름은 `aria-label` 그대로).
+ */
+const TOOL_BUTTON_CLASSES = 'max-md:w-11 max-md:px-0';
+const TOOL_LABEL_CLASSES = 'max-md:sr-only';
+
 export default function ExportToolbar({
   messageId,
   markdownContent,
@@ -29,43 +39,27 @@ export default function ExportToolbar({
   onNotionSuccess,
   className = '',
 }: ExportToolbarProps) {
-  const [copied, setCopied] = useState(false);
+  const { status: copyStatus, copy } = useCopyToClipboard();
   const [downloading, setDownloading] = useState(false);
   const [notionSyncing, setNotionSyncing] = useState(false);
   const [notionSynced, setNotionSynced] = useState(false);
-  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
+    const timers = timersRef.current;
     return () => {
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      timers.forEach(clearTimeout);
     };
   }, []);
 
+  const later = (fn: () => void, ms: number) => {
+    timersRef.current.push(setTimeout(fn, ms));
+  };
+
   const handleCopyMarkdown = async () => {
     if (isStreaming || !markdownContent) return;
-    try {
-      await navigator.clipboard.writeText(markdownContent);
-      setCopied(true);
-      onCopySuccess?.();
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback if clipboard API fails
-      const textarea = document.createElement('textarea');
-      textarea.value = markdownContent;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      try {
-        document.execCommand('copy');
-        setCopied(true);
-        onCopySuccess?.();
-        if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-        copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
-      } catch {}
-      document.body.removeChild(textarea);
-    }
+    const ok = await copy(markdownContent);
+    if (ok) onCopySuccess?.();
   };
 
   const handleDownloadMarkdown = () => {
@@ -87,7 +81,7 @@ export default function ExportToolbar({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } finally {
-      setTimeout(() => setDownloading(false), 500);
+      later(() => setDownloading(false), 500);
     }
   };
 
@@ -100,82 +94,80 @@ export default function ExportToolbar({
       await new Promise((resolve) => setTimeout(resolve, 300));
       setNotionSynced(true);
       onNotionSuccess?.(notionPageUrl);
-      setTimeout(() => setNotionSynced(false), 3000);
+      later(() => setNotionSynced(false), 3000);
     } finally {
       setNotionSyncing(false);
     }
   };
 
+  const copyIcon =
+    copyStatus === 'copied' ? <Check /> : copyStatus === 'failed' ? <TriangleAlert /> : <Copy />;
+  const copyText = copyStatus === 'copied' ? '복사됨' : copyStatus === 'failed' ? '복사 실패' : '마크다운 복사';
+
   return (
     <div
+      role="group"
       aria-label="리포트 익스포트 툴바"
-      className={`export-toolbar flex items-center gap-1.5 pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap ${
-        isStreaming ? 'opacity-50 pointer-events-none' : ''
-      } ${className}`}
+      className={cn(
+        'export-toolbar flex flex-wrap items-center gap-1 text-xs text-fg-muted',
+        isStreaming && 'pointer-events-none opacity-50',
+        className
+      )}
     >
-      <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mr-1 flex items-center gap-1">
-        <FileText className="w-3 h-3" />
-        4단 리포트 익스포트:
+      <span className="mr-1 hidden items-center gap-1 text-xs text-fg-subtle md:inline-flex">
+        <FileText aria-hidden="true" className="size-3.5" />
+        리포트 내보내기
       </span>
 
       {/* Copy Markdown Button */}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={handleCopyMarkdown}
         disabled={isStreaming}
         aria-label="마크다운 복사"
-        className="flex items-center gap-1 px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {copied ? (
-          <>
-            <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-emerald-600 dark:text-emerald-400 font-semibold">복사됨</span>
-          </>
-        ) : (
-          <>
-            <Copy className="w-3 h-3" />
-            <span>마크다운 복사</span>
-          </>
+        title="마크다운 복사"
+        leadingIcon={copyIcon}
+        className={cn(
+          TOOL_BUTTON_CLASSES,
+          copyStatus === 'copied' && 'text-success',
+          copyStatus === 'failed' && 'text-danger'
         )}
-      </button>
+      >
+        <span aria-live="polite" className={TOOL_LABEL_CLASSES}>
+          {copyText}
+        </span>
+      </Button>
 
       {/* Download .md Button */}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={handleDownloadMarkdown}
         disabled={isStreaming || downloading}
         aria-label=".md 다운로드"
-        className="flex items-center gap-1 px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+        title=".md 다운로드"
+        leadingIcon={<Download />}
+        className={TOOL_BUTTON_CLASSES}
       >
-        <Download className="w-3 h-3" />
-        <span>.md 다운로드</span>
-      </button>
+        <span className={TOOL_LABEL_CLASSES}>.md 다운로드</span>
+      </Button>
 
       {/* Sync Notion Button */}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={handleSyncNotion}
         disabled={isStreaming || notionSyncing}
         aria-label="Notion 동기화"
-        className="flex items-center gap-1 px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+        title="Notion 동기화"
+        leadingIcon={notionSyncing ? <Spinner /> : notionSynced ? <Check /> : <Share2 />}
+        className={cn(TOOL_BUTTON_CLASSES, notionSynced && 'text-success')}
       >
-        {notionSyncing ? (
-          <>
-            <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
-            <span>Notion 연동 중...</span>
-          </>
-        ) : notionSynced ? (
-          <>
-            <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Notion 연동됨</span>
-          </>
-        ) : (
-          <>
-            <Share2 className="w-3 h-3 text-purple-600 dark:text-purple-400" />
-            <span>Notion 동기화</span>
-          </>
-        )}
-      </button>
+        <span aria-live="polite" className={TOOL_LABEL_CLASSES}>
+          {notionSyncing ? 'Notion 연동 중...' : notionSynced ? 'Notion 연동됨' : 'Notion 동기화'}
+        </span>
+      </Button>
     </div>
   );
 }

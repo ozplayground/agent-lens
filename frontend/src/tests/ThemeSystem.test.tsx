@@ -36,10 +36,10 @@ describe('Global Theme System (Cycle 1 - TDD)', () => {
       onchange: null,
       addListener: vi.fn(),
       removeListener: vi.fn(),
-      addEventListener: vi.fn((type: string, listener: any) => {
+      addEventListener: vi.fn((type: string, listener: (e: MediaQueryListEvent) => void) => {
         if (type === 'change') matchMediaListeners.push(listener);
       }),
-      removeEventListener: vi.fn((type: string, listener: any) => {
+      removeEventListener: vi.fn((type: string, listener: (e: MediaQueryListEvent) => void) => {
         if (type === 'change') {
           matchMediaListeners = matchMediaListeners.filter((l) => l !== listener);
         }

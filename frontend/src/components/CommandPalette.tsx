@@ -1,18 +1,30 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Bot, Globe, Cpu, Sun, Moon, RefreshCw, X, Laptop } from 'lucide-react';
+import { Bot, Clock, Cpu, Globe, Laptop, Moon, RefreshCw, Rss, Search, Send, Sun, Trash2, X } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
+import { Dialog } from '@/components/ui/Dialog';
+import { IconButton } from '@/components/ui/IconButton';
+import { Kbd } from '@/components/ui/Kbd';
+import { cn } from '@/lib/cn';
 
-export interface CommandActionItem {
+/** 팔레트 명령 하나. `perform` 뒤에 팔레트가 스스로 닫힌다 (`onClose`). */
+export interface PaletteCommand {
   id: string;
   title: string;
-  subtitle: string;
-  category: 'navigation' | 'theme' | 'data' | 'system';
-  icon: React.ReactNode;
+  subtitle?: string;
+  icon?: React.ReactNode;
   perform: () => void;
+  /** 오른쪽에 보이는 단축키 표시 */
   shortcut?: string;
+  /** true 면 보이지만 실행되지 않는다 (`aria-disabled`). */
+  disabled?: boolean;
+}
+
+/** 이전 이름. */
+export interface CommandActionItem extends PaletteCommand {
+  category?: 'navigation' | 'theme' | 'data' | 'system';
 }
 
 export interface CommandPaletteProps {
@@ -21,253 +33,284 @@ export interface CommandPaletteProps {
   onOpenSources?: () => void;
   onOpenMcp?: () => void;
   onTriggerCollect?: () => void;
+  /** 있으면 `수집 스케줄 보기` 명령을 더한다. */
+  onOpenSchedule?: () => void;
+  /** 있으면 `공유 & 알림 설정 열기` 명령을 더한다. */
+  onOpenSettings?: () => void;
+  /** 있으면 `RSS 피드 열기` 명령을 더한다 (새 탭). */
+  rssUrl?: string;
+  /** 있으면 `수집 데이터 초기화 & 재수집` 명령을 더한다 (확인 창을 연다). */
+  onRequestReset?: () => void;
+  /** true 면 초기화 명령을 비활성으로 둔다 (수집 중). */
+  resetDisabled?: boolean;
+  /** 주면 명령 목록을 통째로 바꾼다 (챗 화면). */
+  commands?: PaletteCommand[];
 }
 
-export default function CommandPalette({
-  isOpen = false,
+/**
+ * 커맨드 팔레트. `Dialog placement="top"` + combobox/listbox 패턴.
+ * Escape 는 오버레이 스택이, ⌘K 는 화면의 헤더가 처리한다 (자체 window 리스너 없음).
+ * 닫히면 내용이 언마운트되어 검색어·선택이 초기화된다.
+ */
+export default function CommandPalette(props: CommandPaletteProps) {
+  if (!props.isOpen) return null;
+  return <PaletteDialog {...props} />;
+}
+
+function PaletteDialog({
   onClose,
   onOpenSources,
   onOpenMcp,
   onTriggerCollect,
+  onOpenSchedule,
+  onOpenSettings,
+  rssUrl,
+  onRequestReset,
+  resetDisabled = false,
+  commands,
 }: CommandPaletteProps) {
   const router = useRouter();
-  const { theme, resolvedTheme, toggleTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const baseId = useId();
+  const listId = `${baseId}-list`;
+  const optionId = (index: number) => `${baseId}-option-${index}`;
 
-  const actions: CommandActionItem[] = useMemo(() => [
-    {
-      id: 'chat',
-      title: 'AI 챗 워크스페이스 이동',
-      subtitle: '기술 소식 기반 심층 질의응답 및 에이전틱 리서치',
-      category: 'navigation',
-      icon: <Bot className="w-4 h-4 text-blue-500" />,
-      perform: () => {
-        router.push('/chat');
-        onClose?.();
+  const defaultCommands = useMemo<PaletteCommand[]>(() => {
+    const list: PaletteCommand[] = [
+      {
+        id: 'chat',
+        title: 'AI 챗 워크스페이스 이동',
+        subtitle: '기술 소식 기반 심층 질의응답 및 에이전틱 리서치',
+        icon: <Bot />,
+        perform: () => router.push('/chat'),
       },
-      shortcut: 'C',
-    },
-    {
-      id: 'theme',
-      title:
-        theme === 'system'
-          ? '라이트 모드로 전환 (현재 시스템)'
-          : theme === 'dark'
-          ? '시스템 모드로 전환'
-          : '다크 모드로 전환',
-      subtitle: '시스템 및 개인 선호 테마 순환 토글 (Light -> Dark -> System)',
-      category: 'theme',
-      icon:
-        theme === 'dark' ? (
-          <Moon className="w-4 h-4 text-indigo-400" />
-        ) : theme === 'system' ? (
-          <Laptop className="w-4 h-4 text-blue-500" />
-        ) : (
-          <Sun className="w-4 h-4 text-amber-500" />
-        ),
-      perform: () => {
-        toggleTheme();
-        onClose?.();
+      {
+        id: 'theme',
+        title:
+          theme === 'system'
+            ? '라이트 모드로 전환 (현재 시스템)'
+            : theme === 'dark'
+              ? '시스템 모드로 전환'
+              : '다크 모드로 전환',
+        subtitle: '시스템 및 개인 선호 테마 순환 토글 (Light -> Dark -> System)',
+        icon: theme === 'dark' ? <Moon /> : theme === 'system' ? <Laptop /> : <Sun />,
+        perform: () => toggleTheme(),
+        shortcut: 'T',
       },
-      shortcut: 'T',
-    },
-    {
-      id: 'sources',
-      title: '소스 관리 & AI 리서처 열기',
-      subtitle: 'RSS 피드 및 GitHub 소스 등록, 자율 소스 탐색',
-      category: 'data',
-      icon: <Globe className="w-4 h-4 text-blue-500" />,
-      perform: () => {
-        onOpenSources?.();
-        onClose?.();
+      {
+        id: 'sources',
+        title: '소스 관리 & AI 리서처 열기',
+        subtitle: 'RSS 피드 및 GitHub 소스 등록, 자율 소스 탐색',
+        icon: <Globe />,
+        perform: () => onOpenSources?.(),
       },
-    },
-    {
-      id: 'mcp',
-      title: 'FastMCP 도구 설정 열기',
-      subtitle: 'Claude Desktop 및 에이전트 연동 가이드',
-      category: 'system',
-      icon: <Cpu className="w-4 h-4 text-purple-500" />,
-      perform: () => {
-        onOpenMcp?.();
-        onClose?.();
+      {
+        id: 'mcp',
+        title: 'FastMCP 도구 설정 열기',
+        subtitle: 'Claude Desktop 및 에이전트 연동 가이드',
+        icon: <Cpu />,
+        perform: () => onOpenMcp?.(),
       },
-    },
-    {
-      id: 'collect',
-      title: '최신 소식 즉시 수집 트리거',
-      subtitle: '등록된 모든 소스에서 즉시 신규 기술 소식 크롤링',
-      category: 'data',
-      icon: <RefreshCw className="w-4 h-4 text-emerald-500" />,
-      perform: () => {
-        onTriggerCollect?.();
-        onClose?.();
+      {
+        id: 'collect',
+        title: '최신 소식 즉시 수집 트리거',
+        subtitle: '등록된 모든 소스에서 즉시 신규 기술 소식 크롤링',
+        icon: <RefreshCw />,
+        perform: () => onTriggerCollect?.(),
       },
-    },
-  ], [router, theme, toggleTheme, onClose, onOpenSources, onOpenMcp, onTriggerCollect]);
+    ];
+    if (onOpenSchedule) {
+      list.push({
+        id: 'schedule',
+        title: '수집 스케줄 보기',
+        subtitle: '자동 수집 주기와 다음 예정 시각',
+        icon: <Clock />,
+        perform: onOpenSchedule,
+      });
+    }
+    if (onOpenSettings) {
+      list.push({
+        id: 'settings',
+        title: '공유 & 알림 설정 열기',
+        subtitle: 'Notion · 이메일 · 웹훅 브리핑 연동',
+        icon: <Send />,
+        perform: onOpenSettings,
+      });
+    }
+    if (rssUrl) {
+      list.push({
+        id: 'rss',
+        title: 'RSS 피드 열기',
+        subtitle: '새 탭에서 RSS 피드 주소를 엽니다',
+        icon: <Rss />,
+        perform: () => {
+          window.open(rssUrl, '_blank', 'noopener,noreferrer');
+        },
+      });
+    }
+    if (onRequestReset) {
+      list.push({
+        id: 'reset',
+        title: '수집 데이터 초기화 & 재수집',
+        subtitle: resetDisabled
+          ? '수집 중에는 초기화할 수 없습니다'
+          : '저장된 소식을 모두 지우고 처음부터 다시 수집 (확인 후 실행)',
+        icon: <Trash2 />,
+        perform: onRequestReset,
+        disabled: resetDisabled,
+      });
+    }
+    return list;
+  }, [router, theme, toggleTheme, onOpenSources, onOpenMcp, onTriggerCollect, onOpenSchedule, onOpenSettings, rssUrl, onRequestReset, resetDisabled]);
+
+  const allCommands = commands ?? defaultCommands;
 
   const filtered = useMemo(() => {
     const trimmed = search.trim().toLowerCase();
-    if (!trimmed) return actions;
-    return actions.filter(
-      (act) =>
-        act.title.toLowerCase().includes(trimmed) ||
-        act.subtitle.toLowerCase().includes(trimmed)
+    if (!trimmed) return allCommands;
+    return allCommands.filter(
+      (cmd) => cmd.title.toLowerCase().includes(trimmed) || (cmd.subtitle ?? '').toLowerCase().includes(trimmed)
     );
-  }, [actions, search]);
+  }, [allCommands, search]);
 
+  const activeIndex = filtered.length === 0 ? -1 : Math.min(selectedIndex, filtered.length - 1);
+
+  // 선택 항목이 목록 밖이면 보이게 스크롤한다 (DOM 동기화만).
   useEffect(() => {
-    setSelectedIndex(0);
-  }, [search]);
+    if (activeIndex < 0) return;
+    document.getElementById(`${baseId}-option-${activeIndex}`)?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex, baseId]);
 
-  useEffect(() => {
-    if (!isOpen) return;
+  const close = () => onClose?.();
 
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        onClose?.();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose?.();
-      }
-    };
+  const run = (cmd: PaletteCommand) => {
+    if (cmd.disabled) return;
+    cmd.perform();
+    close();
+  };
 
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, onClose]);
-
-  const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex((prev) => (filtered.length > 0 ? (prev + 1) % filtered.length : 0));
+      setSelectedIndex(filtered.length > 0 ? (activeIndex + 1) % filtered.length : 0);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex((prev) =>
-        filtered.length > 0 ? (prev - 1 + filtered.length) % filtered.length : 0
-      );
+      setSelectedIndex(filtered.length > 0 ? (activeIndex - 1 + filtered.length) % filtered.length : 0);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (filtered.length > 0 && filtered[selectedIndex]) {
-        filtered[selectedIndex].perform();
-      }
+      if (activeIndex >= 0) run(filtered[activeIndex]);
     }
-  }, [filtered, selectedIndex]);
+  };
 
-  if (!isOpen) return null;
+  const header = (
+    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border pr-2 pl-4">
+      <Search aria-hidden="true" className="size-4 shrink-0 text-fg-subtle" />
+      <input
+        ref={inputRef}
+        type="text"
+        role="combobox"
+        aria-label="명령어 검색"
+        aria-expanded="true"
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined}
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setSelectedIndex(0);
+        }}
+        onKeyDown={handleInputKeyDown}
+        placeholder="명령어 검색 또는 바로가기"
+        autoComplete="off"
+        className="h-11 min-w-0 flex-1 border-none bg-transparent p-0 text-base text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none md:text-sm"
+      />
+      <IconButton label="닫기" icon={<X />} onClick={close} />
+    </div>
+  );
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="커맨드 팔레트"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-xl rounded-xl bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#30363d] shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Search Bar */}
-        <div className="flex items-center px-4 py-3 border-b border-slate-200 dark:border-[#30363d] gap-3">
-          <Search className="w-4 h-4 text-slate-400 shrink-0" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder="명령어 검색 또는 바로가기... (ESC로 닫기)"
-            className="flex-1 bg-transparent text-sm text-slate-900 dark:text-[#f0f6fc] placeholder-slate-400 outline-none border-none p-0"
-            autoFocus
-          />
-          <button
-            onClick={onClose}
-            type="button"
-            aria-label="닫기"
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-1 rounded"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Action Items Listbox */}
-        <div
-          role="listbox"
-          aria-label="명령어 목록"
-          className="max-h-80 overflow-y-auto p-2 space-y-1 overscroll-contain"
-        >
-          {filtered.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
-              검색된 명령어가 없습니다.
-            </div>
-          ) : (
-            filtered.map((item, idx) => {
-              const isSelected = idx === selectedIndex;
-              return (
-                <button
-                  key={item.id}
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={item.perform}
-                  type="button"
-                  onMouseEnter={() => setSelectedIndex(idx)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors cursor-pointer group ${
-                    isSelected
-                      ? 'bg-blue-50 dark:bg-[#1f2937] border-l-2 border-blue-600 text-blue-900 dark:text-blue-100'
-                      : 'hover:bg-slate-100 dark:hover:bg-[#21262d] text-slate-800 dark:text-[#f0f6fc]'
-                  }`}
-                >
-                  <div
-                    className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
-                      isSelected
-                        ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400'
-                        : 'bg-slate-100 dark:bg-[#21262d]'
-                    }`}
-                  >
-                    {item.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold truncate">{item.title}</div>
-                    <div className="text-[11px] text-slate-500 dark:text-[#8b949e] truncate">
-                      {item.subtitle}
-                    </div>
-                  </div>
-                  {item.shortcut && (
-                    <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#21262d] border border-slate-200 dark:border-[#30363d] text-[10px] font-mono text-slate-500 dark:text-[#8b949e]">
-                      {item.shortcut}
-                    </kbd>
-                  )}
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        {/* Footer Shortcut Hints */}
-        <div className="px-4 py-2 border-t border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] flex items-center justify-between text-[11px] text-slate-500 dark:text-[#8b949e]">
+    <Dialog
+      open
+      onClose={close}
+      size="md"
+      placement="top"
+      ariaLabel="커맨드 팔레트"
+      header={header}
+      initialFocusRef={inputRef}
+      bodyClassName="p-2"
+      footer={
+        <div className="hidden w-full items-center justify-between text-xs text-fg-subtle sm:flex">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 rounded bg-slate-200 dark:bg-[#21262d] text-[10px] font-mono">
-                ↑↓
-              </kbd>
+              <Kbd>↑↓</Kbd>
               <span>탐색</span>
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 rounded bg-slate-200 dark:bg-[#21262d] text-[10px] font-mono">
-                ↵
-              </kbd>
+              <Kbd>↵</Kbd>
               <span>실행</span>
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-[#21262d] text-[10px] font-mono">
-              ESC
-            </kbd>
+          <span className="flex items-center gap-1">
+            <Kbd>Esc</Kbd>
             <span>닫기</span>
-          </div>
+          </span>
         </div>
-      </div>
-    </div>
+      }
+    >
+      <ul id={listId} role="listbox" aria-label="명령어 목록" className="space-y-1">
+        {filtered.length === 0 ? (
+          <li role="presentation" className="py-8 text-center text-sm text-fg-muted">
+            검색된 명령어가 없습니다.
+          </li>
+        ) : (
+          filtered.map((cmd, idx) => {
+            const isSelected = idx === activeIndex;
+            return (
+              <li
+                key={cmd.id}
+                id={optionId(idx)}
+                role="option"
+                aria-selected={isSelected}
+                aria-disabled={cmd.disabled ? true : undefined}
+                onClick={() => run(cmd)}
+                onMouseMove={() => {
+                  if (!isSelected) setSelectedIndex(idx);
+                }}
+                className={cn(
+                  'flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 transition-colors duration-150 ease-standard',
+                  cmd.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+                  isSelected ? 'bg-accent-soft text-accent-soft-fg' : 'text-fg hover:bg-surface-muted'
+                )}
+              >
+                {cmd.icon ? (
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'flex size-8 shrink-0 items-center justify-center rounded-lg [&>svg]:size-4',
+                      isSelected ? 'bg-surface text-accent' : 'bg-surface-muted text-fg-muted'
+                    )}
+                  >
+                    {cmd.icon}
+                  </span>
+                ) : null}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{cmd.title}</span>
+                  {cmd.subtitle ? (
+                    <span className={cn('block truncate text-xs', isSelected ? 'text-accent-soft-fg' : 'text-fg-muted')}>
+                      {cmd.subtitle}
+                    </span>
+                  ) : null}
+                </span>
+                {cmd.shortcut ? <Kbd>{cmd.shortcut}</Kbd> : null}
+              </li>
+            );
+          })
+        )}
+      </ul>
+    </Dialog>
   );
 }

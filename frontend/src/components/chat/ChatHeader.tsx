@@ -2,12 +2,17 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Globe, Target, Bot, History } from 'lucide-react';
-import { ScopeMode, ModelTier } from '@/types/chat';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Command, History, MoreHorizontal, Plus } from 'lucide-react';
+import { ScopeMode, ChatSourceDetailResponse } from '@/types/chat';
 import { NewsItem } from '@/types/news';
-import { ChatSourceDetailResponse } from '@/types/chat';
-import ActiveSourceChip from './ActiveSourceChip';
-import ChatModelSelector from './ChatModelSelector';
+import { useTheme, type ThemeMode } from '@/context/ThemeContext';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useHotkey } from '@/hooks/useHotkey';
+import { overlayStack } from '@/lib/overlay-stack';
+import { IconButton } from '@/components/ui/IconButton';
+import { MenuButton, type MenuItem } from '@/components/ui/Menu';
+import ChatContextBar from './ChatContextBar';
 
 export interface ChatHeaderProps {
   scopeMode: ScopeMode;
@@ -18,10 +23,21 @@ export interface ChatHeaderProps {
   onToggleHistoryDrawer?: () => void;
   isHistoryOpen?: boolean;
   isStreaming: boolean;
+  /** false 면 새 대화 버튼을 그리지 않는다 (기본 true). */
   showNewChatButton?: boolean;
-  selectedTier?: ModelTier;
-  onSelectTier?: (tier: ModelTier) => void;
+  /** 데스크톱 사이드바가 열려 있는지. 1024px 이상에서 열려 있으면 새 대화 버튼을 숨긴다 (사이드바에 있다). */
+  isSidebarOpen?: boolean;
+  /** 커맨드 팔레트가 열려 있는지 (⌘K 로 닫기 판정). */
+  isCommandPaletteOpen?: boolean;
+  /** 커맨드 팔레트 열기/닫기. 주면 팔레트 버튼·메뉴 항목과 ⌘K 를 단다. */
+  onToggleCommandPalette?: () => void;
 }
+
+const THEME_OPTIONS: { mode: ThemeMode; label: string }[] = [
+  { mode: 'light', label: '라이트' },
+  { mode: 'dark', label: '다크' },
+  { mode: 'system', label: '시스템' },
+];
 
 export default function ChatHeader({
   scopeMode,
@@ -33,122 +49,104 @@ export default function ChatHeader({
   isHistoryOpen = false,
   isStreaming,
   showNewChatButton = true,
-  selectedTier,
-  onSelectTier,
+  isSidebarOpen = false,
+  isCommandPaletteOpen = false,
+  onToggleCommandPalette,
 }: ChatHeaderProps) {
+  const router = useRouter();
+  const { theme, setTheme } = useTheme();
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const isTabletUp = useMediaQuery('(min-width: 768px)');
+
+  // ⌘K / Ctrl+K: 팔레트가 맨 위면 닫고, 다른 레이어가 열려 있으면 무시, 아니면 연다 (spec 설계 7).
+  useHotkey(
+    'mod+k',
+    () => {
+      if (!onToggleCommandPalette) return;
+      const depth = overlayStack.getLayers().length;
+      if (isCommandPaletteOpen) {
+        if (depth <= 1) onToggleCommandPalette();
+        return;
+      }
+      if (depth > 0) return;
+      onToggleCommandPalette();
+    },
+    { enabled: Boolean(onToggleCommandPalette), allowInInputs: true }
+  );
+
+  const showNewChat = showNewChatButton && (!isDesktop || !isSidebarOpen);
+
+  const menuItems: MenuItem[] = [
+    { type: 'group', label: '테마' },
+    ...THEME_OPTIONS.map(
+      ({ mode, label }): MenuItem => ({
+        type: 'radio',
+        label,
+        checked: theme === mode,
+        onSelect: () => setTheme(mode),
+      })
+    ),
+    { type: 'separator' },
+    { type: 'item', label: '뉴스 피드로 이동', icon: <ArrowLeft />, onSelect: () => router.push('/') },
+  ];
+  if (onToggleCommandPalette && !isTabletUp) {
+    menuItems.push({ type: 'item', label: '커맨드 팔레트', icon: <Command />, onSelect: onToggleCommandPalette });
+  }
+
   return (
-    <header className="border-b border-slate-200 bg-white/95 backdrop-blur-xs sticky top-0 z-30 px-3 sm:px-6 py-2.5 shadow-2xs">
-      <div className="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-        {/* Left: Back to Feed & Title */}
-        <div className="flex items-center gap-3">
+    <>
+      <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border bg-surface/95 backdrop-blur">
+        <div className="flex h-full items-center gap-1 px-2 md:gap-2 md:px-4">
+          {/* 뒤로 가기가 맨 왼쪽 (R43) */}
           <Link
             href="/"
-            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer"
             aria-label="피드로 돌아가기"
             title="뉴스 피드로 돌아가기"
+            className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-muted transition-colors duration-150 ease-standard hover:bg-surface-muted hover:text-fg md:h-9 md:min-w-9"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden xs:inline">피드</span>
+            <ArrowLeft aria-hidden="true" className="size-5 md:size-4" />
+            <span className="hidden md:inline">피드</span>
           </Link>
 
-          <div className="h-4 w-px bg-slate-200" />
-
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-blue-600 text-white flex items-center justify-center shadow-2xs">
-              <Bot className="w-3.5 h-3.5" />
-            </div>
-            <span className="text-sm font-bold text-slate-900 tracking-tight">
-              AgentLens <span className="text-blue-600">AI 챗</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Center / Scope Control & Active Source */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div
-            role="group"
-            aria-label="검색 스코프 모드"
-            className="inline-flex p-0.5 rounded-lg bg-slate-100 border border-slate-200 text-xs font-medium text-slate-600"
-          >
-            <button
-              type="button"
-              onClick={() => onScopeChange('scoped')}
-              aria-pressed={scopeMode === 'scoped'}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                scopeMode === 'scoped'
-                  ? 'bg-white text-indigo-700 font-semibold shadow-2xs'
-                  : 'hover:text-slate-900 text-slate-600'
-              }`}
-            >
-              <Target className="w-3.5 h-3.5 text-indigo-600" />
-              <span>단일 기사 (Scoped)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onScopeChange('global')}
-              aria-pressed={scopeMode === 'global'}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                scopeMode === 'global'
-                  ? 'bg-white text-blue-700 font-semibold shadow-2xs'
-                  : 'hover:text-slate-900 text-slate-600'
-              }`}
-            >
-              <Globe className="w-3.5 h-3.5 text-blue-600" />
-              <span>전체 코퍼스 (Global)</span>
-            </button>
-          </div>
-
-          {activeSource && (
-            <div className="shrink-0">
-              <ActiveSourceChip
-                source={activeSource}
-                onRemove={onRemoveSource}
-                disabled={isStreaming}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Right: Actions (Model Selector #1, History Drawer, New Chat) */}
-        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-          {selectedTier && onSelectTier && (
-            <ChatModelSelector
-              selectedTier={selectedTier}
-              onSelectTier={onSelectTier}
-              isStreaming={isStreaming}
-              variant="header-chip"
-            />
-          )}
-
-          {onToggleHistoryDrawer && (
-            <button
-              type="button"
+          {onToggleHistoryDrawer ? (
+            <IconButton
+              label="대화 기록 보기"
+              icon={<History />}
               onClick={onToggleHistoryDrawer}
-              aria-label="대화 기록 보기"
               aria-expanded={isHistoryOpen}
-              aria-controls="chat-history-drawer"
-              title="대화 기록"
-              className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors text-xs cursor-pointer border border-slate-200"
-            >
-              <History className="w-4 h-4" />
-            </button>
-          )}
+              // 가리키는 요소는 열렸을 때만 DOM 에 있다 (접힌 사이드바는 null, 드로어는 열릴 때 포털) — spec 14.7 C-1.
+              aria-controls={isHistoryOpen ? (isDesktop ? 'chat-history-sidebar' : 'chat-history-drawer') : undefined}
+            />
+          ) : null}
 
-          {showNewChatButton && (
-            <button
-              type="button"
-              onClick={onNewChat}
-              disabled={isStreaming}
-              aria-label="새 대화 시작"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>새 대화</span>
-            </button>
-          )}
+          <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-fg">AI 챗</h1>
+
+          <div className="flex shrink-0 items-center gap-1">
+            {showNewChat ? (
+              <IconButton label="새 대화 시작" icon={<Plus />} onClick={onNewChat} disabled={isStreaming} />
+            ) : null}
+
+            {onToggleCommandPalette ? (
+              <IconButton
+                label="커맨드 팔레트 열기"
+                icon={<Command />}
+                onClick={onToggleCommandPalette}
+                className="max-md:hidden"
+              />
+            ) : null}
+
+            <MenuButton label="더보기" icon={<MoreHorizontal />} items={menuItems} align="end" />
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      <ChatContextBar
+        scopeMode={scopeMode}
+        onScopeChange={onScopeChange}
+        activeSource={activeSource}
+        onRemoveSource={onRemoveSource}
+        isStreaming={isStreaming}
+      />
+    </>
   );
 }

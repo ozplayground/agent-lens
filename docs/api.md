@@ -1,6 +1,6 @@
 # API 명세: AgentLens
 
-Updated: 2026-11-06
+Updated: 2026-11-09
 
 이 문서는 backend 코드(`backend/app/`)에서 역으로 정리한 HTTP API 명세다. 정적 OpenAPI 파일은 없고, 런타임 `/docs`·`/openapi.json` 은 FastAPI 가 만든다. 아래 내용은 코드에서 확인한 사실만 적는다. 서버와 테스트는 실행하지 않았다.
 
@@ -9,7 +9,7 @@ Updated: 2026-11-06
 ### 베이스 URL과 경로
 - backend 는 `uvicorn app.main:app` 으로 :8000 에서 뜬다 (`docker-compose.yml` 의 `BACKEND_PORT` 기본 8000).
 - 업무 API 는 모두 `/api` 접두사 아래에 있다. `api_router = APIRouter(prefix="/api")` 가 라우터 10개(news, schedule, stats, mcp, briefing, trends, webhook, sources, research, chat)를 묶는다 (`backend/app/api/router.py:13`).
-- 접두사 밖의 엔드포인트는 `GET /`, `GET /health` 둘이다 (`backend/app/main.py:50`, `:54`). FastAPI 기본값이 그대로라 `/docs`, `/redoc`, `/openapi.json` 도 열린다 (`backend/app/main.py:28`, `docs_url` 등을 끄지 않는다).
+- 접두사 밖의 엔드포인트는 `GET /`, `GET /health` 둘이다 (`backend/app/main.py:71`, `:75`). FastAPI 기본값이 그대로라 `/docs`, `/redoc`, `/openapi.json` 도 열린다 (`backend/app/main.py:49`, `docs_url` 등을 끄지 않는다).
 
 ### 프록시와 직접 연결
 - 프론트는 브라우저에서 상대 경로 `/api/...` 를 부른다. Next rewrite 가 `/api/:path*` 를 `${INTERNAL_API_URL}/api/:path*`(기본 `http://127.0.0.1:8000`)로 넘긴다 (`frontend/next.config.ts`). 서버 측 렌더링에서는 `INTERNAL_API_URL` → `NEXT_PUBLIC_API_URL` → `http://127.0.0.1:8000` 순으로 베이스를 정한다 (`frontend/src/lib/api.ts:3`).
@@ -20,7 +20,7 @@ Updated: 2026-11-06
 - 없다. 어떤 엔드포인트에도 의존성(Depends) 기반 인증, API 키 검사, 세션 검사가 없다. 쓰기·삭제·외부 발송 엔드포인트도 마찬가지다.
 
 ### CORS
-- `CORSMiddleware(allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])` (`backend/app/main.py:29`).
+- `CORSMiddleware(allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])` (`backend/app/main.py:50`).
 - `settings.CORS_ORIGINS` (`backend/app/config.py:45`) 는 정의만 있고 `main.py` 는 이를 읽지 않고 `["*"]` 를 직접 넣는다.
 
 ### Content-Type
@@ -35,7 +35,7 @@ Updated: 2026-11-06
 | HTTPException | `{"detail": "<메시지 문자열>"}` | news, briefing, webhook, sources, research |
 | 요청 검증 실패 (FastAPI 기본) | 422, `{"detail": [{"type", "loc", "msg", "input", ...}]}` | 쿼리·경로·본문 모델 바인딩을 쓰는 모든 엔드포인트. 기본 핸들러를 덮어쓰지 않는다 |
 | chat ErrorResponse | `{"error_code": "ERR_...", "message": "...", "details": null 또는 {"error": "..."}}` | chat 라우터 전부 (`JSONResponse` 로 직접 만든다) |
-| 전역 예외 처리 | 500, `{"detail": "Internal server error occurred. Please check server logs.", "error": "<str(exc)>"}` | 처리하지 않은 모든 예외 (`backend/app/main.py:37`). 예외 문자열을 그대로 응답에 싣는다 |
+| 전역 예외 처리 | 500, `{"detail": "Internal server error occurred. Please check server logs.", "error": "<str(exc)>"}` | 처리하지 않은 모든 예외 (`backend/app/main.py:58`). 예외 문자열을 그대로 응답에 싣는다 |
 
 - 실패를 200 으로 돌려주는 엔드포인트도 있다. `POST /api/research/inspect-url` 은 접속 실패도 200 과 `"status": "error"` 로 응답하고, `POST /api/schedule/trigger`, `POST /api/schedule/reset-and-collect`, `POST /api/research/run-deep` 은 이미 실행 중이면 200 과 `"status": "already_running"` 을 준다.
 
@@ -167,7 +167,7 @@ Updated: 2026-11-06
 | `question` | string | 예 | — | 길이 제약 없음. 빈 문자열도 통과한다 |
 
 - 응답 200: `AskQuestionResponse` `{"news_id": int, "question": str, "answer": str, "model_used": str | null}`
-- 동작: `llm_processor.answer_question_with_meta` 가 메모리 캐시(`제목:질문 소문자` 키)를 먼저 보고, 없으면 `generate_live_answer`(Anthropic → OpenAI → Ollama)를 부른다. LLM 이 모두 실패하면 예외를 삼키고 휴리스틱 답변을 만들며 `model_used` 는 `"AgentLens Heuristic Engine"` 이다. 그래서 LLM 실패가 HTTP 오류로 드러나지 않는다 (`backend/app/services/llm_processor.py:717`, `:463`).
+- 동작: `llm_processor.answer_question_with_meta` 가 메모리 캐시(`제목:질문 소문자` 키)를 먼저 보고, 없으면 `generate_live_answer`(Anthropic → OpenAI → Ollama)를 부른다. LLM 이 모두 실패하면 예외를 삼키고 휴리스틱 답변을 만들며 `model_used` 는 `"AgentLens Heuristic Engine"` 이다. 그래서 LLM 실패가 HTTP 오류로 드러나지 않는다 (`backend/app/services/llm_processor.py:756`, `:502`).
 - 오류: 404 `{"detail": "News item not found"}`, 422 (본문 검증 실패).
 - 부수 효과: 외부 LLM 호출. 프로세스 메모리 캐시 `_qa_cache` 에 저장 (크기 제한 코드는 확인하지 못했다).
 - 관련 코드: `backend/app/api/news.py:111`
@@ -178,7 +178,7 @@ Updated: 2026-11-06
 - 응답 200: `text/event-stream`, 헤더 `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`.
 - 오류: 404 `{"detail": "News item not found"}` (스트림을 열기 전에 확인), 422.
 - 부수 효과: 외부 LLM 스트리밍 호출(Anthropic → OpenAI SDK, 둘 다 실패하면 휴리스틱). 성공한 답은 `_qa_cache` 에 저장.
-- 관련 코드: `backend/app/api/news.py:137`, `backend/app/services/llm_processor.py:816`
+- 관련 코드: `backend/app/api/news.py:137`, `backend/app/services/llm_processor.py:855`
 
 ### GET /api/news/feed/rss.xml
 - 최신 뉴스 50건을 RSS 2.0 XML 로 돌려준다.
@@ -268,7 +268,7 @@ chat 라우터의 오류는 모두 `ErrorResponse` 형식(`{"error_code", "messa
 | 401 | `ERR_CLAUDE_API_KEY_MISSING` | Anthropic 키 없음 또는 인증 실패 |
 | 429 | `ERR_CLAUDE_QUOTA_EXCEEDED` | 코드상 분기는 있다. 다만 `generate_live_answer` 가 Anthropic 429 를 `LLMQuotaExceededException` 으로 바꿔 던지므로 실제로는 아래 `ERR_LLM_QUOTA_EXCEEDED` 가 나갈 것으로 보인다 |
 | 529 | `ERR_CLAUDE_OVERLOADED` | Anthropic 503/529 |
-| 503 | `ERR_LLM_PROVIDER_UNAVAILABLE` | 쓸 수 있는 LLM 키·Ollama 가 없음 |
+| 503 | `ERR_LLM_PROVIDER_UNAVAILABLE` | 쓸 수 있는 LLM 이 없음: Anthropic·OpenAI 키가 없고, Ollama 는 주소가 없거나 `/api/tags` 가 1초 안에 200 이 아니거나 설정 모델(`OLLAMA_MODEL`)이 설치돼 있지 않음. 본문은 같고 원인은 서버 로그에만 남는다 |
 | 502 | `ERR_LLM_UPSTREAM_FAILED` | 모든 프로바이더 호출 실패 |
 | 429 | `ERR_LLM_QUOTA_EXCEEDED` | Anthropic/OpenAI 429 |
 | 500 | `ERR_SERVER_INTERNAL` | 그 밖의 예외. `model_tier`·`filters`·`top_k`·`history` 의 Pydantic 검증 실패도 여기로 떨어진다 (400 이 아님). `details.error` 에 예외 문자열 |
@@ -289,7 +289,7 @@ chat 라우터의 오류는 모두 `ErrorResponse` 형식(`{"error_code", "messa
 | 400 | `ERR_CHAT_PAYLOAD_TOO_LARGE` | 2000자 초과 |
 | 400 | `ERR_INVALID_SCOPE_PARAM` | `scope` 값 오류 |
 | 404 | `ERR_HANDOVER_SOURCE_NOT_FOUND` | scoped 인데 `source_id` 가 없거나 기사가 없음 |
-| 503 | `ERR_LLM_PROVIDER_UNAVAILABLE` | `check_provider_available()` 실패 (키·Ollama 없음) |
+| 503 | `ERR_LLM_PROVIDER_UNAVAILABLE` | `check_provider_available()` 실패 (키 없음, Ollama 연결 안 됨, 또는 Ollama 설정 모델 미설치). 스트림을 열기 전에 판정한다 |
 | 401/429/529/502 | `ERR_CLAUDE_API_KEY_MISSING` 등 | 핸들러에 분기는 있으나 `check_provider_available()` 은 `LLMProviderUnavailableException` 만 던진다. 나머지 분기가 실행되는 경로는 확인하지 못했다 |
 | 500 | (전역 형식 `{"detail", "error"}`) | `ChatStreamRequest(**body)` 가 try 밖에 있어 `model_tier`·`filters`·`top_k` 등 검증 실패가 전역 예외 처리로 간다 (`backend/app/api/chat.py:406`) |
 
@@ -477,7 +477,7 @@ chat 라우터의 오류는 모두 `ErrorResponse` 형식(`{"error_code", "messa
 | `discord_webhook_url` | string | `webhooks.discord_webhook_url` | URL 검증 없음 |
 
 - 응답 200: `{"success": true, "message": "설정이 성공적으로 저장되었습니다."}`
-- 오류: 500 `{"detail": "설정 파일(config.json) 저장에 실패했습니다."}` — 파일 쓰기 실패. `docker-compose.yml` 은 `./config.json:/app/config.json:ro` 로 읽기 전용 마운트하므로 컨테이너에서는 이 경로가 실패할 것으로 보인다 (실행해 확인하지 않았다).
+- 오류: 500 `{"detail": "설정 파일(config.json) 저장에 실패했습니다."}` — 파일 쓰기 실패. `docker-compose.yml` 은 `./config.json:/app/config.json:rw` 로 마운트하고 `save_json_config` 는 제자리 쓰기라 Docker 에서도 저장된다 (2026-11-09 실행 확인: 200). Docker 에서 저장하면 git 이 추적하는 루트 `config.json` 이 바뀐다.
 - 부수 효과: config.json 파일 전체를 다시 쓰고 `settings.reload()` 로 프로세스 설정을 다시 읽는다. `dict(settings.raw_json_config)` 는 얕은 복사라 저장 전에 메모리의 설정 딕셔너리 중첩 값이 먼저 바뀐다 (`backend/app/api/briefing.py:163`, `backend/app/config.py:161`).
 - 관련 코드: `backend/app/api/briefing.py:161`
 
@@ -530,7 +530,7 @@ chat 라우터의 오류는 모두 `ErrorResponse` 형식(`{"error_code", "messa
 
 ## Sources
 
-소스 목록은 DB 가 아니라 `sources.json` 파일에 있다. 파일은 cwd → 부모 → 저장소 루트 → `backend/app/config/sources.json` 순으로 찾는다. 저장할 때는 찾은 파일을 임시 파일 교체로 쓰고, `backend/app/config/sources.json` 과 다르면 그곳에도 같은 내용을 쓴다 (`backend/app/services/sources_service.py:11`, `:101`). 저장 실패(`save_sources` 가 False)는 엔드포인트가 확인하지 않아 성공으로 응답한다.
+소스 목록은 DB 가 아니라 `sources.json` 파일에 있다. 파일은 cwd → 부모 → 저장소 루트 → `backend/app/config/sources.json` 순으로 찾는다. 저장할 때는 찾은 파일을 임시 파일 교체로 쓰고(교체가 `OSError` 면 — Docker 의 단일 파일 bind mount 에서 `EBUSY` — 대상 파일에 제자리로 쓴다), `backend/app/config/sources.json` 과 다르면 그곳에도 같은 내용을 쓴다 (`backend/app/services/sources_service.py:11`, `:102-132`). 저장 실패(`save_sources` 가 False)는 엔드포인트가 확인하지 않아 성공으로 응답한다.
 
 ### GET /api/sources
 - 등록된 수집 소스 전체와 요약 통계를 돌려준다.
@@ -571,7 +571,7 @@ chat 라우터의 오류는 모두 `ErrorResponse` 형식(`{"error_code", "messa
 - 응답 200: `{"status": "success", "message": "'<name>' 등록 완료", "source": {id, name, url, site_url, category_hint, country, enabled, description, added_at}}`. 새 항목의 `id` 는 이름을 소문자로 바꾸고 영숫자·`_` 밖의 문자를 `_` 로 바꾼 값이다. 같은 `id` 중복을 막지 않는다.
 - 오류: 400 `{"detail": "Name and URL are required"}`, 422.
 - 부수 효과: `sources.json` 쓰기.
-- 관련 코드: `backend/app/api/sources.py:49`, `backend/app/services/sources_service.py:185`
+- 관련 코드: `backend/app/api/sources.py:49`, `backend/app/services/sources_service.py:195`
 
 ### POST /api/sources/github
 - 모니터링할 GitHub 저장소를 등록한다. 같은 이름(대소문자 무시)이 있으면 `enabled=true`, `category` 를 덮어쓴다.
@@ -587,7 +587,7 @@ chat 라우터의 오류는 모두 `ErrorResponse` 형식(`{"error_code", "messa
 - 응답 200: `{"status": "success", "message": "'<repo>' 등록 완료", "repo": {repo, category, enabled, description, stars_hint, added_at}}`
 - 오류: 400 `{"detail": "Repository is required"}`, 422.
 - 부수 효과: `sources.json` 쓰기.
-- 관련 코드: `backend/app/api/sources.py:64`, `backend/app/services/sources_service.py:212`
+- 관련 코드: `backend/app/api/sources.py:64`, `backend/app/services/sources_service.py:222`
 
 ### PATCH /api/sources/{source_type}/{item_id}/toggle
 - 소스 하나 또는 소스 유형 전체의 `enabled` 를 뒤집는다.
@@ -601,14 +601,14 @@ chat 라우터의 오류는 모두 `ErrorResponse` 형식(`{"error_code", "messa
 - 응답 200: `{"status": "success", "message": "소스 상태가 변경되었습니다 (<type> / <id>)"}`
 - 오류: 404 `{"detail": "Source not found or invalid type"}`.
 - 부수 효과: `sources.json` 쓰기.
-- 관련 코드: `backend/app/api/sources.py:77`, `backend/app/services/sources_service.py:159`
+- 관련 코드: `backend/app/api/sources.py:77`, `backend/app/services/sources_service.py:169`
 
 ### DELETE /api/sources/{source_type}/{item_id}
 - 소스를 지운다. `rss`(id 또는 url 일치하는 항목 모두), `github_repo`(repo 일치)만 지원한다.
 - 응답 200: `{"status": "success", "message": "소스가 삭제되었습니다 (<type> / <id>)"}`
 - 오류: 404 `{"detail": "Source not found or failed to delete"}` (그 밖의 유형 포함).
 - 부수 효과: `sources.json` 쓰기.
-- 관련 코드: `backend/app/api/sources.py:85`, `backend/app/services/sources_service.py:235`
+- 관련 코드: `backend/app/api/sources.py:85`, `backend/app/services/sources_service.py:245`
 
 ## Research
 
@@ -764,15 +764,15 @@ chat 라우터의 오류는 모두 `ErrorResponse` 형식(`{"error_code", "messa
 
 ### GET /
 - 응답 200: `{"service": "AgentLens API", "version": "<settings.VERSION>", "docs": "/docs"}`
-- 관련 코드: `backend/app/main.py:50`
+- 관련 코드: `backend/app/main.py:71`
 
 ### GET /health
 - 응답 200: `{"status": "healthy", "version": "<settings.VERSION>", "running": <collector_manager.is_running>}`. DB 연결은 확인하지 않는다.
 - docker-compose 의 backend healthcheck 가 `curl -f http://127.0.0.1:8000/health` 로 부른다.
-- 관련 코드: `backend/app/main.py:54`
+- 관련 코드: `backend/app/main.py:75`
 
 ### 시작 시 동작 (엔드포인트 아님)
-- `lifespan` 이 `ensure_db_schema()`, 스케줄러 시작을 하고, `news_items` 가 비어 있으면 요청을 받기 전에 `collect_all()` 을 동기로 한 번 돈다 (`backend/app/main.py:13`). 이 동안 서버는 요청을 받지 않는다.
+- `lifespan` 이 `ensure_db_schema()`, 스케줄러 시작을 하고, `news_items` 가 비어 있으면 `collect_all()` 을 백그라운드 태스크로 띄운 뒤 바로 요청을 받는다. 그동안 `GET /health` 의 `running` 은 `true` 다. 서버를 내릴 때 끝나지 않은 태스크는 취소한다 (`backend/app/main.py:23-47`).
 
 ## SSE 스트림
 
@@ -785,7 +785,7 @@ chat 라우터의 오류는 모두 `ErrorResponse` 형식(`{"error_code", "messa
 | `token` | `text: str` | 답변 조각 |
 | `done` | `total_text: str` | 전체 답변. 종료 신호 |
 
-- 순서: `meta` → `token`* → `done`. Anthropic 스트림이 중간에 실패하면 이미 보낸 토큰 뒤에 OpenAI 나 휴리스틱의 `meta`·`token` 이 이어 붙는다 (`full_text` 를 이어 쓴다, `backend/app/services/llm_processor.py:860`~`:937`).
+- 순서: `meta` → `token`* → `done`. Anthropic 스트림이 중간에 실패하면 이미 보낸 토큰 뒤에 OpenAI 나 휴리스틱의 `meta`·`token` 이 이어 붙는다 (`full_text` 를 이어 쓴다, `backend/app/services/llm_processor.py:898`~`:970`).
 - 오류 이벤트: 없다. 모든 프로바이더 실패는 휴리스틱 답변으로 대체한다. 휴리스틱 단계에서 예외가 나면 오류 이벤트 없이 스트림이 끊긴다.
 - 종료: `done` 은 `full_text` 가 비어 있지 않을 때만 보낸다.
 
@@ -1131,14 +1131,13 @@ backend Pydantic ↔ frontend `src/types` ↔ MSW(`src/mocks/handlers.ts`, `src/
 
 ### 동작상 위험
 - 대화 메시지 중복·충돌: 스트림이 끝나면 backend 가 `persist_turn` 으로 질문·답변을 새 UUID 로 저장하고, 프론트(`useChatSessions.ts:225`)도 같은 턴을 포함한 전체 메시지를 클라이언트 id 로 `POST /api/chat/sessions` 에 보낸다. `append_messages_batch` 는 id 중복 검사 없이 INSERT 하므로 첫 턴은 메시지가 중복 저장되고, 다음 턴부터는 이미 저장된 클라이언트 id 를 다시 보내 기본 키 충돌로 500 `ERR_SESSION_CREATE_FAILED` 가 날 것으로 보인다. 프론트는 이 응답의 상태를 확인하지 않는다. 실행해 확인하지는 않았다 (`backend/app/services/chat_session_service.py:299`, `frontend/src/components/chat/useChatSessions.ts:225`).
-- `usage` 공유 상태: `done` 이벤트와 `/query` 응답의 `usage` 는 싱글턴 `llm_processor.last_usage` 를 읽는다. 동시 요청이 있으면 다른 요청의 사용량이 섞일 수 있고, OpenAI·Ollama 경로는 이 값을 갱신하지 않아 이전 요청 값이 남는다 (`backend/app/services/llm_processor.py:320`, `:388`).
+- `usage` 공유 상태: `done` 이벤트와 `/query` 응답의 `usage` 는 싱글턴 `llm_processor.last_usage` 를 읽는다. 동시 요청이 있으면 다른 요청의 사용량이 섞일 수 있고, OpenAI·Ollama 경로는 이 값을 갱신하지 않아 이전 요청 값이 남는다 (`backend/app/services/llm_processor.py:371`, `:433`).
 - `GET /api/chat/search` 가 FTS 테이블 생성·`rebuild`·커밋을 할 수 있다 (GET 의 쓰기).
 - `GET /api/briefing/today` 와 `POST /api/briefing/generate` 는 같은 함수다. "재생성" 의미가 없다.
 - `POST /api/briefing/settings` 는 Docker 에서 config.json 이 읽기 전용 마운트라 실패할 것으로 보인다.
 - `sources.json` 저장 실패를 sources·research 엔드포인트가 확인하지 않아 성공으로 응답한다.
 - `GET /api/news/feed/rss.xml` 은 `summary`·`published_at` 이 NULL 인 행이 있으면 500 이 나고, `<link>` 가 `http://localhost:3000` 으로 고정이다.
 - `POST /api/chat/stream` 에서 계획·검색·스크래핑 단계 예외는 `error` 이벤트 없이 스트림을 끊는다.
-- 서버 시작 시 DB 가 비어 있으면 첫 수집이 끝날 때까지 요청을 받지 않는다.
 
 ### 문서와 코드의 차이
 - `docs/tech-spec.md` 는 SSE 2개를 모두 rewrite 를 거치지 않고 직접 붙인다고 적었지만, 코드에서 직접 연결은 `POST /api/news/{id}/ask/stream` 뿐이다. `POST /api/chat/stream` 은 상대 경로로 rewrite 를 거친다 (`frontend/src/components/chat/ChatWorkspace.tsx:300`).

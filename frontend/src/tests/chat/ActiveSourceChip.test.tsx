@@ -16,7 +16,7 @@ describe('ActiveSourceChip Component', () => {
     );
 
     expect(screen.getByText(/FastMCP/i)).toBeInTheDocument();
-    expect(screen.getByText('mcp_plugins_skills')).toBeInTheDocument();
+    expect(screen.getByText('MCP')).toBeInTheDocument();
   });
 
   it('calls onRemove when the remove button is clicked', () => {

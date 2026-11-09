@@ -11,12 +11,12 @@ describe('Mobile Viewport & Virtual Keyboard Optimization (TDD)', () => {
     vi.clearAllMocks();
   });
 
-  it('verifies layout viewport metadata prevents auto-zoom and enables interactiveWidget resize', () => {
+  it('verifies layout viewport metadata allows user zoom and enables interactiveWidget resize', () => {
     expect(viewport).toBeDefined();
     expect(viewport.width).toBe('device-width');
     expect(viewport.initialScale).toBe(1);
-    expect(viewport.maximumScale).toBe(1);
-    expect(viewport.userScalable).toBe(false);
+    expect(viewport.maximumScale).toBeUndefined();
+    expect(viewport.userScalable).not.toBe(false);
     expect(viewport.interactiveWidget).toBe('resizes-content');
   });
 

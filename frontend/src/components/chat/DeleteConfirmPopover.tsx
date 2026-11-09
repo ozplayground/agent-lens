@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useRef, type RefObject } from 'react';
 import { Trash2, AlertTriangle } from 'lucide-react';
+import { Popover } from '@/components/ui/Popover';
+import { Button } from '@/components/ui/Button';
 
 export interface DeleteConfirmPopoverProps {
   isOpen: boolean;
@@ -9,103 +11,56 @@ export interface DeleteConfirmPopoverProps {
   onCancel: () => void;
   isDeleting?: boolean;
   anchorRect?: DOMRect | null;
+  /** 트리거(삭제 버튼). 바깥 판정에서 빼고, 닫을 때 포커스를 돌려준다. */
+  anchorRef?: RefObject<HTMLElement | null>;
 }
 
+/**
+ * 세션 삭제 확인 팝오버 (spec 설계 5: `Popover role="dialog"`).
+ * Escape 는 오버레이 스택이 맨 위 하나만 닫는다 (드로어 안에서 열어도 드로어는 남는다). 처음 포커스는 `취소`.
+ */
 export default function DeleteConfirmPopover({
   isOpen,
   onConfirm,
   onCancel,
   isDeleting = false,
+  anchorRef,
 }: DeleteConfirmPopoverProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const cancelBtnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    // Focus cancel button by default to prevent accidental deletion
-    cancelBtnRef.current?.focus();
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onCancel();
-      }
-    };
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        onCancel();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen, onCancel]);
-
-  if (!isOpen) return null;
+  const fallbackAnchorRef = useRef<HTMLElement | null>(null);
 
   return (
-    <div
-      ref={containerRef}
+    <Popover
+      open={isOpen}
+      onClose={() => {
+        if (!isDeleting) onCancel();
+      }}
+      anchorRef={anchorRef ?? fallbackAnchorRef}
+      label="이 대화를 삭제하시겠습니까?"
       role="dialog"
-      aria-modal="true"
-      aria-labelledby="delete-popover-title"
-      aria-describedby="delete-popover-desc"
-      onClick={(e) => e.stopPropagation()}
-      className="absolute right-2 top-8 z-50 w-64 p-3 bg-white rounded-xl shadow-xl border border-slate-200 text-left animate-in fade-in zoom-in-95 duration-150"
+      focusOnOpen
+      align="end"
+      className="w-[min(18rem,calc(100vw-2rem))] p-3 text-left"
     >
       <div className="flex items-start gap-2.5">
-        <div className="p-1.5 rounded-lg bg-rose-50 text-rose-600 shrink-0">
-          <AlertTriangle className="w-4 h-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h4
-            id="delete-popover-title"
-            className="text-xs font-bold text-slate-900 leading-tight"
-          >
-            이 대화를 삭제하시겠습니까?
-          </h4>
-          <p
-            id="delete-popover-desc"
-            className="text-[11px] text-slate-500 mt-1 leading-normal"
-          >
+        <span aria-hidden="true" className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-danger-soft text-danger">
+          <AlertTriangle className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-fg">이 대화를 삭제하시겠습니까?</p>
+          <p className="mt-1 text-xs leading-normal text-fg-muted">
             삭제된 대화 기록과 모든 메시지는 영구 복구할 수 없습니다.
           </p>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-end gap-1.5">
-        <button
-          ref={cancelBtnRef}
-          type="button"
-          onClick={onCancel}
-          disabled={isDeleting}
-          className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-        >
+      <div className="mt-3 flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onCancel} disabled={isDeleting}>
           취소
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={isDeleting}
-          className="px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-        >
-          {isDeleting ? (
-            '삭제 중...'
-          ) : (
-            <>
-              <Trash2 className="w-3 h-3" />
-              <span>삭제</span>
-            </>
-          )}
-        </button>
+        </Button>
+        <Button variant="danger" size="sm" onClick={onConfirm} disabled={isDeleting} leadingIcon={isDeleting ? undefined : <Trash2 />}>
+          {isDeleting ? '삭제 중...' : '삭제'}
+        </Button>
       </div>
-    </div>
+    </Popover>
   );
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { AlertCircle, X } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, History, Laptop, Moon, Plus, Sun } from 'lucide-react';
 import {
   ChatMessage,
   ScopeMode,
@@ -28,12 +28,18 @@ import FocusBottomSheet from './FocusBottomSheet';
 import ChatSidebar from './ChatSidebar';
 import ChatHistoryDrawer from './ChatHistoryDrawer';
 import { useChatSessions } from './useChatSessions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { ToastRegion, useToast } from '@/components/ui/Toast';
+import { useTheme } from '@/context/ThemeContext';
+import CommandPalette, { type PaletteCommand } from '@/components/CommandPalette';
 
 export interface ChatWorkspaceProps {
   initialSourceId?: number;
   initialQuestion?: string;
   className?: string;
 }
+
+const SOURCE_NOT_FOUND_MESSAGE = '요청하신 기사를 찾을 수 없어 전체 소식 모드로 시작합니다.';
 
 function generateUUID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -52,6 +58,10 @@ export default function ChatWorkspace({
   className = '',
 }: ChatWorkspaceProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const toast = useToast();
 
   // Dual-Layer Session Management Hook
   const {
@@ -80,9 +90,9 @@ export default function ChatWorkspace({
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState<boolean>(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState<boolean>(false);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [viewportHeight, setViewportHeight] = useState<string>('100dvh');
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -136,7 +146,7 @@ export default function ChatWorkspace({
 
   // Compute composite timeline containing messages and model switch events
   const timelineItems = useMemo<ChatTimelineItem[]>(() => {
-    const items: { type: 'message' | 'model_switch'; data: any; timestamp: string }[] = [];
+    const items: (ChatTimelineItem & { timestamp: string })[] = [];
     for (const msg of messages) {
       items.push({
         type: 'message',
@@ -154,7 +164,7 @@ export default function ChatWorkspace({
     items.sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
-    return items as ChatTimelineItem[];
+    return items;
   }, [messages, modelSwitchEvents]);
 
   // Model Tier Change Handler
@@ -531,7 +541,7 @@ export default function ChatWorkspace({
                 });
               }
             } else {
-              setToastMessage('요청하신 기사를 찾을 수 없어 전체 뉴스 모드로 시작합니다.');
+              toast.show({ message: SOURCE_NOT_FOUND_MESSAGE, tone: 'warning' });
               setScopeMode('global');
               setActiveSource(null);
               if (paramQuestion) {
@@ -544,7 +554,7 @@ export default function ChatWorkspace({
             }
           })
           .catch(() => {
-            setToastMessage('요청하신 기사를 찾을 수 없어 전체 뉴스 모드로 시작합니다.');
+            toast.show({ message: SOURCE_NOT_FOUND_MESSAGE, tone: 'warning' });
             setScopeMode('global');
             setActiveSource(null);
             if (paramQuestion) {
@@ -560,9 +570,55 @@ export default function ChatWorkspace({
     }
 
     if (paramQuestion) {
-      handleSendMessage(paramQuestion);
+      // 다른 분기(fetch 후 전송)와 같이 effect 본문 밖에서 전송을 시작한다.
+      queueMicrotask(() => {
+        handleSendMessage(paramQuestion);
+      });
     }
-  }, [searchParams, initialSourceId, initialQuestion, handleSendMessage, handleSelectSession]);
+  }, [searchParams, initialSourceId, initialQuestion, handleSendMessage, handleSelectSession, toast]);
+
+  // 챗 커맨드 팔레트 명령 (spec 설계 6). 테마 제목 규칙은 피드 팔레트와 같다.
+  const paletteCommands = useMemo<PaletteCommand[]>(
+    () => [
+      {
+        id: 'feed',
+        title: '뉴스 피드로 이동',
+        subtitle: '수집된 AI 에이전트 소식 목록으로 돌아갑니다',
+        icon: <ArrowLeft />,
+        perform: () => router.push('/'),
+      },
+      {
+        id: 'theme',
+        title:
+          theme === 'system'
+            ? '라이트 모드로 전환 (현재 시스템)'
+            : theme === 'dark'
+              ? '시스템 모드로 전환'
+              : '다크 모드로 전환',
+        subtitle: '시스템 및 개인 선호 테마 순환 토글 (Light -> Dark -> System)',
+        icon: theme === 'dark' ? <Moon /> : theme === 'system' ? <Laptop /> : <Sun />,
+        perform: () => toggleTheme(),
+      },
+      {
+        id: 'new-chat',
+        title: '새 대화 시작',
+        subtitle: '현재 대화를 닫고 빈 대화로 시작합니다',
+        icon: <Plus />,
+        perform: () => handleNewChat(),
+      },
+      {
+        id: 'history',
+        title: '대화 기록 열기',
+        subtitle: '저장된 대화 목록을 엽니다',
+        icon: <History />,
+        perform: () => {
+          if (isDesktop) setIsSidebarOpen(true);
+          else setIsDrawerOpen(true);
+        },
+      },
+    ],
+    [router, theme, toggleTheme, handleNewChat, isDesktop]
+  );
 
   const handleRemoveSource = useCallback(() => {
     setActiveSource(null);
@@ -584,7 +640,7 @@ export default function ChatWorkspace({
   return (
     <div
       style={{ height: viewportHeight }}
-      className={`w-full max-w-full flex flex-row bg-slate-50 overflow-hidden overflow-x-hidden ${className}`}
+      className={`w-full max-w-full flex flex-row bg-canvas text-fg overflow-hidden overflow-x-hidden ${className}`}
     >
       {/* Desktop History Sidebar (Collapsible) */}
       <ChatSidebar
@@ -606,23 +662,6 @@ export default function ChatWorkspace({
 
       {/* Main Chat Workspace Column */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden overflow-x-hidden relative">
-        {/* Warning Toast */}
-        {toastMessage && (
-          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-800 flex items-center justify-between z-40 animate-in slide-in-from-top duration-200">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span className="font-medium">{toastMessage}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setToastMessage(null)}
-              className="p-1 rounded hover:bg-amber-100 text-amber-600 cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-
         {/* Header */}
         <ChatHeader
           scopeMode={scopeMode}
@@ -631,17 +670,17 @@ export default function ChatWorkspace({
           onRemoveSource={handleRemoveSource}
           onNewChat={handleNewChat}
           onToggleHistoryDrawer={() => {
-            if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+            if (isDesktop) {
               setIsSidebarOpen((prev) => !prev);
             } else {
               setIsDrawerOpen((prev) => !prev);
             }
           }}
-          isHistoryOpen={isDrawerOpen || isSidebarOpen}
-          showNewChatButton={!isSidebarOpen}
+          isHistoryOpen={isDesktop ? isSidebarOpen : isDrawerOpen}
+          isSidebarOpen={isSidebarOpen}
+          isCommandPaletteOpen={isPaletteOpen}
+          onToggleCommandPalette={() => setIsPaletteOpen((prev) => !prev)}
           isStreaming={isStreaming}
-          selectedTier={selectedTier}
-          onSelectTier={handleSelectTier}
         />
 
         {/* Message List & Welcome View */}
@@ -658,38 +697,47 @@ export default function ChatWorkspace({
           onCopyMessage={() => {}}
         />
 
-        {/* Pinned Bottom Composer Bar with Focus Capsule */}
-        <div className="w-full max-w-full overflow-x-hidden border-t border-slate-200 bg-white/90 backdrop-blur-xs p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-xs shrink-0">
-          <div className="max-w-4xl mx-auto w-full flex flex-col gap-2">
-            {/* Focus Capsule Toolbar */}
-            <div className="flex items-center justify-between">
-              <FocusCapsule
-                filters={focusFilters}
-                scopedSource={activeSource}
-                onClick={() => setIsBottomSheetOpen(true)}
-                onReset={() => setFocusFilters(DEFAULT_FOCUS_FILTERS)}
-                isOpen={isBottomSheetOpen}
-                matchedCount={actualSourceCount}
+        {/* 입력 영역 감싸개: `relative` 라서 composer 알림 영역이 입력 영역 바로 위에 붙는다.
+            입력 영역의 overflow-x-hidden 상자 밖에 두어 알림이 잘리지 않는다 (spec 14.7 C-2). */}
+        <div className="relative w-full max-w-full shrink-0">
+          <ToastRegion placement="composer" />
+
+          {/* Pinned Bottom Composer Bar with Focus Capsule — 열 맞춤: 바깥 px-4 md:px-6, 안쪽 mx-auto w-full max-w-3xl */}
+          <div className="w-full max-w-full overflow-x-hidden border-t border-border bg-surface px-4 md:px-6">
+            <div
+              data-composer=""
+              className="max-w-3xl mx-auto w-full flex flex-col gap-2 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+            >
+              {/* Focus Capsule Toolbar */}
+              <div className="flex items-center justify-between">
+                <FocusCapsule
+                  filters={focusFilters}
+                  scopedSource={activeSource}
+                  onClick={() => setIsBottomSheetOpen(true)}
+                  onReset={() => setFocusFilters(DEFAULT_FOCUS_FILTERS)}
+                  isOpen={isBottomSheetOpen}
+                  matchedCount={actualSourceCount}
+                />
+              </div>
+
+              <ChatPromptInput
+                value={inputPrompt}
+                onChange={setInputPrompt}
+                onSubmit={handleSendMessage}
+                onStopGenerating={handleStopGenerating}
+                isStreaming={isStreaming}
+                scopeMode={scopeMode}
+                selectedTier={selectedTier}
+                onSelectTier={handleSelectTier}
               />
             </div>
-
-            <ChatPromptInput
-              value={inputPrompt}
-              onChange={setInputPrompt}
-              onSubmit={handleSendMessage}
-              onStopGenerating={handleStopGenerating}
-              isStreaming={isStreaming}
-              scopeMode={scopeMode}
-              selectedTier={selectedTier}
-              onSelectTier={handleSelectTier}
-            />
           </div>
         </div>
       </div>
 
       {/* Mobile Slide-over Drawer (< 1024px) */}
       <ChatHistoryDrawer
-        isOpen={isDrawerOpen}
+        isOpen={isDrawerOpen && !isDesktop}
         onClose={() => setIsDrawerOpen(false)}
         sessions={sessions}
         activeSessionId={sessionId}
@@ -713,6 +761,13 @@ export default function ChatWorkspace({
         onResetFilters={() => setFocusFilters(DEFAULT_FOCUS_FILTERS)}
         targetCount={actualSourceCount}
       />
+
+      <CommandPalette
+        isOpen={isPaletteOpen}
+        onClose={() => setIsPaletteOpen(false)}
+        commands={paletteCommands}
+      />
+
     </div>
   );
 }

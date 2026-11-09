@@ -5,7 +5,7 @@ import FocusCapsule from '@/components/chat/FocusCapsule';
 import { FocusFilters, DEFAULT_FOCUS_FILTERS } from '@/types/chat';
 
 describe('FocusCapsule Component', () => {
-  it('renders default capsule [🎯 Focus: 전체 소식 ▾] with 30px minimal height and a11y attributes', () => {
+  it('renders default capsule [🎯 포커스: 전체 소식 ▾] with 30px minimal height and a11y attributes', () => {
     const handleClick = vi.fn();
     const handleReset = vi.fn();
 
@@ -45,7 +45,7 @@ describe('FocusCapsule Component', () => {
     expect(handleReset).not.toHaveBeenCalled();
   });
 
-  it('renders filtered capsule [🎯 Focus: MCP · 최근 7일 ✕] when filters are active', () => {
+  it('renders filtered capsule [🎯 포커스: MCP · 최근 7일 ✕] when filters are active', () => {
     const handleClick = vi.fn();
     const handleReset = vi.fn();
     const activeFilters: FocusFilters = {
@@ -137,7 +137,7 @@ describe('FocusCapsule Component', () => {
       />
     );
 
-    expect(screen.getByText('Focus: 전체 소식')).toBeInTheDocument();
+    expect(screen.getByText('포커스: 전체 소식')).toBeInTheDocument();
     expect(screen.queryByText(/5건/)).not.toBeInTheDocument();
     expect(screen.queryByText(/매칭/)).not.toBeInTheDocument();
   });

@@ -4,6 +4,8 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Bot, Sparkles, ArrowRight } from 'lucide-react';
 import { NewsItem } from '@/types/news';
+import { Button } from '@/components/ui/Button';
+import { cn } from '@/lib/cn';
 
 export interface HandoverCtaButtonProps {
   item: NewsItem;
@@ -17,7 +19,7 @@ export default function HandoverCtaButton({
   item,
   variant = 'card-compact',
   draftQuestion,
-  className = '',
+  className,
   onHandoverComplete,
 }: HandoverCtaButtonProps) {
   const router = useRouter();
@@ -37,32 +39,42 @@ export default function HandoverCtaButton({
       <button
         type="button"
         onClick={handleClick}
-        className={`w-full flex items-center justify-between p-3 rounded-lg bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 text-indigo-900 transition-all cursor-pointer shadow-2xs group ${className}`}
+        className={cn(
+          'group flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border border-border bg-accent-soft p-3 text-left text-accent-soft-fg transition-colors duration-150 ease-standard hover:border-border-strong',
+          className
+        )}
       >
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-md bg-indigo-600 text-white flex items-center justify-center shrink-0">
-            <Bot className="w-4 h-4" />
-          </div>
-          <div className="text-left">
-            <div className="text-xs font-bold">전용 AI 챗으로 이동</div>
-            <div className="text-[11px] text-indigo-700">이 기사를 집중 컨텍스트로 심층 질의응답</div>
-          </div>
-        </div>
-        <ArrowRight className="w-4 h-4 text-indigo-600 group-hover:translate-x-1 transition-transform shrink-0" />
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span
+            aria-hidden="true"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-solid text-on-accent"
+          >
+            <Bot className="size-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">AI 챗에서 분석</span>
+            <span className="block text-xs">이 기사를 단일 기사 모드로 열어 질의응답</span>
+          </span>
+        </span>
+        <ArrowRight
+          aria-hidden="true"
+          className="size-4 shrink-0 transition-transform duration-150 ease-standard group-hover:translate-x-0.5"
+        />
       </button>
     );
   }
 
-  // default: 'card-compact'
+  // default: 'card-compact' — 보이는 글자 `AI 챗에서 분석` 이 접근 이름이다. 모든 폭에서 글자를 보인다 (R48).
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="sm"
       onClick={handleClick}
-      title="전용 AI 챗에서 이 기사 집중 분석"
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors cursor-pointer ${className}`}
+      title="AI 챗에서 이 기사를 단일 기사 모드로 분석"
+      leadingIcon={<Sparkles className="text-accent" />}
+      className={className}
     >
-      <Sparkles className="w-3 h-3 text-indigo-600" />
-      <span>전용 챗에서 분석</span>
-    </button>
+      <span>AI 챗에서 분석</span>
+    </Button>
   );
 }

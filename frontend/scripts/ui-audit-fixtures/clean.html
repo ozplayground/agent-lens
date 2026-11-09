@@ -1,0 +1,511 @@
+<!doctype html>
+<!--
+  ui-audit --self-test 의 정상 페이지 (spec 14.8, R30 ①).
+  defects.html 과 같은 구조를 맞게 만든 판이다. 검사 10개(clip, placeholder, occluded, rowAlign, scrollRow,
+  ariaControls, keepAll, vRhythm, chatAlign, toast)가 모두 대상을 찾고 통과해야 한다. data-expect 를 두지 않는다.
+  보정 7 검사(toolbarLayout, cardMetric, chatScope, terms, modelPicker, focusLabels)와 보정 9 검사(feedAreas, chatHeader,
+  pictograph, briefing, cardFooter)도 대상을 찾고 통과해야 한다. 피드 툴바([data-feed-toolbar])가 있는 블록은 모두
+  보정 9 의 세 영역 구조(검색 영역 → 필터 영역 → 목록 머리줄)다. role="dialog" 블록은 data-self-test-dialog 를 단다.
+  앱 번들·TokenGuard 대상이 아니다 (frontend/src 밖). 1440×3000 뷰포트에서 연다.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>ui-audit clean</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 14px/20px -apple-system, "Apple SD Gothic Neo", sans-serif; word-break: keep-all; overflow-wrap: break-word; color: #111; background: #fff; }
+  section { margin-bottom: 32px; }
+  h2 { font-size: 16px; line-height: 24px; margin: 0 0 8px; }
+  button, select, input, textarea { font: inherit; }
+  .chip { height: 32px; padding: 0 12px; border: 1px solid #ccc; border-radius: 16px; background: #f5f5f5; white-space: nowrap; flex-shrink: 0; }
+  .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid #ddd; border-radius: 12px; }
+  .meta { display: flex; align-items: center; gap: 8px; height: 32px; }
+  .meta-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+  .icon-btn { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: #eee; }
+  .title { margin: 0; font-size: 16px; line-height: 24px; min-height: 48px; }
+  .body { margin: 0; line-height: 24px; min-height: 48px; }
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  /* 보정 9 세 영역: 입력 토큰 높이 768 미만 44 / 이상 36, 칩·토글 44 / 32 (spec 14.17) */
+  .fa-area { display:flex; flex-direction:column; gap:12px; }
+  .fa-input { display:block; width:100%; height:36px; padding:0 12px; }
+  .fa-select { height:36px; flex-shrink:0; }
+  .fa-chip { height:32px; padding:0 12px; border:1px solid #ccc; border-radius:16px; background:#f5f5f5; white-space:nowrap; flex-shrink:0; }
+  .fa-toggle { height:32px; min-width:32px; padding:0 8px; flex-shrink:0; }
+  .fa-row { display:flex; gap:8px; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none; scroll-padding:0 24px; }
+  .fa-header { display:flex; align-items:center; gap:12px; }
+  @media (max-width: 767px) {
+    .fa-input, .fa-select { height:44px; }
+    .fa-chip { height:44px; }
+    .fa-toggle { width:44px; height:44px; padding:0; }
+  }
+</style>
+</head>
+<body>
+  <!-- 30 후속 2 (보정 3): defects.html 360 영역의 고친 형태. 양쪽 표시, 표시는 줄 앞뒤 형제, scroll-padding 0 24px, 선택 칩은 칩 왼쪽 − 24 -->
+  <section data-self-test-narrow="" style="width:312px">
+    <h2>scrollRow 보정 3 (360)</h2>
+      <div style="display:flex; align-items:center; gap:4px; width:100%; margin-bottom:8px">
+        <button class="icon-btn" type="button" aria-label="양쪽 표시 줄 이전 항목 보기" style="width:32px; height:32px; flex-shrink:0">‹</button>
+        <span data-overflow-hint="start" aria-hidden="true" style="display:flex; width:16px; flex-shrink:0; justify-content:center; pointer-events:none">‹</span>
+        <div role="group" aria-label="양쪽 표시 줄" data-scroll-row="" data-overflow="both" data-init-scroll="middle"
+             style="display:flex; gap:8px; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none; scroll-padding:0 24px; mask-image:linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent)">
+          <button class="chip" type="button" style="width:90px">핵심 요약</button>
+          <button class="chip" type="button" style="width:90px">시사점</button>
+          <button class="chip" type="button" style="width:90px">비슷한 기사</button>
+          <button class="chip" type="button" style="width:90px">배경 설명</button>
+          <button class="chip" type="button" style="width:90px">관련 도구</button>
+          <button class="chip" type="button" style="width:90px">다음 단계</button>
+        </div>
+        <span data-overflow-hint="end" aria-hidden="true" style="display:flex; width:16px; flex-shrink:0; justify-content:center; pointer-events:none">›</span>
+        <button class="icon-btn" type="button" aria-label="양쪽 표시 줄 다음 항목 보기" style="width:32px; height:32px; flex-shrink:0">›</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:4px; width:100%; margin-bottom:8px">
+        <button class="icon-btn" type="button" aria-label="뒤 형제 표시 줄 이전 항목 보기" style="width:32px; height:32px; flex-shrink:0">‹</button>
+        <div role="group" aria-label="뒤 형제 표시 줄" data-scroll-row="" data-overflow="end" data-init-scroll="none"
+             style="display:flex; gap:8px; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none; scroll-padding:0 24px; mask-image:linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent)">
+          <button class="chip" type="button" style="width:90px">핵심 요약</button>
+          <button class="chip" type="button" style="width:90px">시사점</button>
+          <button class="chip" type="button" style="width:90px">비슷한 기사</button>
+          <button class="chip" type="button" style="width:90px">배경 설명</button>
+          <button class="chip" type="button" style="width:90px">관련 도구</button>
+          <button class="chip" type="button" style="width:90px">다음 단계</button>
+        </div>
+        <span data-overflow-hint="end" aria-hidden="true" style="display:flex; width:16px; flex-shrink:0; justify-content:center; pointer-events:none">›</span>
+        <button class="icon-btn" type="button" aria-label="뒤 형제 표시 줄 다음 항목 보기" style="width:32px; height:32px; flex-shrink:0">›</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:4px; width:100%; margin-bottom:8px">
+        <button class="icon-btn" type="button" aria-label="흐림 밖 칩 줄 이전 항목 보기" style="width:32px; height:32px; flex-shrink:0">‹</button>
+        <span data-overflow-hint="start" aria-hidden="true" style="display:flex; width:16px; flex-shrink:0; justify-content:center; pointer-events:none">‹</span>
+        <div role="group" aria-label="흐림 밖 칩 줄" data-scroll-row="" data-overflow="both" data-init-scroll="chip-24" data-selected-selector="[aria-pressed=&quot;true&quot;]"
+             style="display:flex; gap:8px; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none; scroll-padding:0 24px; mask-image:linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent)">
+          <button class="chip" type="button" style="width:90px" aria-pressed="false">핵심 요약</button>
+          <button class="chip" type="button" style="width:90px" aria-pressed="false">시사점</button>
+          <button class="chip" type="button" style="width:90px" aria-pressed="false">비슷한 기사</button>
+          <button class="chip" type="button" style="width:90px" aria-pressed="true">배경 설명</button>
+          <button class="chip" type="button" style="width:90px" aria-pressed="false">관련 도구</button>
+          <button class="chip" type="button" style="width:90px" aria-pressed="false">다음 단계</button>
+        </div>
+        <span data-overflow-hint="end" aria-hidden="true" style="display:flex; width:16px; flex-shrink:0; justify-content:center; pointer-events:none">›</span>
+        <button class="icon-btn" type="button" aria-label="흐림 밖 칩 줄 다음 항목 보기" style="width:32px; height:32px; flex-shrink:0">›</button>
+      </div>
+      <!-- 38 (보정 7)·49 (보정 9): 세 영역 구조의 44px 판 (360 폭). 검색 영역 → 필터 영역(카테고리 줄 양쪽 bleed,
+           소스 줄 왼쪽 bleed + 같은 줄 오른쪽 끝 44px Must-Read 토글, select 없음) → 목록 머리줄(상태 + 정렬, 오른쪽 끝 맞춤).
+           feedAreas(360)·toolbarLayout(보정 9 판정)이 통과해야 한다. 아래 넘친 모드 탭은 chatScope 의 고친 형태 -->
+      <div class="fa-area" style="width:312px; margin-bottom:8px">
+        <div data-feed-search=""><form role="search" style="margin:0"><input class="fa-input" type="search" aria-label="키워드 검색"></form></div>
+        <div data-feed-toolbar="" style="display:flex; flex-direction:column; gap:8px">
+          <div data-toolbar-row="" style="display:flex; margin:0 -24px">
+            <div role="group" aria-label="카테고리" data-scroll-row="" data-overflow="none" class="fa-row" style="padding:0 24px">
+              <button class="fa-chip" type="button" aria-pressed="true">전체</button><button class="fa-chip" type="button" aria-pressed="false">MCP &amp; 생태계</button>
+            </div>
+          </div>
+          <div data-toolbar-row="" style="display:flex; align-items:center; gap:8px; margin-left:-24px">
+            <div role="group" aria-label="소스" data-scroll-row="" data-overflow="none" class="fa-row" style="padding-left:24px">
+              <button class="fa-chip" type="button" data-source-chip="" aria-pressed="true" style="width:90px">전체</button><button class="fa-chip" type="button" data-source-chip="" aria-pressed="false" style="width:90px">국내 테크</button>
+            </div>
+            <button class="fa-toggle" type="button" data-must-read-toggle="" aria-pressed="false" aria-label="Must-Read">★</button>
+          </div>
+        </div>
+        <div data-feed-list-header="" class="fa-header">
+          <div data-feed-status="" role="status" style="flex:1; min-width:0">총 20건</div>
+          <select class="fa-select" aria-label="정렬" style="width:112px"><option>인기순</option></select>
+        </div>
+      </div>
+      <div data-chat-context-bar="" style="width:312px; margin-bottom:8px">
+        <div data-scroll-row="" data-overflow="none" style="display:flex; overflow-x:auto; scrollbar-width:none; scroll-padding:0 24px">
+          <div role="group" aria-label="검색 스코프 모드" style="display:inline-flex; gap:2px; padding:2px; flex-shrink:0">
+            <button type="button" style="width:99px; flex-shrink:0">단일 기사</button>
+            <button type="button" style="width:99px; flex-shrink:0">전체 소식</button>
+          </div>
+        </div>
+      </div>
+  </section>
+
+  <section>
+    <h2>clip: 부모 안에 다 들어온 칩</h2>
+    <div style="display:flex; gap:8px; width:600px; overflow:hidden">
+      <button class="chip" type="button">전체</button>
+      <button class="chip" type="button">하네스</button>
+      <button class="chip" type="button">MCP</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>clip: 말줄임표로 끝나는 한 줄, line-clamp 로 자른 여러 줄</h2>
+    <div style="width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">말줄임표로 끝나는 아주 긴 한 줄 글자입니다</div>
+    <p class="clamp2" style="width:220px; margin:8px 0 0">두 줄까지만 보이도록 자르는 본문입니다. 세 번째 줄부터는 말줄임표로 끝나야 하고 잘린 글자는 보이지 않습니다.</p>
+  </section>
+
+  <section>
+    <h2>placeholder: 입력 폭 안에 들어오는 자리표시</h2>
+    <input type="search" aria-label="키워드 검색" placeholder="키워드 검색" style="width:240px; height:40px; padding:0 12px 0 36px; text-overflow:ellipsis">
+  </section>
+
+  <section>
+    <h2>occluded: 나란히 놓인 칩과 선택창, 입력 안쪽 여백의 보조 버튼</h2>
+    <div style="display:flex; gap:16px; align-items:center">
+      <button class="chip" type="button">가려지지 않은 칩</button>
+      <select aria-label="정렬" style="width:120px; height:36px"><option>최신순</option></select>
+      <div style="position:relative; width:240px">
+        <input type="password" aria-label="토큰" value="secret" style="width:240px; height:44px; padding:0 48px 0 12px">
+        <button type="button" aria-label="토큰 보기" style="position:absolute; right:4px; top:4px; width:36px; height:36px; padding:0">👁</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>clip: 대화상자 안 세로 스크롤 영역 아래쪽 내용 (스크롤로 닿는다)</h2>
+    <div style="height:120px; overflow:hidden; border:1px solid #ddd">
+      <!-- 스크롤 영역은 바깥 상자 안쪽(테두리 안 118px)을 꽉 채운다. 120px 로 두면 테두리 2px 만큼 잘린다 (clip ④) -->
+      <div style="height:100%; overflow-y:auto">
+        <p style="margin:0 0 60px">스크롤 영역 첫 문단</p>
+        <p style="margin:0 0 60px">스크롤 영역 두 번째 문단</p>
+        <a href="#scroll-end">스크롤해야 보이는 링크</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>rowAlign: 같은 틀의 카드 두 개</h2>
+    <div style="display:grid; grid-template-columns:320px 320px; gap:16px">
+      <article class="card" data-feed-card="">
+        <div class="meta" data-card-meta="">
+          <span class="meta-text">하네스 · 국내 테크 · 3일 전</span>
+          <button class="icon-btn" type="button" aria-label="보관하기">☆</button>
+        </div>
+        <h3 class="title clamp2"><button type="button" style="all:unset; cursor:pointer">짧은 제목</button></h3>
+        <p class="body clamp2">요약 본문 한 줄입니다.</p>
+      </article>
+      <article class="card" data-feed-card="">
+        <div class="meta" data-card-meta="">
+          <span class="meta-text">MCP · GitHub · 어제 · Must-Read 같은 긴 머리줄도 한 줄에서 말줄임</span>
+          <button class="icon-btn" type="button" aria-label="보관하기">☆</button>
+        </div>
+        <h3 class="title clamp2"><button type="button" style="all:unset; cursor:pointer">두 줄을 차지할 수 있는 조금 더 긴 제목입니다</button></h3>
+        <p class="body clamp2">요약 본문은 두 줄 높이를 고정으로 차지합니다. 넘치면 말줄임표로 끝납니다.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>scrollRow: 표시가 있는 넘친 줄, 넘치지 않는 줄</h2>
+    <div style="display:flex; align-items:center; gap:4px; width:420px">
+      <div role="group" aria-label="빠른 질문" data-scroll-row="" data-overflow="end"
+           style="display:flex; gap:8px; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none; scroll-padding:0 24px; mask-image:linear-gradient(to right, black calc(100% - 24px), transparent)">
+        <button class="chip" type="button">핵심 요약</button>
+        <button class="chip" type="button">시사점</button>
+        <button class="chip" type="button">비슷한 기사</button>
+        <button class="chip" type="button">배경 설명</button>
+        <button class="chip" type="button">관련 도구</button>
+        <button class="chip" type="button">다음 단계</button>
+      </div>
+      <button class="icon-btn" type="button" aria-label="빠른 질문 다음 항목 보기">›</button>
+    </div>
+    <div role="group" aria-label="카테고리" data-scroll-row="" data-overflow="none"
+         style="display:flex; gap:8px; margin-top:8px; overflow-x:auto; scrollbar-width:none; scroll-padding:0 24px">
+      <button class="chip" type="button" aria-pressed="true">전체 소식</button>
+      <button class="chip" type="button" aria-pressed="false">하네스 &amp; 벤치마크</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>ariaControls: 있는 패널을 가리키는 버튼</h2>
+    <button type="button" aria-controls="clean-panel" aria-expanded="true">패널 접기</button>
+    <div id="clean-panel">패널 내용</div>
+  </section>
+
+  <section>
+    <h2>keepAll: 어절 단위로 줄을 바꾸는 두 줄 버튼</h2>
+    <button type="button" style="width:140px; padding:8px; text-align:left; white-space:normal">추천 질문 카드 한국어 버튼 글자</button>
+  </section>
+
+  <!-- 30 후속: 선택 칩(전체)이 줄의 보이는 상자 안에 다 들어온 스크롤 줄 -->
+  <section>
+    <h2>scrollRow: 선택 칩이 다 보이는 스크롤 줄</h2>
+    <div style="display:flex; align-items:center; gap:4px; width:360px">
+      <div role="group" aria-label="출처" data-scroll-row="" data-overflow="end"
+           style="display:flex; gap:8px; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none; scroll-padding:0 24px; mask-image:linear-gradient(to right, black calc(100% - 24px), transparent)">
+        <button class="chip" type="button" aria-pressed="true">★ Must-Read</button>
+        <button class="chip" type="button" data-source-chip="" aria-pressed="true">전체 4734</button>
+        <button class="chip" type="button" data-source-chip="" aria-pressed="false">국내 테크 459</button>
+        <button class="chip" type="button" data-source-chip="" aria-pressed="false">GitHub 2443</button>
+        <button class="chip" type="button" data-source-chip="" aria-pressed="false">HackerNews 942</button>
+        <button class="chip" type="button" data-source-chip="" aria-pressed="false">HuggingFace 605</button>
+      </div>
+      <button class="icon-btn" type="button" aria-label="출처 다음 항목 보기" style="width:32px; height:32px">›</button>
+    </div>
+  </section>
+
+  <!-- 리뷰 후속 (spec 14.8 fixture 표): defects.html 의 clip ④ 세로·가로, 배지 줄을 고친 형태 -->
+  <section>
+    <h2>clip ④ 세로: 중간 감싸개에 min-height:0 (스크롤 영역이 바깥 상자 안)</h2>
+    <div style="display:flex; flex-direction:column; height:200px; overflow:hidden; width:320px; border:1px solid #ddd">
+      <div style="height:40px; flex-shrink:0">머리</div>
+      <div style="flex:1; display:flex; flex-direction:column; min-height:0">
+        <div style="flex:1; overflow-y:auto">
+          <div style="height:600px">스크롤 영역 내용</div>
+          <button type="button">맨 아래 버튼</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>clip ④ 가로: 중간 감싸개에 min-width:0 (스크롤 영역이 바깥 상자 안)</h2>
+    <div style="display:flex; width:300px; overflow:hidden; border:1px solid #ddd">
+      <div style="flex:1; min-width:0">
+        <div style="display:flex; gap:8px; overflow-x:auto">
+          <button class="chip" type="button">핵심 요약</button>
+          <button class="chip" type="button">시사점</button>
+          <button class="chip" type="button">비슷한 기사</button>
+          <button class="chip" type="button">배경 설명</button>
+          <button class="chip" type="button">관련 도구</button>
+          <button class="chip" type="button">다음 단계</button>
+          <button class="chip" type="button">참고 자료</button>
+          <button class="chip" type="button">원문 보기</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>clip ①: 줄어드는 배지 줄 (기술 배지 flex-shrink:1, 글자 감싸개 min-width:0)</h2>
+    <div style="display:flex; flex-wrap:nowrap; gap:6px; overflow:hidden; width:266px">
+      <span style="display:inline-flex; align-items:center; height:24px; padding:0 8px; border-radius:12px; background:#fff3cd; white-space:nowrap; flex-shrink:0">★ Must-Read</span>
+      <span style="display:inline-flex; align-items:center; height:24px; padding:0 8px; border-radius:12px; background:#eee; flex-shrink:1; min-width:48px; max-width:128px"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">Model Context Protocol</span></span>
+      <span style="display:inline-flex; align-items:center; height:24px; padding:0 8px; border-radius:12px; background:#eee; flex-shrink:1; min-width:48px; max-width:128px"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">LangGraph Studio Cloud</span></span>
+      <span style="display:inline-flex; align-items:center; height:24px; padding:0 8px; border-radius:12px; background:#eee; flex-shrink:1; min-width:48px; max-width:128px"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">SWE-bench Multimodal</span></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>vRhythm·feedAreas: 요약 바 → 검색 영역 → 필터 영역 → 목록 머리줄 (보정 9 세 영역, 간격 12px)</h2>
+    <div class="fa-area" style="width:1000px">
+      <div data-insights-bar="" style="height:48px; background:#eef"></div>
+      <div data-feed-search=""><form role="search" style="margin:0"><input class="fa-input" type="search" aria-label="키워드 검색"></form></div>
+      <div data-feed-toolbar="" style="display:flex; flex-direction:column; gap:8px">
+        <div data-toolbar-row="" style="display:flex">
+          <div role="group" aria-label="카테고리" data-scroll-row="" data-overflow="none" class="fa-row">
+            <button class="fa-chip" type="button" aria-pressed="true">전체</button><button class="fa-chip" type="button" aria-pressed="false">하네스 &amp; 벤치마크</button><button class="fa-chip" type="button" aria-pressed="false">MCP &amp; 생태계</button>
+          </div>
+        </div>
+        <div data-toolbar-row="" style="display:flex; align-items:center; gap:8px">
+          <div role="group" aria-label="소스" data-scroll-row="" data-overflow="none" class="fa-row">
+            <button class="fa-chip" type="button" data-source-chip="" aria-pressed="true">전체</button><button class="fa-chip" type="button" data-source-chip="" aria-pressed="false">GitHub</button>
+          </div>
+          <button class="fa-chip" type="button" data-must-read-toggle="" aria-pressed="false">★ Must-Read</button>
+        </div>
+      </div>
+      <div data-feed-list-header="" class="fa-header">
+        <div data-feed-status="" role="status" style="flex:1; min-width:0">총 20건</div>
+        <select class="fa-select" aria-label="정렬" style="width:128px"><option>인기순</option></select>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>chatAlign·toast: 맞춘 챗 열과 입력 영역 바로 위 알림</h2>
+    <div style="display:flex; width:1100px; height:420px; border:1px solid #ddd">
+      <aside style="width:260px; flex-shrink:0; border-right:1px solid #ddd">
+        <div data-chat-sidebar-head="" style="height:100px; padding:8px">
+          <button type="button">새 대화</button>
+        </div>
+      </aside>
+      <div style="flex:1; min-width:0; display:flex; flex-direction:column">
+        <div style="height:56px; padding:16px">챗 헤더</div>
+        <div data-chat-context-bar="" style="height:44px; display:flex; align-items:center">
+          <div style="margin:0 auto; width:600px; display:flex">
+            <!-- (리뷰 후속) 알파 0 배경 감싸개 두 겹: 바깥 toolbar 는 color(srgb … / 0), 안쪽 radiogroup 은 oklab(… / 0).
+                 감싸개는 칠한 위젯보다 8px·4px 왼쪽에서 시작한다. 투명으로 봐야 칠한 위젯 왼쪽 끝(= 메시지 열)이 기준이 된다 -->
+            <div role="toolbar" aria-label="맥락 줄 도구" style="display:flex; margin-left:-8px; padding-left:4px; background-color:color(srgb 1 1 1 / 0)">
+            <div role="radiogroup" aria-label="스코프 묶음" style="display:flex; padding-left:4px; background-color:oklab(0 0 0 / 0)">
+            <!-- 세그먼트 토글: 칠해진 상자가 열과 맞고 안쪽 버튼은 padding 2px 만큼 안쪽이다 -->
+            <div role="group" aria-label="검색 스코프 모드" style="display:inline-flex; padding:2px; gap:2px; background:#eef; border-radius:8px">
+              <button type="button" style="border:0; background:transparent">단일 기사</button>
+              <button type="button" style="border:0; background:#fff">전체 소식</button>
+            </div>
+            </div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:1; min-height:0">
+          <div data-chat-column="" style="margin:0 auto; width:600px; height:120px">메시지 열</div>
+        </div>
+        <div style="position:relative">
+          <div data-toast-region="composer" style="position:absolute; left:0; right:0; bottom:100%; margin-bottom:8px">
+            <div style="margin:0 auto; width:600px">
+              <div role="status" style="padding:8px; border:1px solid #cc9; background:#ffe">기사를 찾지 못해 전체 검색으로 바꿨습니다</div>
+            </div>
+          </div>
+          <div data-composer="" style="margin:0 auto; width:600px; height:60px">
+            <textarea rows="1" aria-label="질문 입력" placeholder="질문 입력" style="width:100%; height:40px; padding:10px 12px; resize:none"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- 38 (보정 7): cardMetric·terms·modelPicker·focusLabels 의 고친 형태 -->
+  <section>
+    <h2>cardMetric: 원천 지표만</h2>
+      <article data-feed-card="" data-source="rss_kr" style="width:320px; margin-bottom:16px; padding:12px; border:1px solid #ddd; border-radius:12px">
+        <div data-card-meta=""><span>에이전트 · 국내 테크 · 15일 전</span></div>
+        <h3 class="title">카드 제목</h3>
+        <div style="display:flex; gap:12px; font-size:12px"></div>
+      </article>
+      <article data-feed-card="" data-source="github" style="width:320px; margin-bottom:16px; padding:12px; border:1px solid #ddd; border-radius:12px">
+        <div data-card-meta=""><span>에이전트 · GitHub · 15일 전</span></div>
+        <h3 class="title">카드 제목</h3>
+        <div style="display:flex; gap:12px; font-size:12px"><span style="display:inline-flex; gap:4px"><span class="sr-only">스타</span><span>5000</span></span><span style="display:inline-flex; gap:4px"><span class="sr-only">포크</span><span>15</span></span><span style="display:inline-flex; gap:4px"><span class="sr-only">인기 점수</span><span>100</span></span></div>
+      </article>
+      <article data-feed-card="" data-source="hackernews" style="width:320px; margin-bottom:16px; padding:12px; border:1px solid #ddd; border-radius:12px">
+        <div data-card-meta=""><span>AI 동향 · HackerNews · 2일 전</span></div>
+        <h3 class="title">카드 제목</h3>
+        <div style="display:flex; gap:12px; font-size:12px"><span style="display:inline-flex; gap:4px"><span class="sr-only">포인트</span><span>320</span></span><span style="display:inline-flex; gap:4px"><span class="sr-only">댓글</span><span>48</span></span></div>
+      </article>
+  </section>
+
+  <section>
+    <h2>terms: 한국어 용어 (사용자 글은 면제)</h2>
+    <div role="group" aria-label="검색 스코프 모드" style="display:inline-flex; gap:2px">
+      <button type="button">단일 기사</button>
+      <button type="button">전체 소식</button>
+    </div>
+    <span style="display:inline-block; padding:0 8px; border-radius:12px; background:#eee">전체 소식</span>
+    <button type="button"><span>포커스: 전체 소식</span></button>
+    <span style="display:block" title="Global 소식 정리">Global 소식 정리</span>
+    <span style="display:block" title="Global">Global</span>
+  </section>
+
+  <section>
+    <h2>modelPicker: 입력창 아래 하나 (헤더의 숨긴 버튼은 세지 않음)</h2>
+    <div style="display:flex; justify-content:flex-end"><button type="button" aria-label="Claude 모델 선택: Sonnet 5.5" style="display:none">Sonnet 5.5</button></div>
+    <textarea rows="1" aria-label="질문 입력" style="width:400px; height:40px; resize:none"></textarea>
+    <div><button type="button" aria-label="Claude 모델 선택: Sonnet 5.5">Sonnet 5.5</button></div>
+  </section>
+
+  <section>
+    <h2>focusLabels: 피드와 같은 긴 라벨</h2>
+    <div role="group" aria-label="도메인 카테고리" style="display:flex; flex-wrap:wrap; gap:8px">
+      <button class="chip" type="button">전체 소식</button><button class="chip" type="button">하네스 &amp; 벤치마크</button><button class="chip" type="button">MCP &amp; 생태계</button><button class="chip" type="button">에이전트 아키텍처</button><button class="chip" type="button">최신 AI 동향</button>
+    </div>
+  </section>
+
+  <!-- 30 후속 4 (보정 5): 숨은 Must-Read 의 고친 형태. Must-Read 토글이 소스 줄 밖, 같은 줄 오른쪽 끝 형제이고 768 미만 44×44.
+       소스 줄은 넘치지 않는 폭이라 1440 R14 와 엉키지 않는다. 1440·360 두 폭 모두에서 실패 0 이어야 한다.
+       49 (보정 9): 세 영역 구조(검색 영역 → 필터 영역 → 목록 머리줄)로 고쳤다. 정렬은 목록 머리줄에 있다 -->
+  <section data-self-test-both="" style="width:312px; margin-top:24px">
+    <h2>scrollRow 보정 5: 늘 보이는 Must-Read 토글</h2>
+    <div class="fa-area" style="width:312px">
+      <div data-feed-search=""><form role="search" style="margin:0"><input class="fa-input" type="search" aria-label="키워드 검색"></form></div>
+      <div data-feed-toolbar="" style="display:flex; flex-direction:column; gap:8px">
+        <div data-toolbar-row="" style="display:flex">
+          <div role="group" aria-label="카테고리" data-scroll-row="" data-overflow="none" class="fa-row">
+            <button class="fa-chip" type="button" aria-pressed="true">전체</button><button class="fa-chip" type="button" aria-pressed="false">MCP</button>
+          </div>
+        </div>
+        <div data-toolbar-row="" style="display:flex; align-items:center; gap:4px">
+          <div role="group" aria-label="소스" data-scroll-row="" data-overflow="none" data-selected-selector="[data-source-chip][aria-pressed=&quot;true&quot;]" class="fa-row">
+              <button class="fa-chip" type="button" data-source-chip="" aria-pressed="true" style="width:70px">전체</button>
+              <button class="fa-chip" type="button" data-source-chip="" aria-pressed="false" style="width:70px">GitHub</button>
+          </div>
+          <button class="fa-toggle" type="button" data-must-read-toggle="" aria-pressed="false" aria-label="Must-Read" title="Must-Read 만 보기">★</button>
+        </div>
+      </div>
+      <div data-feed-list-header="" class="fa-header">
+        <div data-feed-status="" role="status" style="flex:1; min-width:0">총 2건</div>
+        <select class="fa-select" aria-label="정렬" style="width:70px"><option>인기순</option></select>
+      </div>
+    </div>
+  </section>
+
+  <!-- 49 (보정 9, spec 14.17 fixture 표 정상판): chatHeader·pictograph(면제 확인 포함)·terms·briefing·cardFooter -->
+  <section>
+    <h2>chatHeader: 피드 링크가 맨 앞</h2>
+    <header style="display:flex; align-items:center; gap:8px; height:56px; width:600px">
+      <a href="#feed" aria-label="피드로 돌아가기" style="display:inline-flex; align-items:center; height:40px; padding:0 8px">피드</a>
+      <button type="button" aria-label="대화 기록 보기" style="height:40px; padding:0 8px; white-space:nowrap">기록</button>
+      <span style="font-weight:600">AI 챗</span>
+    </header>
+  </section>
+
+  <section>
+    <h2>AgentLens © 2026 ↔ 피드</h2>
+    <button type="button" style="display:inline-flex; align-items:center; gap:8px; margin-bottom:8px"><svg aria-hidden="true" width="16" height="16"></svg><span>FastMCP로 파이썬 기반 경량 MCP 서버 구축하는 방법</span></button>
+    <div class="markdown-viewer">
+      <h3 style="margin:0; font-size:16px; line-height:24px">💡 마크다운 본문 머리글</h3>
+      <p style="margin:4px 0">💡 시사점: 마크다운 전문은 backend 문서 그대로다</p>
+    </div>
+    <a href="#article" target="_blank" style="display:inline-block">🚀 외부 기사 제목</a>
+  </section>
+
+  <section>
+    <h2>terms: AI 질의응답·AI 챗에서 분석</h2>
+    <div role="tablist" aria-label="뉴스 상세 보기" style="display:flex; gap:8px; margin-bottom:8px">
+      <button type="button" role="tab" aria-selected="false">AI 질의응답</button>
+    </div>
+    <button type="button" title="AI 챗에서 이 기사를 단일 기사 모드로 분석">AI 챗에서 분석</button>
+  </section>
+
+  <section>
+    <h2>briefing: 설정 하나, 헤드라인 한 번, 피드와 같은 분야 이름</h2>
+    <div role="dialog" data-self-test-dialog="" aria-label="오늘의 브리핑" aria-describedby="c-briefing-desc" style="width:600px; padding:16px; border:1px solid #ddd">
+      <div style="font-weight:600">오늘의 브리핑</div>
+      <p id="c-briefing-desc" style="margin:8px 0">에이전트 하네스 표준화가 빨라진다</p>
+      <div role="tablist" aria-label="브리핑 보기" style="display:flex; gap:8px">
+        <button type="button" role="tab" id="c-briefing-tab" aria-selected="true" aria-controls="c-briefing-panel">카테고리별 요약</button>
+      </div>
+      <div role="tabpanel" id="c-briefing-panel" aria-labelledby="c-briefing-tab">
+        <div role="alert" style="margin:8px 0; padding:8px; border:1px solid #c99">
+          <p style="margin:0">이메일 발송에 실패했습니다</p>
+          <button type="button">이메일 설정 열기</button>
+        </div>
+        <section style="margin:8px 0">
+          <h3 style="margin:0; font-size:16px; line-height:24px">오늘의 핵심 요약</h3>
+          <p style="margin:4px 0">하네스 표준과 MCP 도구가 함께 늘었다</p>
+        </section>
+        <section style="margin:8px 0">
+          <h3 style="display:flex; align-items:center; gap:8px; margin:0; font-size:16px; line-height:24px"><svg aria-hidden="true" width="16" height="16"></svg><span>MCP &amp; 생태계</span></h3>
+        </section>
+        <section style="margin:8px 0">
+          <h3 style="margin:0; font-size:16px; line-height:24px">오늘의 추천 Action Items</h3>
+        </section>
+      </div>
+      <button type="button">연동 설정</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>cardFooter: 줄바꿈하는 바닥 줄 (안쪽 266px)</h2>
+    <article data-feed-card="" data-source="github" style="width:300px; padding:16px; border:1px solid #ddd; border-radius:12px">
+      <h3 class="title">카드 제목</h3>
+      <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; column-gap:8px; row-gap:4px; font-size:12px">
+        <div style="display:flex; align-items:center; gap:12px">
+          <span data-card-stat="score" style="display:inline-flex; gap:4px; white-space:nowrap"><span class="sr-only">스타</span><span>19,848</span></span>
+          <span data-card-stat="count" style="display:inline-flex; gap:4px; white-space:nowrap"><span class="sr-only">포크</span><span>2646</span></span>
+          <span data-card-stat="hotness" style="display:inline-flex; gap:4px; white-space:nowrap"><span class="sr-only">인기 점수</span><span>100</span></span>
+        </div>
+        <div style="display:flex; align-items:center; gap:4px; margin-left:auto">
+          <button type="button" title="AI 챗에서 이 기사를 단일 기사 모드로 분석" style="display:inline-flex; align-items:center; gap:8px; height:32px; padding:0 10px; white-space:nowrap"><svg aria-hidden="true" width="16" height="16"></svg><span>AI 챗에서 분석</span></button>
+          <a href="#original" target="_blank" style="display:inline-flex; align-items:center; height:32px; padding:0 8px; white-space:nowrap">원문</a>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <script>
+    // 처음 상태의 scrollLeft 를 둔다: middle = 가운데, 숫자 = 그 값, chip-N = 선택 칩 왼쪽 − N px (스냅 여백 N 에 선 상태)
+    for (const row of document.querySelectorAll('[data-init-scroll]')) {
+      const v = row.getAttribute('data-init-scroll');
+      if (v === 'middle') row.scrollLeft = (row.scrollWidth - row.clientWidth) / 2;
+      else if (/^\d+$/.test(v)) row.scrollLeft = Number(v);
+      else if (v.startsWith('chip-')) {
+        const chip = row.querySelector(row.getAttribute('data-selected-selector'));
+        const offset = chip.getBoundingClientRect().left - (row.getBoundingClientRect().left + row.clientLeft) + row.scrollLeft;
+        row.scrollLeft = offset - Number(v.slice(5));
+      }
+    }
+  </script>
+</body>
+</html>

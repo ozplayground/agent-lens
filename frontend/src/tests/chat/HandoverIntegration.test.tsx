@@ -66,7 +66,7 @@ describe('Feed & Modal Context Handover Integration', () => {
       </div>
     );
 
-    const btn = screen.getByRole('button', { name: /전용 챗에서 분석|Ask AI/i });
+    const btn = screen.getByRole('button', { name: 'AI 챗에서 분석' });
     fireEvent.click(btn);
 
     expect(mockPush).toHaveBeenCalledWith('/chat?sourceId=101');
@@ -82,7 +82,7 @@ describe('Feed & Modal Context Handover Integration', () => {
       />
     );
 
-    const btn = screen.getByRole('button', { name: /전용 AI 챗으로 이동|전용 챗에서 분석/i });
+    const btn = screen.getByRole('button', { name: /^AI 챗에서 분석/ });
     fireEvent.click(btn);
 
     expect(mockPush).toHaveBeenCalledWith(
@@ -101,7 +101,7 @@ describe('Feed & Modal Context Handover Integration', () => {
       />
     );
 
-    const handoverBtn = screen.getByRole('button', { name: /전용 챗에서 분석|Ask AI/i });
+    const handoverBtn = screen.getByRole('button', { name: 'AI 챗에서 분석' });
     fireEvent.click(handoverBtn);
 
     expect(mockPush).toHaveBeenCalledWith('/chat?sourceId=101');
@@ -119,7 +119,7 @@ describe('Feed & Modal Context Handover Integration', () => {
       />
     );
 
-    const handoverBtn = screen.getByRole('button', { name: /전용 AI 챗으로 이동|전용 챗에서 분석/i });
+    const handoverBtn = screen.getByRole('button', { name: /^AI 챗에서 분석/ });
     fireEvent.click(handoverBtn);
 
     expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/chat?sourceId=101'));

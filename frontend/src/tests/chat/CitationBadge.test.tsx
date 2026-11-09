@@ -96,8 +96,8 @@ describe('CitationBadge and CitationPopover Component', () => {
     const badge = screen.getByRole('button', { name: /보충.*출처.*S1/i });
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveTextContent('[S1]');
-    // Check emerald / green class presence
-    expect(badge.className).toContain('emerald');
+    // Check supplementary tone marker and success (green) token class
+    expect(badge).toHaveAttribute('data-tone', 'supplementary'); expect(badge.className).toContain('text-success');
   });
 
   it('renders supplementary web metadata (domain, query, snippet) in CitationPopover for [S1]', () => {

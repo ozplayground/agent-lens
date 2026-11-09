@@ -1,9 +1,9 @@
 # 기능명세: MCP 서버
 
-Updated: 2026-11-06
+Updated: 2026-11-09
 
 ## 개요
-AgentLens 는 Model Context Protocol(MCP) 서버를 함께 제공해 Claude Desktop, Cursor 같은 MCP 클라이언트가 수집된 뉴스를 도구 호출로 조회하고 수집을 실행할 수 있게 한다. 서버는 `backend/app/mcp/server.py` 의 FastMCP 앱이며, 클라이언트가 `python -m app.mcp.server` 를 자식 프로세스로 띄워 stdio 로 통신한다. 웹 API 서버와는 별개 프로세스지만 같은 백엔드 코드·설정·SQLite DB 를 쓴다. 도구는 4개(하네스 소식, MCP·스킬 생태계 소식, 키워드 검색, 즉시 수집)다. 웹 화면에서는 헤더 "MCP" 버튼으로 여는 `McpModal` 이 도구 목록과 클라이언트 설정 예시를 보여 주고, `GET /api/mcp/info` 는 실행 중인 서버 기준의 설정 예시를 JSON 으로 돌려준다.
+AgentLens 는 Model Context Protocol(MCP) 서버를 함께 제공해 Claude Desktop, Cursor 같은 MCP 클라이언트가 수집된 뉴스를 도구 호출로 조회하고 수집을 실행할 수 있게 한다. 서버는 `backend/app/mcp/server.py` 의 FastMCP 앱이며, 클라이언트가 `python -m app.mcp.server` 를 자식 프로세스로 띄워 stdio 로 통신한다. 웹 API 서버와는 별개 프로세스지만 같은 백엔드 코드·설정·SQLite DB 를 쓴다. 도구는 4개(하네스 소식, MCP·스킬 생태계 소식, 키워드 검색, 즉시 수집)다. 웹 화면에서는 헤더 더보기 메뉴 "MCP 연동" 으로 여는 `McpModal` 대화상자가 도구 목록과 클라이언트 설정 예시를 보여 주고, `GET /api/mcp/info` 는 실행 중인 서버 기준의 설정 예시를 JSON 으로 돌려준다.
 
 ## 기능 목록
 | ID | 기능 | 설명 | 진입점 (화면 / API) |
@@ -14,7 +14,7 @@ AgentLens 는 Model Context Protocol(MCP) 서버를 함께 제공해 Claude Desk
 | MCP-04 | search_agent_news | 제목·요약 부분 일치 검색, 카테고리 필터 | MCP 도구 |
 | MCP-05 | trigger_agentlens_crawl | 전체 소스 수집을 즉시 실행하고 결과를 돌려준다 | MCP 도구 |
 | MCP-06 | MCP 정보 API | 도구 목록과 Claude Desktop 설정 예시(실행 중인 Python 경로·backend 절대 경로)를 돌려준다 | `GET /api/mcp/info` |
-| MCP-07 | MCP 연동 모달 | 도구 4개 설명과 고정된 `claude_desktop_config.json` 예시, 복사 버튼 | 헤더 "MCP", ⌘K "FastMCP 도구 설정 열기" → `McpModal` |
+| MCP-07 | MCP 연동 대화상자 | 도구 4개 설명과 고정된 `claude_desktop_config.json` 예시, 복사 버튼 | 헤더 더보기 "MCP 연동", ⌘K "FastMCP 도구 설정 열기" → `McpModal` |
 
 ## MCP-01 MCP 서버 실행
 - 진입점: `backend/` 를 cwd 로 두고 `python -m app.mcp.server`. MCP 클라이언트 설정의 `command`/`args`/`cwd` 로 띄운다 (예시는 MCP-06, MCP-07).
@@ -102,17 +102,17 @@ AgentLens 는 Model Context Protocol(MCP) 서버를 함께 제공해 Claude Desk
 - 예외·엣지: 경로는 웹 서버가 도는 환경 기준이다. Docker 로 띄우면 컨테이너 안의 Python 경로와 `/app` 이 나오므로 호스트의 MCP 클라이언트 설정에 그대로 쓸 수 없다. 서버 이름이 FastMCP 인스턴스 이름(`AgentLens-MCP-Server`)과 다르다.
 - 관련 코드: `backend/app/api/mcp.py:1-27`, `backend/app/api/router.py:17`
 
-## MCP-07 MCP 연동 모달
-- 진입점: 헤더 "MCP" 버튼, 명령 팔레트(⌘K) "FastMCP 도구 설정 열기"(부제 "Claude Desktop 및 에이전트 연동 가이드"). 닫기: X, "닫기", Esc.
+## MCP-07 MCP 연동 대화상자
+- 진입점: 헤더 더보기 메뉴 "MCP 연동"(모든 폭), 커맨드 팔레트(⌘K) "FastMCP 도구 설정 열기"(부제 "Claude Desktop 및 에이전트 연동 가이드"). `Dialog size="lg"`(768px 이상 너비 720px, 768px 미만 전체 화면). 닫기: 닫기 버튼, 바닥 "닫기", 배경막 클릭, Escape (Escape 는 오버레이 스택의 맨 위 레이어만 닫는다).
 - 입력: 없음. 서버를 호출하지 않는다.
 - 처리 규칙:
-  1. 제목 "AgentLens MCP 연동", 부제 "Claude Desktop, Cursor 등에서 하네스 및 MCP 소식을 직접 호출할 수 있습니다."
-  2. "제공되는 MCP Tools" 카드 4개: `get_latest_harness_methods`(SWE-bench 및 에이전트 테스트 하네스 소식), `get_mcp_and_skills_ecosystem`(최신 MCP 서버, 스킬 플러그인 생태계), `search_agent_news`(키워드 및 카테고리별 글로벌 AI 소식 검색), `trigger_agentlens_crawl`(전세계 소스 실시간 크롤링 실행).
-  3. "Claude Desktop 설정 (`claude_desktop_config.json`)" 영역에 고정 문자열을 보여 준다: `mcpServers.agentlens` = `command: "python"`, `args: ["-m", "app.mcp.server"]`, `cwd: "/path/to/agentlens/backend"`(자리표시자).
-  4. "설정 복사" 버튼은 위 문자열을 클립보드에 쓰고 2000ms 동안 "복사됨!" 으로 바꾼다.
-- 출력: 모달 화면.
+  1. 제목 "AgentLens MCP 연동", 설명 "Claude Desktop, Cursor 등에서 하네스 및 MCP 소식을 직접 호출할 수 있습니다."
+  2. "제공되는 MCP 도구" 정의 목록(`dl`, 768px 미만 1열·이상 2열) 4개: `get_latest_harness_methods`(SWE-bench 및 에이전트 테스트 하네스 소식), `get_mcp_and_skills_ecosystem`(최신 MCP 서버, 스킬 플러그인 생태계), `search_agent_news`(키워드 및 카테고리별 글로벌 AI 소식 검색), `trigger_agentlens_crawl`(전세계 소스 실시간 크롤링 실행).
+  3. "Claude Desktop 설정 (`claude_desktop_config.json`)" 절에 고정 문자열을 코드 블록(`CodeBlock`, 언어 표시 `json`, 가로 스크롤)으로 보여 준다: `mcpServers.agentlens` = `command: "python"`, `args: ["-m", "app.mcp.server"]`, `cwd: "/path/to/agentlens/backend"`(자리표시자).
+  4. 코드 블록의 "복사" 버튼은 위 문자열을 클립보드에 쓰고(`navigator.clipboard` 가 없거나 실패하면 `execCommand('copy')`), 2000ms 동안 "복사됨"(실패하면 "복사 실패")으로 바꾼다.
+- 출력: 대화상자 화면.
 - 예외·엣지: `/api/mcp/info` 의 실제 경로를 쓰지 않으므로 사용자가 `cwd` 와 Python 경로를 직접 고쳐야 한다. `command: "python"` 은 백엔드 의존성이 설치된 가상환경 Python 이 아닐 수 있다.
-- 관련 코드: `frontend/src/components/McpModal.tsx:6-85`, `frontend/src/components/Header.tsx:158-164`, `frontend/src/components/CommandPalette.tsx:87-96`, `frontend/src/app/page.tsx:416`
+- 관련 코드: `frontend/src/components/McpModal.tsx:8-61`, `frontend/src/components/ui/CodeBlock.tsx:21-57`, `frontend/src/hooks/useCopyToClipboard.ts:44-70`, `frontend/src/components/Header.tsx:88`, `frontend/src/components/CommandPalette.tsx:105-111`, `frontend/src/app/page.tsx:291`
 
 ## 상수·설정값
 | 이름 | 값 | 위치 | 의미 |
@@ -126,15 +126,15 @@ AgentLens 는 Model Context Protocol(MCP) 서버를 함께 제공해 Claude Desk
 | JSON 직렬화 | `ensure_ascii=False`, `indent=2` | `server.py:17`, `:26`, `:41`, `:47` | 반환 문자열 형식 |
 | 정보 API 서버 이름 | `AgentLens MCP Server` | `backend/app/api/mcp.py:10` | `/api/mcp/info` 의 `name` |
 | 설정 예시 `cwd` (API) | `backend/` 절대 경로 | `backend/app/api/mcp.py:23` | 실행 중인 서버 기준 |
-| 설정 예시 (모달) | `command: "python"`, `cwd: "/path/to/agentlens/backend"` | `frontend/src/components/McpModal.tsx:8-16` | 고정 자리표시자 |
+| 설정 예시 (대화상자) | `command: "python"`, `cwd: "/path/to/agentlens/backend"` | `frontend/src/components/McpModal.tsx:15-23` | 고정 자리표시자 |
 | DB 기본 URL | `sqlite+aiosqlite:///./agentlens.db` | `backend/app/config.py:42`, `config.json:8` | cwd 기준 상대 경로 |
-| 복사 표시 시간 | 2000ms | `McpModal.tsx:65` | "복사됨!" 유지 |
+| 복사 표시 시간 | 2000ms | `frontend/src/hooks/useCopyToClipboard.ts:70` | "복사됨"/"복사 실패" 유지 |
 
 ## 알려진 불일치·위험
-- 설정 예시 불일치: 모달은 `python` 과 자리표시자 경로를 보여 주고, `/api/mcp/info` 는 실제 경로를 계산하지만 화면에서 쓰지 않는다. 근거: `frontend/src/components/McpModal.tsx:8-16`, `backend/app/api/mcp.py:6-27`.
-- 도구 설명 세 벌: FastMCP docstring, `/api/mcp/info` 의 하드코딩 목록, 모달의 한국어 설명이 따로 관리된다. 도구를 바꾸면 세 곳을 함께 고쳐야 한다. 근거: `backend/app/mcp/server.py:12`, `:21`, `:30`, `:45`, `backend/app/api/mcp.py:12-17`, `McpModal.tsx:41-58`.
+- 설정 예시 불일치: 대화상자는 `python` 과 자리표시자 경로를 보여 주고, `/api/mcp/info` 는 실제 경로를 계산하지만 화면에서 쓰지 않는다. 근거: `frontend/src/components/McpModal.tsx:15-23`, `backend/app/api/mcp.py:6-27`.
+- 도구 설명 세 벌: FastMCP docstring, `/api/mcp/info` 의 하드코딩 목록, 대화상자의 한국어 설명이 따로 관리된다. 도구를 바꾸면 세 곳을 함께 고쳐야 한다. 근거: `backend/app/mcp/server.py:12`, `:21`, `:30`, `:45`, `backend/app/api/mcp.py:12-17`, `McpModal.tsx:8-13`.
 - DB 경로 의존: `./agentlens.db` 가 cwd 기준이라 MCP 서버(cwd `backend/`)와 웹 서버의 cwd 가 다르면 서로 다른 DB 를 본다. 현재 루트와 `backend/` 에 `agentlens.db` 가 각각 있다. Docker 의 웹 서버는 volume 의 `/app/data/agentlens.db` 를 쓰므로 호스트에서 띄운 MCP 서버와 데이터를 공유하지 않는다. 근거: `backend/app/config.py:42`, `docker-compose.yml:21`, `:37`.
-- 스키마 보장 없음: MCP 서버는 `ensure_db_schema()` 를 부르지 않아, 웹 서버를 한 번도 띄우지 않은 DB 에서는 도구가 실패한다. 근거: `backend/app/mcp/server.py`(호출 없음), `backend/app/main.py:15`.
+- 스키마 보장 없음: MCP 서버는 `ensure_db_schema()` 를 부르지 않아, 웹 서버를 한 번도 띄우지 않은 DB 에서는 도구가 실패한다. 근거: `backend/app/mcp/server.py`(호출 없음), `backend/app/main.py:25`(웹 서버 lifespan 에서만 부른다).
 - 수집 중복 실행: `trigger_agentlens_crawl` 의 중복 방지 플래그가 프로세스별이라 웹 서버 수집과 겹칠 수 있고, 호출마다 LLM 비용이 든다. 인증이 없어 MCP 클라이언트(또는 그 안의 에이전트)가 제한 없이 부를 수 있다. 근거: `backend/app/collectors/manager.py:177-180`, `server.py:43-47`.
 - 이름과 동작 차이: `get_latest_harness_methods` 는 최신순이 아니라 hotness 순이다. `search_agent_news` 의 `query` 는 필수 인자지만 빈 문자열이면 검색 조건 없이 동작하고, LIKE 와일드카드를 이스케이프하지 않는다. 근거: `server.py:14`, `:35-37`.
 - 입력 검증 없음: `limit` 상한이 없어 큰 값을 주면 해당 카테고리 전체를 한 번에 직렬화한다. `category` 값도 검사하지 않는다. 근거: `server.py:11-41`.

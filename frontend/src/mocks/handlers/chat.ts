@@ -32,6 +32,13 @@ import {
   sanitizeModelTier,
 } from '@/types/chat';
 
+const MODEL_TIERS: readonly ModelTier[] = ['haiku', 'sonnet', 'opus'];
+
+/** 문자열이 지원하는 모델 티어인지 좁히는 타입 가드 */
+function isModelTier(value: string): value is ModelTier {
+  return (MODEL_TIERS as readonly string[]).includes(value);
+}
+
 /**
  * 헬퍼: 요청된 모델 및 티어 파라미터를 기반으로 대상 모델, 티어, 지연시간, 토큰 사용량 메타데이터 산출
  */
@@ -39,12 +46,12 @@ export function resolveModelAndUsage(requestedModel?: ChatModel, requestedTier?:
   let tier: ModelTier = DEFAULT_MODEL_TIER;
   let model: ChatModel = DEFAULT_CHAT_MODEL;
 
-  if (requestedTier && (['haiku', 'sonnet', 'opus'] as ModelTier[]).includes(requestedTier)) {
+  if (requestedTier && isModelTier(requestedTier)) {
     tier = requestedTier;
     model = TIER_TO_MODEL[tier];
   } else if (requestedModel) {
     const sanitized = sanitizeModelTier(requestedModel);
-    tier = (['haiku', 'sonnet', 'opus'].includes(sanitized as any) ? sanitized : 'sonnet') as ModelTier;
+    tier = isModelTier(sanitized) ? sanitized : 'sonnet';
     model = TIER_TO_MODEL[tier];
   }
 

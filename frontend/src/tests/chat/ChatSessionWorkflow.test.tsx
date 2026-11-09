@@ -55,7 +55,7 @@ describe('ChatSessionWorkflow Integration (FUNC-CHAT-012 TDD)', () => {
     });
 
     // 2. Scoped mode is restored
-    const scopedBtn = screen.getByRole('button', { name: /단일 기사|Scoped/i });
+    const scopedBtn = screen.getByRole('button', { name: '단일 기사' });
     expect(scopedBtn).toHaveAttribute('aria-pressed', 'true');
 
     // 3. Active source chip is restored (Article 102: LangGraph v0.2 Production Multi-Agent)

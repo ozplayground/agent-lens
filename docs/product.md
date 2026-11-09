@@ -18,14 +18,17 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
   - 뉴스 피드: 카테고리·소스 필터, 검색, 북마크(브라우저 localStorage), 상세 보기, 기사 단위 AI 질문(스트리밍 포함), RSS 출력 `GET /api/news/feed/rss.xml`
   - AI 챗: 세션 저장·삭제, SSE 스트리밍 답변, 인용 출처, 모델 선택, 단일 기사 범위 질문 (`backend/app/api/chat.py`, `frontend/src/components/chat/`)
   - 일일 브리핑: 생성, Notion 내보내기, 이메일 발송, 웹훅 발송. 자동 발송은 매일 0:15 UTC
-  - 트렌드 레이더: `GET /api/trends/radar`, `frontend/src/components/TechRadar.tsx`
+  - 트렌드 레이더: `GET /api/trends/radar`, 피드 위 요약 바(`frontend/src/components/feed/InsightsBar.tsx`)에서 펼치는 패널(`frontend/src/components/feed/TrendRadarPanel.tsx`)
   - 소스 관리와 딥 리서치: `sources.json` 의 RSS·GitHub 소스 추가·끄기·삭제, 새 소스 후보 발굴(매일 3, 15시 UTC 자동 실행)
   - MCP 서버: 도구 `get_latest_harness_methods`, `get_mcp_and_skills_ecosystem`, `search_agent_news`, `trigger_agentlens_crawl`
   - UI: 테마(light, dark, system), 단축키, 커맨드 팔레트
 - 하지 않는다: 명시적으로 정한 것은 없다. 코드에 없는 것은 사용자 인증·계정, 원격 프로덕션 배포(로컬 Docker Compose 만 있음)다.
 
 ## 제품 원칙과 제약
-- 아직 정하지 않았다.
+- 웹 UI 는 PC(1024px 이상)·태블릿(768~1023px)·모바일(768px 미만)에서 같은 기능에 닿는다. 화면 폭에 따라 위치는 바뀌어도 기능은 빠지지 않는다.
+- 화면은 하나의 디자인시스템(토큰과 공통 부품)으로 만들고, 라이트·다크 테마를 같은 품질로 지원한다.
+- 접근성은 WCAG 2.2 AA 의 대비·키보드 조작·포커스 표시를 지킨다.
+- 그 밖의 원칙은 아직 정하지 않았다.
 
 ## 기능 목록
 기능별 상세 동작은 [기능명세 색인](functional-spec/README.md) 에 있다. 아래 영역은 지금 코드에 있는 기능 묶음이다.

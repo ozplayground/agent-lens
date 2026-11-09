@@ -1,12 +1,38 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { RefreshCw, Clock, Terminal, CheckCircle2, Cpu, Rss, Bell, Trash2, AlertTriangle, Globe, Send, Bot, Command } from 'lucide-react';
-import { ScheduleStatus } from '@/types/news';
-import { fetchScheduleStatus, triggerManualCollect, fetchCrawlProgress, resetAndRecollect } from '@/lib/api';
-import ThemeToggle from '@/components/ThemeToggle';
+import {
+  Bot,
+  CircleCheck,
+  Clock,
+  Command,
+  Cpu,
+  Ellipsis,
+  Globe,
+  RefreshCw,
+  Rss,
+  Send,
+  Terminal,
+  Trash2,
+} from 'lucide-react';
+import { useCollector } from '@/hooks/useCollector';
+import { useHotkey } from '@/hooks/useHotkey';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { overlayStack } from '@/lib/overlay-stack';
+import { cn } from '@/lib/cn';
+import { useTheme, type ThemeMode } from '@/context/ThemeContext';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { Kbd } from '@/components/ui/Kbd';
+import { MenuButton, type MenuItem } from '@/components/ui/Menu';
+import { Spinner } from '@/components/ui/Spinner';
+import { ThemeMenu } from '@/components/ui/ThemeMenu';
 import CommandPalette from '@/components/CommandPalette';
+import ResetConfirmDialog from '@/components/ResetConfirmDialog';
+
+export const RSS_FEED_URL = '/api/news/feed/rss.xml';
 
 interface HeaderProps {
   onRefresh: () => void;
@@ -16,284 +42,210 @@ interface HeaderProps {
   onOpenSources?: () => void;
 }
 
+const THEME_OPTIONS: { mode: ThemeMode; label: string }[] = [
+  { mode: 'light', label: '라이트' },
+  { mode: 'dark', label: '다크' },
+  { mode: 'system', label: '시스템' },
+];
+
+const NAV_LINK_CLASSES =
+  'inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-fg-muted transition-colors duration-150 ease-standard hover:bg-surface-muted hover:text-fg md:h-9 aria-[current=page]:text-fg aria-[current=page]:bg-surface-muted';
+
+/**
+ * `/` 화면 헤더 (spec 설계 3). 56px 한 줄, sticky.
+ * 폭에 따라 같은 요소의 모양만 바꾸고, 모바일 전용 항목은 더보기 메뉴에 넣는다.
+ * 커맨드 팔레트(⌘K)와 초기화 확인 창은 헤더가 가진다.
+ */
 export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWebhook, onOpenSources }: HeaderProps) {
-  const [status, setStatus] = useState<ScheduleStatus | null>(null);
-  const [isCollecting, setIsCollecting] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [showResetModal, setShowResetModal] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
+  const { isCollecting, timeLeft, collect } = useCollector({ onRefresh });
+  const { theme, setTheme } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [showPalette, setShowPalette] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  // 빌드 때 next.config.ts 의 env 로 들어온다 (패키지 버전). 값이 없으면 배지를 그리지 않는다.
+  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION;
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setShowPalette((prev) => !prev);
+  // ⌘K / Ctrl+K: 팔레트가 맨 위면 닫고, 다른 레이어가 열려 있으면 무시, 아니면 연다. 입력창 안에서도 동작.
+  useHotkey(
+    'mod+k',
+    () => {
+      const depth = overlayStack.getLayers().length;
+      if (showPalette) {
+        if (depth <= 1) setShowPalette(false);
+        return;
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+      if (depth > 0) return;
+      setShowPalette(true);
+    },
+    { allowInInputs: true }
+  );
 
-  const load = async () => {
-    try {
-      const data = await fetchScheduleStatus();
-      setStatus(data);
-    } catch {}
-  };
+  const scheduleText = timeLeft ? `다음 수집 ${timeLeft} 후` : '다음 수집 확인 중';
 
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 30000);
-    return () => clearInterval(t);
-  }, []);
-
-  const pollProgress = (initialMsg?: string) => {
-    setIsCollecting(true);
-    if (initialMsg) setMsg(initialMsg);
-
-    let lastSaved = 0;
-    const pollInterval = setInterval(async () => {
-      try {
-        const prog = await fetchCrawlProgress();
-        if (prog.step_message) {
-          setMsg(prog.step_message);
-        }
-        if (prog.items_saved > lastSaved) {
-          lastSaved = prog.items_saved;
-          onRefresh();
-        }
-
-        if (!prog.is_running) {
-          clearInterval(pollInterval);
-          setIsCollecting(false);
-          setMsg(`수집 완료 (+${prog.items_saved}건 신규 반영)`);
-          onRefresh();
-          load();
-          setTimeout(() => setMsg(null), 4000);
-        }
-      } catch {
-        clearInterval(pollInterval);
-        setIsCollecting(false);
-        setMsg(null);
-      }
-    }, 1200);
-  };
-
-  const handleCollect = async () => {
-    if (isCollecting) return;
-    try {
-      await triggerManualCollect();
-      pollProgress('실시간 소식 수집 중...');
-    } catch {
-      setMsg('수집 요청 실패');
-      setIsCollecting(false);
-      setTimeout(() => setMsg(null), 3000);
+  const items: MenuItem[] = [];
+  if (onOpenSources) items.push({ type: 'item', label: '소스 & 리서처', icon: <Globe />, onSelect: onOpenSources });
+  if (onOpenWebhook) items.push({ type: 'item', label: '공유 & 알림', icon: <Send />, onSelect: onOpenWebhook });
+  items.push({ type: 'item', label: 'MCP 연동', icon: <Cpu />, onSelect: onOpenMcp });
+  items.push({ type: 'item', label: 'RSS 피드', icon: <Rss />, href: RSS_FEED_URL, external: true });
+  if (isMobile) {
+    items.push({ type: 'separator' });
+    items.push({
+      type: 'item',
+      label: timeLeft ? `수집 스케줄 (다음 ${timeLeft} 후)` : '수집 스케줄',
+      icon: <Clock />,
+      onSelect: onOpenSchedule,
+    });
+    items.push({
+      type: 'item',
+      label: isCollecting ? '수집 중' : '즉시 수집',
+      icon: <RefreshCw />,
+      onSelect: () => void collect(),
+      disabled: isCollecting,
+    });
+    items.push({ type: 'separator' });
+    items.push({ type: 'group', label: '테마' });
+    for (const { mode, label } of THEME_OPTIONS) {
+      items.push({ type: 'radio', label, checked: theme === mode, onSelect: () => setTheme(mode) });
     }
-  };
-
-  const handleConfirmReset = async () => {
-    setIsResetting(true);
-    try {
-      const res = await resetAndRecollect();
-      setShowResetModal(false);
-      setIsResetting(false);
-      onRefresh();
-      pollProgress(`기존 ${res.deleted_count}건 삭제 완료. 신규 수집 중...`);
-    } catch (e: any) {
-      alert(e.message || '초기화 실패');
-      setIsResetting(false);
-    }
-  };
-
-  const minutesLeft = status?.minutes_until_next_run ?? 0;
-  const hoursLeft = Math.floor(minutesLeft / 60);
-  const minsRemaining = Math.round(minutesLeft % 60);
+  }
+  items.push({ type: 'separator' });
+  items.push({
+    type: 'item',
+    label: '초기화 & 재수집…',
+    icon: <Trash2 />,
+    tone: 'danger',
+    onSelect: () => setShowReset(true),
+    disabled: isCollecting,
+  });
 
   return (
-    <header className="border-b border-slate-200 bg-white sticky top-0 z-40 text-slate-800 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        {/* Brand & Status */}
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700">
-            <Terminal className="w-4 h-4" />
-          </div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-bold text-slate-900 tracking-tight">AgentLens</h1>
-            <span className="text-[11px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-              v0.1.0
-            </span>
-            <span className="hidden sm:flex items-center gap-1 text-xs text-slate-600 ml-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              Live
-            </span>
-          </div>
-          <span className="hidden lg:inline text-xs text-slate-500 border-l border-slate-200 pl-3">
-            AI Agent · 하네스(Harness) · MCP 기술 큐레이션
+    <header className="sticky top-0 z-30 h-14 border-b border-border bg-surface/95 backdrop-blur">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-40 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:text-fg focus:shadow-overlay"
+      >
+        본문으로 건너뛰기
+      </a>
+      <div className="mx-auto flex h-full max-w-7xl items-center gap-1 px-4 md:gap-2 md:px-6 lg:px-8">
+        {/* 브랜드 */}
+        <Link href="/" className="mr-1 flex h-11 shrink-0 items-center gap-2 rounded-lg text-fg">
+          <span
+            aria-hidden="true"
+            className="flex size-7 items-center justify-center rounded-lg border border-border bg-surface-muted text-fg-muted"
+          >
+            <Terminal className="size-4" />
           </span>
-        </div>
+          <span className="text-base font-semibold">AgentLens</span>
+          {appVersion ? (
+            <span className="hidden lg:inline-flex">
+              <Badge>v{appVersion}</Badge>
+            </span>
+          ) : null}
+        </Link>
 
-        {/* Actions */}
-        <div className="flex items-center flex-wrap gap-2">
-          <Link
-            href="/chat"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-blue-50 hover:bg-blue-100 border border-blue-200 text-xs font-semibold text-blue-700 transition-colors shadow-2xs cursor-pointer"
-            title="AI 에이전트 전용 챗 워크스페이스"
-          >
-            <Bot className="w-3.5 h-3.5 text-blue-600" />
-            <span>AI 챗</span>
+        {/* 주 내비 */}
+        <nav aria-label="주 메뉴" className="flex items-center gap-1 max-md:ml-auto">
+          <Link href="/" aria-current="page" className={cn(NAV_LINK_CLASSES, 'max-md:hidden')}>
+            피드
           </Link>
+          <Link href="/chat" className={cn(NAV_LINK_CLASSES, 'max-md:w-11 max-md:justify-center max-md:px-0')}>
+            <Bot aria-hidden="true" className="size-4 shrink-0" />
+            <span className="max-md:sr-only">AI 챗</span>
+          </Link>
+        </nav>
 
-          {onOpenSources && (
-            <button
-              onClick={onOpenSources}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 transition-colors shadow-xs cursor-pointer"
-              title="스크래핑 대상 소스 관리 및 AI 리서처"
-            >
-              <Globe className="w-3.5 h-3.5 text-blue-600" />
-              <span>소스 & 리서처</span>
-            </button>
-          )}
-
+        <div className="flex items-center gap-1 md:ml-auto md:gap-2">
+          {/* 수집 상태 (md 이상) */}
           <button
-            onClick={onOpenMcp}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 transition-colors shadow-xs cursor-pointer"
-          >
-            <Cpu className="w-3.5 h-3.5 text-slate-500" />
-            <span>MCP</span>
-          </button>
-
-          <a
-            href="/api/news/feed/rss.xml"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 transition-colors shadow-xs cursor-pointer"
-          >
-            <Rss className="w-3.5 h-3.5 text-amber-600" />
-            <span>RSS</span>
-          </a>
-
-          {onOpenWebhook && (
-            <button
-              onClick={onOpenWebhook}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 transition-colors shadow-xs cursor-pointer"
-              title="Notion / 이메일 / 웹훅 브리핑 연동 설정"
-            >
-              <Send className="w-3.5 h-3.5 text-blue-600" />
-              <span>공유 & 알림</span>
-            </button>
-          )}
-
-          <button
-            onClick={onOpenSchedule}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs text-slate-600 transition-colors cursor-pointer"
-          >
-            <Clock className="w-3.5 h-3.5 text-slate-500" />
-            <span>다음 수집 {hoursLeft > 0 ? `${hoursLeft}h ` : ''}{minsRemaining}m 후</span>
-          </button>
-
-          {/* Reset & Recollect button (Danger action) */}
-          <button
-            onClick={() => setShowResetModal(true)}
-            disabled={isCollecting}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 border border-red-200 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            title="데이터 전체 삭제 및 클린 재수집"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>초기화 & 재수집</span>
-          </button>
-
-          {/* Collect button */}
-          <button
-            onClick={handleCollect}
-            disabled={isCollecting}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer shadow-xs ${
-              isCollecting
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700'
-            }`}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isCollecting ? 'animate-spin' : ''}`} />
-            <span>{isCollecting ? '수집 중...' : '즉시 수집'}</span>
-          </button>
-
-          {/* Command Palette button */}
-          <button
-            onClick={() => setShowPalette(true)}
             type="button"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 transition-colors shadow-xs cursor-pointer"
-            title="명령어 검색 및 단축키 팔레트 (⌘K)"
+            onClick={onOpenSchedule}
+            aria-label={`수집 스케줄 · ${scheduleText}`}
+            className="hidden h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm text-fg-muted transition-colors duration-150 ease-standard hover:bg-surface-muted hover:text-fg md:inline-flex"
           >
-            <Command className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden sm:inline font-mono text-[11px] text-slate-500">⌘K</span>
+            {isCollecting ? <Spinner /> : <Clock aria-hidden="true" className="size-4 shrink-0" />}
+            <span className="hidden lg:inline">{isCollecting ? '수집 중' : scheduleText}</span>
+            <span className="lg:hidden">{isCollecting ? '수집 중' : timeLeft ?? '…'}</span>
           </button>
 
-          {/* Theme Toggle */}
-          <ThemeToggle />
+          {/* 즉시 수집 (md 이상, 태블릿은 아이콘만) */}
+          {/* `Button` 의 기본 `inline-flex` 와 `hidden` 이 겹치지 않게 바깥 span 이 숨긴다. */}
+          <span className="hidden md:inline-flex">
+            <Button
+              variant="secondary"
+              leadingIcon={<RefreshCw />}
+              loading={isCollecting}
+              onClick={() => void collect()}
+              className="max-lg:w-9 max-lg:px-0"
+            >
+              <span className="max-lg:sr-only">{isCollecting ? '수집 중' : '즉시 수집'}</span>
+            </Button>
+          </span>
+
+          {/* 커맨드 팔레트 */}
+          <button
+            type="button"
+            onClick={() => setShowPalette(true)}
+            className="hidden h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm text-fg-muted transition-colors duration-150 ease-standard hover:border-border-strong hover:text-fg lg:inline-flex"
+          >
+            <Command aria-hidden="true" className="size-4" />
+            <span>검색·명령</span>
+            <Kbd>⌘K</Kbd>
+          </button>
+          <IconButton
+            label="커맨드 팔레트 열기"
+            icon={<Command />}
+            onClick={() => setShowPalette(true)}
+            className="lg:hidden"
+          />
+
+          {/* 테마 (md 이상) */}
+          {!isMobile ? <ThemeMenu /> : null}
+
+          {/* 더보기 */}
+          <MenuButton label="더보기" icon={<Ellipsis />} items={items} align="end" />
         </div>
       </div>
 
-      {/* Progress Status Bar */}
-      {msg && (
-        <div className="border-t border-slate-200 bg-slate-50 px-4 sm:px-6 lg:px-8 py-1.5 text-xs flex items-center justify-between">
-          <div className="max-w-7xl mx-auto w-full flex items-center justify-between text-slate-600">
-            <span className="flex items-center gap-2 font-mono">
-              {isCollecting ? (
-                <RefreshCw className="w-3 h-3 animate-spin text-blue-600 shrink-0" />
-              ) : (
-                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-              )}
-              <span className="text-slate-800 font-medium">{msg}</span>
-            </span>
-            {isCollecting && (
-              <span className="text-[11px] hidden sm:inline font-mono text-slate-500">
-                스트리밍 파이프라인: 피드 실시간 반영 중
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation Modal for Reset */}
-      {showResetModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white border border-slate-200 rounded-lg p-5 shadow-2xl space-y-4">
-            <div className="flex items-center gap-2.5 text-red-600">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
-              <h2 className="text-sm font-bold text-slate-900">수집 데이터 전체 삭제 및 재수집</h2>
-            </div>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              현재 데이터베이스에 저장된 <strong className="text-slate-900">모든 뉴스 소식 및 수집 로그가 영구 삭제</strong>되며, 최신 크롤러 기준에 따라 처음부터 깨끗하게 실시간 재수집을 시작합니다. 계속하시겠습니까?
-            </p>
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-              <button
-                onClick={() => setShowResetModal(false)}
-                disabled={isResetting}
-                className="px-3 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-medium transition-colors cursor-pointer"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleConfirmReset}
-                disabled={isResetting}
-                className="px-3.5 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {isResetting && <RefreshCw className="w-3 h-3 animate-spin" />}
-                <span>{isResetting ? '초기화 중...' : '전체 삭제 후 다시 수집'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Command Palette Modal */}
       <CommandPalette
         isOpen={showPalette}
         onClose={() => setShowPalette(false)}
         onOpenSources={onOpenSources}
         onOpenMcp={onOpenMcp}
-        onTriggerCollect={handleCollect}
+        onTriggerCollect={() => void collect()}
+        onOpenSchedule={onOpenSchedule}
+        onOpenSettings={onOpenWebhook}
+        rssUrl={RSS_FEED_URL}
+        onRequestReset={() => setShowReset(true)}
+        resetDisabled={isCollecting}
       />
+      <ResetConfirmDialog open={showReset} onClose={() => setShowReset(false)} />
     </header>
+  );
+}
+
+/**
+ * 수집 진행 줄. `<header>` 밖, 헤더 바로 아래에 둔다 (스크롤하면 함께 올라간다).
+ * 메시지가 있을 때만 보인다. 알림 영역(`role="status"`)은 항상 DOM 에 있다.
+ */
+export function CollectorStatusLine() {
+  const { isCollecting, message } = useCollector();
+  return (
+    <div role="status" aria-live="polite" className={cn(message ? 'border-b border-border bg-surface-muted' : null)}>
+      {message ? (
+        <div className="mx-auto flex h-9 max-w-7xl items-center justify-between gap-3 px-4 text-xs md:px-6 lg:px-8">
+          <span className="flex min-w-0 items-center gap-2 text-fg">
+            {isCollecting ? (
+              <Spinner className="text-accent" />
+            ) : (
+              <CircleCheck aria-hidden="true" className="size-4 shrink-0 text-success" />
+            )}
+            <span className="truncate font-medium">{message}</span>
+          </span>
+          {isCollecting ? (
+            <span className="hidden shrink-0 text-fg-subtle sm:inline">피드 실시간 반영 중</span>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }

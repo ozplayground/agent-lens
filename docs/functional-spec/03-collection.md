@@ -1,6 +1,6 @@
 # 기능명세: 수집·분류·요약 파이프라인
 
-Updated: 2026-11-06
+Updated: 2026-11-09
 
 ## 개요
 6종 외부 소스(RSS, HackerNews, GitHub, arXiv, Hugging Face Daily Papers, Reddit)에서 AI 에이전트·하네스·MCP 관련 글을 가져와, 관련성·품질 게이트(LLM 우선, 실패 시 휴리스틱)로 거르고, 키워드 규칙으로 4개 카테고리를 정하고, 중복을 합친 뒤 `news_items` 에 저장한다. 저장 시 인기도(hotness), 3줄 요약, 개발자 시사점, 기술 스택을 붙인다. 수집은 APScheduler 로 하루 4번(UTC 0·6·12·18시), 서버 시작 시 DB 가 비어 있으면 1번, 그리고 헤더 "즉시 수집"·"초기화 & 재수집" 버튼, MCP 도구로 실행된다. 진행 상황은 `/api/schedule/progress`, `/api/schedule/status` 로 본다. 기사 원문 본문 스크래퍼는 수집 파이프라인이 아니라 챗에서 필요할 때 호출된다.
@@ -27,7 +27,7 @@ Updated: 2026-11-06
 | COLL-17 | 정기 스케줄 | UTC 0·6·12·18시 수집 (딥 리서치·브리핑 작업도 같은 스케줄러) | `start_scheduler()` |
 | COLL-18 | 수동 트리거 | 백그라운드 수집 시작, 헤더 진행 폴링 | 헤더 "즉시 수집", 커맨드 팔레트 / `POST /api/schedule/trigger` |
 | COLL-19 | 초기화 후 재수집 | 기사·크롤 로그 전체 삭제 후 백그라운드 수집 | 헤더 "초기화 & 재수집" / `POST /api/schedule/reset-and-collect` |
-| COLL-20 | 시작 시 초기 수집 | 서버 시작 시 기사 0건이면 수집 | FastAPI lifespan |
+| COLL-20 | 시작 시 초기 수집 | 서버 시작 시 기사 0건이면 수집을 백그라운드로 시작, 요청은 바로 받음 | FastAPI lifespan |
 | COLL-21 | MCP 수집 트리거 | MCP 도구로 동기 수집 | MCP `trigger_agentlens_crawl` |
 | COLL-22 | LLM 프로바이더 선택·폴백 | Anthropic → OpenAI → Ollama 순, Gemini 는 명시 요청 시만 | `llm_processor.generate_live_answer()`, `stream_tokens()` |
 | COLL-23 | 테스트 환경 판정 | TESTING/CI 환경변수, pytest 로드 여부 | `llm_processor.is_test_environment()` |
@@ -35,6 +35,7 @@ Updated: 2026-11-06
 
 ## COLL-01 수집 실행 오케스트레이션
 - 진입점: `collect_all()` 을 정기 스케줄(COLL-17), 수동 트리거(COLL-18), 초기화(COLL-19), 시작 시(COLL-20), MCP(COLL-21), `make collect` 가 호출한다.
+- `make collect` (`scripts/collect.py`): `AGENTLENS_API_URL`(기본 `http://localhost:8000`)의 `/health` 가 healthy 면 API 모드로 그 backend 에 `POST /api/schedule/trigger`(COLL-18)를 보내고 `GET /api/schedule/progress` 로 끝날 때까지 기다린다 (`last_crawl_time` 이 바뀌면 성공, 그대로 끝나면 실패, `COLLECT_TIMEOUT` 기본 1800초). 없으면 직접 모드로 `backend/` 에서 `ensure_db_schema()` 뒤 `collect_all()` 을 직접 부르고 소스별 결과를 낸다 (`status` 가 `success` 가 아니거나 모든 소스가 실패하면 종료 1). `COLLECT_MODE=api|direct` 로 모드를 고정한다. 첫 줄에 `API 모드: <URL>` 또는 `직접 모드: <DB 절대 경로>` 를 낸다.
 - 입력: 선택 인자 `session` 은 받지만 쓰지 않는다.
 - 처리 규칙:
   1. 이미 실행 중(`is_running`)이면 `{"status": "already_running", "message": "Collector is currently running"}` 를 돌려주고 끝낸다.
@@ -61,7 +62,7 @@ Updated: 2026-11-06
   4. 읽은 시점의 저장소 루트 파일(`sources.json`) 기준 활성 소스: RSS 17개(국내 `country: KR` 5개, 글로벌 12개), GitHub 검색 쿼리 5개·모니터링 저장소 8개, Reddit 서브레딧 4개(`LocalLLaMA`, `MachineLearning`, `OpenAI`, `ArtificialInteligence`)·키워드 7개(`agent`, `harness`, `mcp`, `eval`, `tool`, `benchmark`, `reasoning`), HN 쿼리 6개, arXiv 쿼리 3개, HF 활성. `backend/app/config/sources.json` 과 내용이 같았다.
 - 출력: 소스별 설정 dict.
 - 예외·엣지: 소스 관리(추가·토글·삭제) UI·API 는 소스 영역 문서에서 다룬다.
-- 관련 코드: `backend/app/services/sources_service.py:11-157`, `sources.json`, `backend/app/config/sources.json`
+- 관련 코드: `backend/app/services/sources_service.py:11-167`, `sources.json`, `backend/app/config/sources.json`
 
 ## COLL-03 RSS 수집기
 - 진입점: `fetch_rss()`.
@@ -133,13 +134,13 @@ Updated: 2026-11-06
   1. 캐시: 키 `"{title.strip().lower()}::{source}"` 가 프로세스 메모리 캐시(`_eval_cache`, 크기 제한·만료 없음)에 있으면 그 결과를 그대로 쓴다. 거부 결과도 캐시된다.
   2. 혼합 소스 판정: `source` 가 `rss_kr`, `rss`, `hackernews`, `web` 중 하나면 혼합 소스다.
   3. 사전 필터: 혼합 소스이고 `is_strictly_ai_related(title, summary)` 가 false 면 LLM 호출 없이 거부한다 (`quality_score 1.0`, `relevance_score 0.0`, `category "unrelated"`, `rejection_reason "Pre-filter: No AI/Agent/MCP domain relevance found in mixed feed"`, `evaluated_by "pre_filter_gate"`).
-  4. LLM 평가: `has_live_provider()` 가 true(Anthropic 키, OpenAI 키, 또는 Ollama `/api/tags` 1초 내 200 중 하나)면 큐레이터 프롬프트로 `_generate_live_answer` 를 호출한다. 프롬프트는 4개 주제(하네스·벤치마크·평가·샌드박스 / MCP·도구·스킬·플러그인 / 에이전트 프레임워크·멀티에이전트·코딩 에이전트 / 프런티어 모델·LLM·추론)만 색인하고 일반 프로그래밍·비즈니스·커리어·비 AI 소프트웨어는 거부하라고 지시하며, JSON(`is_relevant_to_ai_agent`, `category`, `relevance_score`, `quality_score`, `is_worthwhile`, `is_high_signal`, `rejection_reason`, `why_it_matters`(한국어 1~2문장))만 요구한다.
+  4. LLM 평가: `has_live_provider()` 가 true(Anthropic 키, OpenAI 키, 또는 Ollama `/api/tags` 가 1초 내 200 이고 설정 모델이 설치돼 있음 중 하나)면 큐레이터 프롬프트로 `_generate_live_answer` 를 호출한다. 프롬프트는 4개 주제(하네스·벤치마크·평가·샌드박스 / MCP·도구·스킬·플러그인 / 에이전트 프레임워크·멀티에이전트·코딩 에이전트 / 프런티어 모델·LLM·추론)만 색인하고 일반 프로그래밍·비즈니스·커리어·비 AI 소프트웨어는 거부하라고 지시하며, JSON(`is_relevant_to_ai_agent`, `category`, `relevance_score`, `quality_score`, `is_worthwhile`, `is_high_signal`, `rejection_reason`, `why_it_matters`(한국어 1~2문장))만 요구한다.
   5. 응답 처리: 앞뒤 코드펜스 제거 후 첫 `{`~마지막 `}` 를 JSON 파싱. `is_worthwhile = LLM is_worthwhile AND is_relevant_to_ai_agent AND category != "irrelevant" AND relevance_score >= 5.0 AND quality_score >= QUALITY_CUTOFF_SCORE`. `is_high_signal = is_worthwhile AND (quality_score >= HIGH_SIGNAL_THRESHOLD OR LLM is_high_signal)`. `category` 는 저장 가치가 있고 4개 카테고리 중 하나일 때만 그 값, 아니면 `"unrelated"`. 점수는 소수 1자리 반올림(범위 보정 없음). `why_it_matters` 는 LLM 값, `evaluated_by` 는 모델 id.
   6. 휴리스틱 폴백: LLM 프로바이더가 없거나, 호출이 실패해 답이 없거나(모든 예외는 `_generate_live_answer` 가 삼킨다), JSON 을 찾지 못하거나, 파싱 예외가 나면 `evaluate_quality_and_signal`(COLL-10)과 `classify_and_tag`(COLL-11)를 쓴다. 저장 가치 없음이거나 카테고리가 `unrelated` 면 거부(`relevance_score 0.0`, 사유는 휴리스틱 사유 또는 `"Strict heuristic rejection: Low signal or unrelated"`). 아니면 통과(`relevance_score 7.0`, 휴리스틱 `is_high_signal`, 휴리스틱 카테고리, `why_it_matters None`). `evaluated_by "heuristic_fallback"`.
   7. 결과를 캐시에 넣고 돌려준다.
 - 출력: `{quality_score, relevance_score, is_worthwhile, is_high_signal, category, rejection_reason, why_it_matters, evaluated_by}`.
 - 예외·엣지: 게이트 거부 시 매니저는 `items_filtered += 1` 후 다음 항목으로 넘어간다. LLM 평가 모델은 지정하지 않으므로 Anthropic 이면 기본 챗 모델(`ANTHROPIC_DEFAULT_CHAT_MODEL`)을 쓴다(COLL-22).
-- 관련 코드: `backend/app/services/llm_processor.py:543-670`, `backend/app/collectors/manager.py:91-102`, `backend/tests/test_collectors.py:52-72`
+- 관련 코드: `backend/app/services/llm_processor.py:582-709`, `backend/app/collectors/manager.py:91-102`, `backend/tests/test_collectors.py:52-72`
 
 ## COLL-10 휴리스틱 품질 점수
 - 진입점: `evaluate_quality_and_signal(title, summary, source)`. COLL-09 폴백, 소스 리서처·딥 리서처에서도 호출한다.
@@ -155,7 +156,7 @@ Updated: 2026-11-06
   8. `is_worthwhile = score >= QUALITY_CUTOFF_SCORE`(혼합·비 AI 면 false), `is_high_signal = score >= HIGH_SIGNAL_THRESHOLD AND is_worthwhile`.
 - 출력: `{quality_score, is_worthwhile, is_high_signal}` (+1 단계 거부 시 `rejection_reason`).
 - 예외·엣지: `reddit` 은 혼합 소스가 아니라서 AI 사전 판정 없이 기본 6.0 에서 시작하고 신뢰도 가산이 없다.
-- 관련 코드: `backend/app/services/llm_processor.py:477-541`, `backend/tests/test_llm_processor.py:14-23`
+- 관련 코드: `backend/app/services/llm_processor.py:516-580`, `backend/tests/test_llm_processor.py:14-23`
 
 ## COLL-11 AI 도메인 판정·카테고리 분류·태그
 - 진입점: `is_strictly_ai_related(title, summary)`, `classify_and_tag(title, summary)`. 매니저 저장 단계와 COLL-09 폴백에서 호출.
@@ -199,7 +200,7 @@ Updated: 2026-11-06
   3. 시사점: override 가 trim 후 10자 초과면 그 값. 아니면 카테고리별 고정 문구(`CATEGORY_INSIGHTS`, 없는 카테고리는 `ai_news` 문구)를 쓰되, 기술 스택이 있으면 `"{첫 기술} 기반 구현에서 {문구}"`.
 - 출력: `{tldr_bullets: [3개], why_it_matters, tech_stack}`.
 - 예외·엣지: LLM 게이트가 쓰이지 않은 경우(휴리스틱 폴백) 시사점은 항상 고정 문구 기반이다.
-- 관련 코드: `backend/app/services/llm_processor.py:40-89`, `backend/app/services/llm_processor.py:469-475`, `backend/app/services/llm_processor.py:672-715`, `backend/tests/test_llm_processor.py:5-31`
+- 관련 코드: `backend/app/services/llm_processor.py:40-89`, `backend/app/services/llm_processor.py:508-514`, `backend/app/services/llm_processor.py:711-754`, `backend/tests/test_llm_processor.py:5-31`
 
 ## COLL-14 중복 제거·저장·갱신
 - 진입점: `_process_and_save_batch(raw_items, source_name)`.
@@ -245,7 +246,7 @@ Updated: 2026-11-06
   3. 실행 중 수집이 있으면 `collect_all` 이 `already_running` 으로 바로 끝난다.
 - 출력: 없음 (표준 출력 로그).
 - 예외·엣지: 크론 시각·타임존은 코드에 고정되어 있다. `config.json` 의 `scheduler.crawl_hours`, `scheduler.timezone` 은 상태 표시(`SCHEDULED_HOURS`, `timezone`)에만 쓰이고, `scheduler.enabled`, `scheduler.auto_briefing_hour` 는 읽는 코드가 없다.
-- 관련 코드: `backend/app/scheduler.py:1-68`, `backend/app/main.py:16,25`, `backend/tests/test_scheduler.py`
+- 관련 코드: `backend/app/scheduler.py:1-68`, `backend/app/main.py:26,46`, `backend/tests/test_scheduler.py`
 
 ## COLL-18 수동 트리거
 - 진입점: 헤더 "즉시 수집" 버튼(수집 중 비활성, 라벨 "수집 중..."), 커맨드 팔레트의 수집 명령(`onTriggerCollect`), API `POST /api/schedule/trigger`.
@@ -257,7 +258,7 @@ Updated: 2026-11-06
 - 관련 코드: `backend/app/api/schedule.py:48-67`, `frontend/src/components/Header.tsx:51-93,207-218,290-296`, `frontend/src/lib/api.ts:190-202`
 
 ## COLL-19 초기화 후 재수집
-- 진입점: 헤더 "초기화 & 재수집" → 확인 모달, API `POST /api/schedule/reset-and-collect`, `make reset`.
+- 진입점: 헤더 "초기화 & 재수집" → 확인 모달, API `POST /api/schedule/reset-and-collect`, `make reset` (`AGENTLENS_API_URL` 의 backend 에 보낸다. backend 가 없거나 응답이 `started` 가 아니면 실패로 끝난다).
 - 처리 규칙:
   1. 수집 중이면 삭제 없이 `{"status": "already_running", "message": "현재 수집이 진행 중이므로 초기화할 수 없습니다. 잠시 후 다시 시도해주세요.", "deleted_count": 0}`.
   2. 아니면 `news_items`, `crawl_logs` 를 전부 삭제·커밋한다.
@@ -269,9 +270,9 @@ Updated: 2026-11-06
 
 ## COLL-20 시작 시 초기 수집
 - 진입점: FastAPI `lifespan`.
-- 처리 규칙: `ensure_db_schema()` → `start_scheduler()` → 기사 수가 0 이면 "[AgentLens] Initial database seed collection..." 출력 후 `collect_all()` 을 await 한다. 그 뒤에 요청을 받기 시작한다.
-- 예외·엣지: 초기 수집이 끝날 때까지 서버가 요청을 받지 않는다(외부 요청·LLM 호출 시간만큼 기동이 늦어진다).
-- 관련 코드: `backend/app/main.py:13-26`
+- 처리 규칙: `ensure_db_schema()` → `start_scheduler()` → 세션을 열어 기사 수를 세고 닫는다 → 0 이면 "[AgentLens] Initial database seed collection (백그라운드로)..." 출력 후 `collect_all()` 을 `asyncio.create_task` 로 띄우고 바로 요청을 받기 시작한다 (`GET /health` 의 `running` 이 `true`). 종료 때 태스크가 끝나지 않았으면 `cancel()` 하고 `CancelledError` 를 삼켜 기다린 뒤 스케줄러를 멈추고 엔진을 dispose 한다.
+- 예외·엣지: 태스크가 취소가 아닌 예외로 끝나면 `[AgentLens] 첫 수집 백그라운드 태스크 오류: …` 한 줄을 낸다. 수집 도중 서버를 내리면 진행 중이던 배치 저장이 롤백될 수 있다. 스케줄러나 수동 트리거가 같은 때 수집을 띄우면 `is_running` 으로 `already_running` 이 된다.
+- 관련 코드: `backend/app/main.py:15-47`, `backend/tests/test_startup_seed.py`
 
 ## COLL-21 MCP 수집 트리거
 - 진입점: MCP 서버(`python -m app.mcp.server`, stdio) 도구 `trigger_agentlens_crawl`.
@@ -283,26 +284,26 @@ Updated: 2026-11-06
 - 진입점: `generate_live_answer(prompt, model, model_tier)`(일괄), `stream_tokens(...)`(스트리밍, 챗에서 사용), `_generate_live_answer(prompt)`(예외를 삼키는 래퍼, 수집 게이트·기사 Ask AI 가 사용).
 - 입력: 프롬프트, 선택적 모델명 또는 티어.
 - 처리 규칙:
-  1. 키 해석: Anthropic 은 생성자 인자 → `settings.ANTHROPIC_API_KEY` → 환경변수 `ANTHROPIC_API_KEY` → `config.json` `llm.anthropic_api_key`. OpenAI·Gemini 는 settings → `config.json` → 환경변수 → 인스턴스 생성 시 값.
+  1. 키 해석: Anthropic 은 생성자 인자 → `settings.ANTHROPIC_API_KEY` → 환경변수 `ANTHROPIC_API_KEY` → `config.json` `llm.anthropic_api_key`. OpenAI 는 `_resolve_openai_key`: 덮어쓰기 `llm_processor.openai_key`(`None` 이 아니면 그 값만) → settings → `config.json` → 환경변수. Gemini 는 settings → `config.json` → 환경변수 → 인스턴스 생성 시 값.
   2. 요청 모델 문자열에 `gemini` 가 있으면 Gemini 키 확인 후 `_call_gemini`(REST `generateContent`, temperature 0.3, maxOutputTokens 2048, timeout 20초, thought 파트 제외). 실패 시 `LLMUpstreamException`. 다른 프로바이더로 넘어가지 않는다. 스트리밍도 Gemini 는 한 번에 전체 텍스트를 1청크로 낸다.
   3. (일괄만) 모델 문자열에 `gpt` 또는 `openai` 가 있으면 OpenAI 만 시도, 실패 시 `LLMUpstreamException`.
   4. 그 외: `check_provider_available()` 이 `has_live_provider()` 를 확인하고 없으면 `LLMProviderUnavailableException("가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)")`.
   5. 1순위 Anthropic(키 있을 때): `resolve_model_and_tier` 로 모델 결정. 빈 값이면 기본 모델(`ANTHROPIC_DEFAULT_CHAT_MODEL` → `ANTHROPIC_MODEL` → `claude-sonnet-5-5`), `haiku`/`sonnet`/`opus` 티어명은 설정 모델로, `gemini`/`google` 이 들어간 값은 기본 모델로 바꾼다. REST `/v1/messages`, `anthropic-version 2023-06-01`, `anthropic-beta prompt-caching-2024-07-31`, max_tokens 4096, timeout 45초(스트리밍 120초). `claude-` 로 시작하는 모델에는 temperature 를 보내지 않는다. 오류 매핑: 401 → `AnthropicKeyMissingException`, 429 → `AnthropicQuotaExceededException`(상위에서 `LLMQuotaExceededException` 으로 바꿔 즉시 전파), 503/529 → `AnthropicOverloadedException`(즉시 전파), 그 외 비 200 → `RuntimeError`(다음 순위로 폴백).
-  6. 2순위 OpenAI(키 있을 때): Chat Completions, 모델 `OPENAI_MODEL`(기본 `gpt-4o-mini`), temperature 0.3, max_tokens 4096, timeout 60초(일괄은 httpx REST, 스트리밍은 공식 SDK). 오류 문자열에 429/quota/rate 가 있으면 `LLMQuotaExceededException`.
-  7. 3순위 Ollama: `{OLLAMA_BASE_URL}/api/generate`, 모델 `OLLAMA_MODEL`(기본 `llama3.2:latest`), `num_predict 4096`, timeout 90초(스트리밍 120초).
+  6. 2순위 OpenAI(키 있을 때): Chat Completions, 모델 `_resolve_openai_chat_model`(`OPENAI_MODEL` → `config.json` `llm.openai_model` → `gpt-4o-mini`), temperature 0.3, max_tokens 4096, timeout 60초(일괄은 httpx REST, 스트리밍은 공식 SDK). 오류 문자열에 429/quota/rate 가 있으면 `LLMQuotaExceededException`.
+  7. 3순위 Ollama: `{주소}/api/generate`, 주소 `_resolve_ollama_url`(덮어쓰기 `llm_processor.ollama_url` → `OLLAMA_BASE_URL` → `config.json` `llm.ollama_base_url`, 끝 `/` 제거), 모델 `_resolve_ollama_generate_model`(`OLLAMA_MODEL` → `config.json` `llm.ollama_model` → `llama3.2:latest`. 일괄·스트리밍 같은 값), `num_predict 4096`, timeout 90초(스트리밍 120초).
   8. 모두 실패하면 `LLMUpstreamException("외부 LLM 업스트림 통신 실패 / API 장애")`. 스트리밍에서 이미 토큰을 낸 뒤 실패하면 `LLMStreamFailedException`.
-  9. `has_live_provider()`: Anthropic 키 → OpenAI 키 → Ollama 주소가 있으면 동기 `httpx.Client` 로 `{url}/api/tags` 를 1초 timeout 으로 호출해 200 이면 true. `target_provider="gemini"` 면 Gemini 키 유무만 본다.
+  9. `has_live_provider()`: Anthropic 키 → OpenAI 키 → Ollama(`_ollama_status`): 주소가 있으면 동기 `httpx.Client` 로 `{url}/api/tags` 를 1초 timeout 으로 한 번 호출해, 200 이고 `models[].name` 또는 `model` 에 설정 모델(태그를 생략하면 `:latest` 를 붙여 비교)이 있으면 true. false 면 이유(`Anthropic 키 없음 · OpenAI 키 없음 · <Ollama 이유>`. Ollama 이유는 `Ollama 주소 없음`, `Ollama 연결 실패`, `Ollama /api/tags 응답 <코드>`, `Ollama 응답 해석 실패`, `Ollama 설정 모델 미설치 (<모델>)`)를 DEBUG 로그로 남기고, `check_provider_available()` 이 예외를 낼 때 같은 이유를 WARNING 으로 남긴다. `target_provider="gemini"` 면 Gemini 키 유무만 본다.
   10. 반환 모델 식별자는 `sanitize_model_identifier` 로 trim 하고, 비어 있으면 기본 챗 모델명을 쓴다.
 - 출력: `(텍스트, 모델 식별자)` 또는 `(토큰, 모델)` 스트림.
 - 예외·엣지: `config.json` `llm.provider`(`"auto"`)를 읽는 `LLM_PROVIDER` 설정은 어디서도 쓰지 않는다. `ANTHROPIC_COLLECTION_MODEL` 은 `generate_structured_summary`(수집용 구조화 요약, 캐시된 시스템 프롬프트, max_tokens 1500, 본문 4000자 포함)에서만 쓰이는데 이 함수는 파이프라인에서 호출되지 않고 테스트에서만 호출된다. 키가 없을 때 Ollama 연결 확인은 기본 주소 `http://localhost:11434` 로 매번 시도한다.
-- 관련 코드: `backend/app/services/llm_processor.py:91-467`, `backend/app/services/llm_providers/anthropic_provider.py:29-123`, `backend/app/services/llm_providers/anthropic_provider.py:152-319`, `backend/app/services/llm_providers/anthropic_provider.py:321-369`, `backend/app/services/llm_providers/base.py`, `backend/app/config.py:48-65,108-132`
+- 관련 코드: `backend/app/services/llm_processor.py:91-506`, `backend/app/services/llm_providers/anthropic_provider.py:29-123`, `backend/app/services/llm_providers/anthropic_provider.py:152-319`, `backend/app/services/llm_providers/anthropic_provider.py:321-369`, `backend/app/services/llm_providers/base.py`, `backend/app/config.py:48-65,108-132`
 
 ## COLL-23 테스트 환경 판정
 - 진입점: `llm_processor.is_test_environment()`.
 - 처리 규칙: 다음 중 하나면 true. ① `settings.TESTING` true(환경변수 `TESTING` 이 있으면 `true`/`1`/`yes` 여부로 덮어씀) ② 환경변수 `TESTING` 이 `true`/`1`/`yes` ③ 환경변수 `CI` 가 `true`/`1`/`yes` ④ `sys.modules` 에 `pytest` 가 있음.
 - 출력: bool.
-- 예외·엣지: 이 판정을 쓰는 곳은 챗 서비스의 ReAct 플래너 분기 한 곳뿐이다. 수집 게이트(COLL-09)와 기사 Ask AI 는 판정을 보지 않고 `has_live_provider()` 만 보므로, 테스트 중에도 키가 설정돼 있으면 실제 LLM 을 호출한다. 테스트는 `conftest.py` 에서 `DATABASE_URL` 을 `backend/tests/test_agentlens.db` 로 바꾸고 id 1 샘플 기사를 넣지만 `TESTING` 은 설정하지 않는다.
-- 관련 코드: `backend/app/services/llm_processor.py:229-240`, `backend/app/services/chat_service.py:381`, `backend/app/config.py:63,131-132`, `backend/tests/conftest.py`
+- 예외·엣지: 이 판정을 쓰는 곳은 챗 서비스의 ReAct 플래너 분기 한 곳뿐이다. 수집 게이트(COLL-09)와 기사 Ask AI 는 판정을 보지 않고 `has_live_provider()` 만 본다. 테스트에서 실제 LLM 호출을 막는 것은 이 판정이 아니라 `backend/tests/conftest.py` 의 하네스다: LLM 설정 원천을 비우고 흉내 Claude 키를 두며, `httpx`·`httpx2` 전송 계층에서 LLM 호스트 요청을 흉내로 답하거나 막는다. `conftest.py` 는 `DATABASE_URL` 을 `backend/tests/test_agentlens.db` 로 바꾸고 id 1 샘플 기사를 넣는다. `TESTING` 은 설정하지 않는다.
+- 관련 코드: `backend/app/services/llm_processor.py:288-299`, `backend/app/services/chat_service.py:381`, `backend/app/config.py:63,131-132`, `backend/tests/conftest.py`
 
 ## COLL-24 기사 본문 스크래퍼
 - 진입점: `ArticleScraperService(session).get_article_content(article)`. 챗 서비스가 기사 원문이 필요할 때 호출한다. 수집 파이프라인에서는 호출하지 않는다.
@@ -322,14 +323,14 @@ Updated: 2026-11-06
 | 이름 | 값 | 위치 | 의미 |
 |---|---|---|---|
 | `QUALITY_CUTOFF_SCORE` | `config.json` 5.0 (키 없으면 5.0) | `config.json` `llm.quality_cutoff_score`, `backend/app/config.py:64` | 저장 최소 품질 점수 |
-| `HIGH_SIGNAL_THRESHOLD` | `config.json` 7.0 (키 없으면 7.8, getattr 폴백 7.0) | `config.json` `llm.high_signal_threshold`, `backend/app/config.py:65`, `backend/app/services/llm_processor.py:529,622` | 하이시그널(Must-Read) 기준 |
-| LLM 관련성 하한 | `relevance_score >= 5.0` | `backend/app/services/llm_processor.py:624` | LLM 경로 저장 조건 |
-| 휴리스틱 폴백 관련성 | 7.0 | `backend/app/services/llm_processor.py:660` | 통과 시 기록값 |
-| 혼합 소스 | `rss_kr`, `rss`, `hackernews`, `web` | `backend/app/services/llm_processor.py:481,560` | AI 사전 필터 대상 |
-| 휴리스틱 기본 점수 | 혼합 5.0 / 그 외 6.0 | `backend/app/services/llm_processor.py:492` | |
-| 고신호 가산 | 키워드당 0.5, 최대 2.5 | `backend/app/services/llm_processor.py:507` | |
-| 소스 가산 | github/arxiv/huggingface +1.0, rss(_kr)+AI +0.5 | `backend/app/services/llm_processor.py:510-513` | |
-| 스팸 감점 / 짧은 제목 감점 | −3.5 / 제목 10자 미만 −2.0 | `backend/app/services/llm_processor.py:520-525` | |
+| `HIGH_SIGNAL_THRESHOLD` | `config.json` 7.0 (키 없으면 7.8, getattr 폴백 7.0) | `config.json` `llm.high_signal_threshold`, `backend/app/config.py:65`, `backend/app/services/llm_processor.py:568,661` | 하이시그널(Must-Read) 기준 |
+| LLM 관련성 하한 | `relevance_score >= 5.0` | `backend/app/services/llm_processor.py:663` | LLM 경로 저장 조건 |
+| 휴리스틱 폴백 관련성 | 7.0 | `backend/app/services/llm_processor.py:699` | 통과 시 기록값 |
+| 혼합 소스 | `rss_kr`, `rss`, `hackernews`, `web` | `backend/app/services/llm_processor.py:520,599` | AI 사전 필터 대상 |
+| 휴리스틱 기본 점수 | 혼합 5.0 / 그 외 6.0 | `backend/app/services/llm_processor.py:531` | |
+| 고신호 가산 | 키워드당 0.5, 최대 2.5 | `backend/app/services/llm_processor.py:546` | |
+| 소스 가산 | github/arxiv/huggingface +1.0, rss(_kr)+AI +0.5 | `backend/app/services/llm_processor.py:549-552` | |
+| 스팸 감점 / 짧은 제목 감점 | −3.5 / 제목 10자 미만 −2.0 | `backend/app/services/llm_processor.py:559-564` | |
 | 카테고리 가중치 | harness 1.3, mcp 1.2, agent_tech 1.1 | `backend/app/collectors/categorizer.py:109-111` | |
 | 키워드 가중치 | 제목 3.5 / 본문 1.5 | `backend/app/collectors/categorizer.py:100,104` | |
 | hotness 식 | `min(100, (raw + c×2.5 + 5)/(h+2)^1.3 × 8)` | `backend/app/collectors/categorizer.py:144-147` | |
@@ -346,28 +347,27 @@ Updated: 2026-11-06
 | 진행 폴링 / 상태 폴링 | 1200ms / 30000ms | `frontend/src/components/Header.tsx:47,80` | |
 | Anthropic 기본 모델 | `claude-sonnet-5-5` | `config.json`, `backend/app/services/llm_providers/anthropic_provider.py:29-48` | 기본 챗 모델 = 게이트 모델 |
 | Anthropic timeout / max_tokens | 45초(스트림 120초) / 4096 | `backend/app/services/llm_providers/anthropic_provider.py:212-233,250-279` | |
-| OpenAI 모델 / timeout | `gpt-4o-mini` / 60초 | `backend/app/services/llm_processor.py:189-203` | |
-| Ollama 주소 / 모델 / timeout | `http://localhost:11434` / `llama3.2:latest` / 90초 | `backend/app/config.py:61-62`, `backend/app/services/llm_processor.py:212-227` | |
-| Gemini 모델 / timeout | `gemini-3.5-flash-lite` / 20초 | `backend/app/config.py:58`, `backend/app/services/llm_processor.py:141-154` | 명시 요청 시만 |
-| Ollama 가용성 확인 | 동기 1초 | `backend/app/services/llm_processor.py:270` | |
+| OpenAI 모델 / timeout | `gpt-4o-mini` / 60초 | `backend/app/services/llm_processor.py:252-262` | |
+| Ollama 주소 / 모델 / timeout | `http://localhost:11434` / `llama3.2:latest` / 90초 | `backend/app/config.py:61-62`, `backend/app/services/llm_processor.py:150-169,271-286` | |
+| Gemini 모델 / timeout | `gemini-3.5-flash-lite` / 20초 | `backend/app/config.py:58`, `backend/app/services/llm_processor.py:210-223` | 명시 요청 시만 |
+| Ollama 가용성 확인 | 동기 1초, `/api/tags` 200 + 설정 모델 설치 | `backend/app/services/llm_processor.py:171-194` | |
 | 스크래퍼 | timeout 5.0초, 최소 본문 500자, L2 재사용 100자, L1 500개 | `backend/app/services/scraper.py:36,74,106,121,141` | |
 
 ## 알려진 불일치·위험
 - 스케줄 설정 무시: 크론이 `"0,6,12,18"`·UTC 로 고정되어 `config.json` `scheduler.crawl_hours`/`timezone` 을 바꿔도 실제 실행 시각은 그대로이고, 상태 API 의 `schedule_hours`·`timezone`·폴백 `next_run` 만 바뀐다. `scheduler.enabled`, `auto_briefing_hour`, `briefing.auto_dispatch_hour` 를 읽는 코드가 없다 (`backend/app/scheduler.py:9,39,55`, `backend/app/config.py:43-44`).
 - 쓰이지 않는 설정: `LLM_PROVIDER`(`llm.provider`), `USER_AGENT`(`crawler.user_agent`), `crawler.request_timeout_seconds`, `crawler.max_concurrent_requests`, `crawler.items_per_source_limit`, `SCRAPER_TIMEOUT_SECONDS` 는 읽는 곳이 없다. 수집기 timeout·건수·User-Agent 는 코드에 고정되어 있다.
-- 하이시그널 임계값 4곳 불일치: `config.json` 7.0, `config.py` 키 없을 때 기본 7.8, `llm_processor` getattr 폴백 7.0, Anthropic 시스템 프롬프트 문구 7.8, 프론트 목 7.8 (`backend/app/config.py:65`, `backend/app/services/llm_processor.py:529`, `backend/app/services/llm_providers/anthropic_provider.py:372-`, `frontend/src/mocks/handlers.ts`).
-- 수집용 모델 미사용: `ANTHROPIC_COLLECTION_MODEL` 과 `generate_structured_summary`(LLM 기반 TL;DR·기술 스택 생성)는 파이프라인에서 호출되지 않는다. 게이트는 기본 챗 모델을 쓰고, TL;DR·기술 스택은 규칙 기반이다 (`backend/app/services/llm_providers/anthropic_provider.py:321-369`, `backend/app/services/llm_processor.py:610,672-715`). 화면 문구("LLM으로 선별하고 3줄 핵심 요약과 개발자 시사점을 추출")와 달리 3줄 요약은 LLM 이 만들지 않는다 (`frontend/src/app/page.tsx:150`).
-- `category_hint` 미사용: 소스 설정마다 `category_hint` 가 있지만 RSS 수집기가 항목에 넣지 않고, `evaluate_content_with_llm` 도 인자를 쓰지 않는다 (`backend/app/collectors/sources/rss.py:68-77`, `backend/app/services/llm_processor.py:543-549`).
-- 평가 캐시 무기한: `_eval_cache` 는 크기·만료가 없고 초기화 API 도 비우지 않는다. 한 번 거부된 제목+소스는 프로세스 재시작 전까지 다시 평가되지 않는다 (`backend/app/services/llm_processor.py:118,556-558`).
-- 이벤트 루프 블로킹: `has_live_provider()` 가 키가 없을 때 동기 `httpx.Client` 로 Ollama 를 1초 timeout 호출한다. 수집 게이트는 기사마다(캐시 미스 시) 이를 호출한다 (`backend/app/services/llm_processor.py:267-275,580`).
+- 하이시그널 임계값 4곳 불일치: `config.json` 7.0, `config.py` 키 없을 때 기본 7.8, `llm_processor` getattr 폴백 7.0, Anthropic 시스템 프롬프트 문구 7.8, 프론트 목 7.8 (`backend/app/config.py:65`, `backend/app/services/llm_processor.py:568`, `backend/app/services/llm_providers/anthropic_provider.py:372-`, `frontend/src/mocks/handlers.ts`).
+- 수집용 모델 미사용: `ANTHROPIC_COLLECTION_MODEL` 과 `generate_structured_summary`(LLM 기반 TL;DR·기술 스택 생성)는 파이프라인에서 호출되지 않는다. 게이트는 기본 챗 모델을 쓰고, TL;DR·기술 스택은 규칙 기반이다 (`backend/app/services/llm_providers/anthropic_provider.py:321-369`, `backend/app/services/llm_processor.py:649,711-754`).
+- `category_hint` 미사용: 소스 설정마다 `category_hint` 가 있지만 RSS 수집기가 항목에 넣지 않고, `evaluate_content_with_llm` 도 인자를 쓰지 않는다 (`backend/app/collectors/sources/rss.py:68-77`, `backend/app/services/llm_processor.py:582-588`).
+- 평가 캐시 무기한: `_eval_cache` 는 크기·만료가 없고 초기화 API 도 비우지 않는다. 한 번 거부된 제목+소스는 프로세스 재시작 전까지 다시 평가되지 않는다 (`backend/app/services/llm_processor.py:120,595-597`).
+- 이벤트 루프 블로킹: `has_live_provider()` 가 키가 없을 때 동기 `httpx.Client` 로 Ollama 를 1초 timeout 호출한다. 수집 게이트는 기사마다(캐시 미스 시) 이를 호출한다 (`backend/app/services/llm_processor.py:176-178,319,619`).
 - 락 안 LLM 호출: 배치 저장 락 안에서 기사별 LLM 평가가 순차로 일어나 6개 소스를 동시에 가져와도 평가·저장은 직렬이다 (`backend/app/collectors/manager.py:77-99`).
 - 진행 상태 부정확: 6개 워커가 동시에 시작해 `current_source`/`step_message` 를 덮어쓴다 (`backend/app/collectors/manager.py:203-209`). 크롤 로그는 항상 `status="success"` 이고 소스별 오류는 메모리 `last_crawl_stats` 에만 남아 API 로 볼 수 없다 (`backend/app/collectors/manager.py:224-242`).
 - 배치 전체 롤백: 한 항목에서 예외(예: 수집기 항목의 `title` 값이 None 이면 `.strip()` 에서 AttributeError)가 나면 그 소스 배치 전체가 롤백되어 0건이 된다 (`backend/app/collectors/manager.py:81,171-174`).
-- LLM 점수 범위 미보정: LLM 경로의 `quality_score` 는 1~10 으로 자르지 않는다 (`backend/app/services/llm_processor.py:620,628`). 휴리스틱 경로만 1.0~10.0 으로 자른다.
-- 시작 지연: DB 가 비어 있으면 lifespan 에서 수집을 await 하므로 수집이 끝날 때까지 API 가 뜨지 않는다 (`backend/app/main.py:18-22`).
+- LLM 점수 범위 미보정: LLM 경로의 `quality_score` 는 1~10 으로 자르지 않는다 (`backend/app/services/llm_processor.py:659,667`). 휴리스틱 경로만 1.0~10.0 으로 자른다.
+- 빈 DB 첫 수집 중 종료: 백그라운드 첫 수집 도중 서버를 내리면 태스크를 취소해 그 시점까지의 배치 저장이 롤백될 수 있다 (`backend/app/main.py:40-45`).
 - MCP 프로세스 상태 분리: MCP `trigger_agentlens_crawl` 은 별도 프로세스의 `collector_manager` 로 실행되어 API 서버의 중복 실행 방지가 통하지 않는다 (`backend/app/mcp/server.py:43-47`).
-- 테스트 격리 부재: 수집 게이트·Ask AI 는 `is_test_environment()` 를 보지 않아 pytest 중에도 키가 있으면 실제 LLM 을 호출한다. `conftest.py` 는 `TESTING` 을 설정하지 않는다 (`backend/app/services/llm_processor.py:229-240,580`, `backend/tests/conftest.py`).
-- Gemini 정책 흔적: 코드 주석은 Gemini 스트리밍이 폐기됐다고 하지만 `generate_live_answer`/`stream_tokens` 는 모델명에 `gemini` 가 있으면 여전히 Gemini 를 호출한다. 반면 `resolve_model_and_tier` 는 Anthropic 경로에서 gemini 이름을 기본 모델로 바꾼다 (`backend/app/services/llm_processor.py:295-301,365-372,399`, `backend/app/services/llm_providers/anthropic_provider.py:98-103`).
+- Gemini 정책 흔적: 코드 주석은 Gemini 스트리밍이 폐기됐다고 하지만 `generate_live_answer`/`stream_tokens` 는 모델명에 `gemini` 가 있으면 여전히 Gemini 를 호출한다. 반면 `resolve_model_and_tier` 는 Anthropic 경로에서 gemini 이름을 기본 모델로 바꾼다 (`backend/app/services/llm_processor.py:346-352,410-417,444`, `backend/app/services/llm_providers/anthropic_provider.py:98-103`).
 - 시드 시각 고정: `SEED_ITEMS` 의 `published_at` 이 모듈 import 시각이라 서버가 오래 떠 있으면 시드의 hotness 가 낮게 계산된다 (`backend/app/collectors/manager.py:29,39`).
 - 인증 없음: `POST /api/schedule/trigger`, `POST /api/schedule/reset-and-collect` 는 누구나 호출할 수 있다.
-- `sources.json` 2벌: 저장소 루트와 `backend/app/config/sources.json` 이 함께 있고, 탐색 순서상 cwd 에 따라 다른 파일을 읽을 수 있다. 저장 시에는 두 번째 위치에도 복사한다 (`backend/app/services/sources_service.py:11-24,101-122`).
+- `sources.json` 2벌: 저장소 루트와 `backend/app/config/sources.json` 이 함께 있고, 탐색 순서상 cwd 에 따라 다른 파일을 읽을 수 있다. 저장 시에는 두 번째 위치에도 복사한다 (`backend/app/services/sources_service.py:11-24,102-132`).

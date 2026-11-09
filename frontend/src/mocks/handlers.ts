@@ -61,8 +61,8 @@ export const mockNewsItems: NewsItem[] = Object.values(mockArticles).map((art) =
   published_at: art.published_at,
   created_at: art.created_at ?? art.published_at,
   dedup_hash: `hash_${art.id}`,
-  full_content: (art as any).full_content ?? null,
-  scraped_at: (art as any).scraped_at ?? null,
+  full_content: 'full_content' in art && typeof art.full_content === 'string' ? art.full_content : null,
+  scraped_at: 'scraped_at' in art && typeof art.scraped_at === 'string' ? art.scraped_at : null,
 }));
 
 /**

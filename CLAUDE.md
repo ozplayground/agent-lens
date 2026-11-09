@@ -4,9 +4,12 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 
 ## 명령
 - 검사: `make check` (실패 시 0 이 아닌 값으로 끝난다. 작업 완료 보고에 출력을 붙인다). backend pytest + frontend vitest·eslint·`tsc --noEmit`
-- 환경 준비: `make setup` · 프론트 빌드: `make build` · 로컬 실행: `make docker-up` / `make docker-down` / `make docker-logs`
-- `make test`, `make dev` 는 지워진 `scripts/` 를 가리켜 지금 동작하지 않는다. 검사는 `make check` 를 쓴다.
-- `make check` 는 `.env` 의 LLM 키로 외부 호출을 하고, backend 테스트가 git 이 추적하는 루트 `config.json`·`sources.json` 을 고친다 (격리는 미정, `docs/test-strategy.md`). 돌린 뒤 `git status` 로 확인하고 되돌린다.
+- `make test` 는 `make check` 와 같다.
+- 환경 준비: `make setup` (다시 돌려도 된다. `.venv` 가 Python 3.11 이면 건너뛴다) · 프론트 빌드: `make build` · 정리: `make clean` (설치물·빌드 산출물·캐시만 지우고 DB·설정은 남긴다)
+- 로컬 실행: `make dev` (backend :8000 `--reload` + frontend :3000 을 함께 띄운다. Ctrl-C 로 둘 다 내린다. 포트가 쓰이고 있으면 띄우지 않고 실패한다)
+- Docker 실행: `make docker-up` (healthy 까지 기다린다) / `make docker-down` / `make docker-logs` (따라가기, Ctrl-C 로 끝낸다) · 이미지: `make docker-build`
+- 수집: `make collect` (backend 가 떠 있으면 그 backend 에 수집시키고, 없으면 `backend/agentlens.db` 에 직접 수집한다. 외부 소스·LLM 을 실제로 호출한다)
+- `make check` 의 pytest 는 LLM 호출을 흉내 내고 `config.json`·`sources.json` 은 임시 사본에 쓴다. 스크래퍼·Notion·SMTP 호출은 실제로 나간다 (`docs/test-strategy.md`). 돌린 뒤 `git status` 로 추적 파일이 바뀌지 않았는지 확인한다.
 
 ## SDLC
 작업은 기능 단위로 스테이지를 따른다. 각 스테이지는 산출물을 커밋하고, 다음 스테이지는 그것을 읽고 시작한다.
@@ -28,7 +31,7 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 - 자동 승인: `.claude/hooks/sdlc-config.local.json` 에 `{"auto_approve": true}` (git 에 올리지 않음) 나 환경 변수 `SDLC_AUTO_APPROVE=1` 이 있으면 켜진다 (`SDLC_AUTO_APPROVE=0` 이 우선해서 끈다). 켜져 있으면 세션 시작 메시지에 표시되고, 스킬이 '승인 명령을 알린다' 고 한 자리에서 Claude 가 산출물을 템플릿·이전 산출물과 대조해 자체 검토한 뒤 `python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve --auto <파일>` 로 승인하고 다음 스테이지로 넘어간다. 승인자는 `자동 승인 (Claude)` 로 남는다. Status 를 직접 고치는 것은 자동 승인이 켜져 있어도 막힌다. 원격 태그 push 와 파괴적 명령의 `RELEASE_APPROVAL` 게이트는 자동 승인과 상관없이 그대로다.
 - 승인된 plan.md 의 '변경 파일' 에 없는 `backend/app/**`, `frontend/src/**` 경로는 편집이 막힌다 (`frontend/src/tests/**`, `backend/app/config/sources.json` 포함). 범위를 바꾸려면 plan.md 를 고치고 재승인받는다.
 - 테스트를 고쳐 통과시키지 않는다. 코드를 고친다.
-- Deploy 는 프로덕션 배포가 없다: release.md 승인, 버전 bump, 버전 태그, releases.md 기록만 한다. 원격 태그 push(`git push --tags`, `git push … v<숫자>`)와 파괴적 명령(`make reset`, `make reset-and-collect`, `curl … reset-and-collect`)은 `RELEASE_APPROVAL` 이 있는 세션에서만 실행된다.
+- Deploy 는 프로덕션 배포가 없다: release.md 승인, 버전 bump, 버전 태그, releases.md 기록만 한다. 원격 태그 push(`git push --tags`, `git push … v<숫자>`)와 파괴적 명령(`make reset`, `curl … reset-and-collect`)은 `RELEASE_APPROVAL` 이 있는 세션에서만 실행된다.
 - 계약(`backend/app/schemas/` ↔ `frontend/src/types/` ↔ `frontend/src/mocks/`)은 손으로 맞춘다. 고칠 때 `.claude/rules/contracts.md` 를 따른다.
 
 ## 문서 지도

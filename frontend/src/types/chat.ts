@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { NewsItem } from './news';
 
 // ============================================================================
 // 1. 공통 응답 엔벨로프 및 에러 DTO (Response Envelope & Error Contracts)
@@ -926,7 +927,7 @@ export interface ChatHeaderProps {
   onScopeChange?: (nextScope: ScopeMode) => void;
   onToggleScope?: (mode: ScopeMode) => void;
   /** 핸드오버된 활성 기사 출처 메타 (Scoped 모드 한정) */
-  activeSource?: any | null;
+  activeSource?: NewsItem | ChatSourceDetailResponse | null;
   /** 기사 컨텍스트 해제 핸들러 */
   onRemoveSource?: () => void;
   onClearSource?: () => void;

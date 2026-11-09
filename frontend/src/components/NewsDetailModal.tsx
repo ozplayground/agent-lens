@@ -1,20 +1,27 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  X,
-  Sparkles,
-  Bot,
-  Star,
-  MessageSquare,
-  Bookmark,
-  ExternalLink,
-} from 'lucide-react';
+import React, { useState, useRef, useEffect, useId } from 'react';
+import { X, Star, Bookmark, ExternalLink } from 'lucide-react';
 import { NewsItem } from '@/types/news';
 import { askQuestionAboutNewsStream } from '@/lib/api';
+import { categoryLabel, sourceLabel } from '@/lib/labels';
+import { copyText } from '@/hooks/useCopyToClipboard';
+import { Dialog } from '@/components/ui/Dialog';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Tabs, TabPanel } from '@/components/ui/Tabs';
+import { Badge } from '@/components/ui/Badge';
+import { IconButton } from '@/components/ui/IconButton';
+import { buttonClasses } from '@/components/ui/Button';
 import MarkdownViewer from './MarkdownViewer';
 import AskAiPanel, { ChatMessage } from './news-detail/AskAiPanel';
 import HandoverCtaButton from './chat/HandoverCtaButton';
+
+type DetailTab = 'summary' | 'ask_ai';
+
+const TAB_ID_PREFIX = 'news-detail';
+
+/** 복사 결과 표시 시간 (`useCopyToClipboard` 기본값과 같다). */
+const COPY_FEEDBACK_MS = 2000;
 
 interface NewsDetailModalProps {
   item: NewsItem | null;
@@ -33,13 +40,24 @@ export default function NewsDetailModal({
   onToggleBookmark,
   onHandoverToChat,
 }: NewsDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'summary' | 'ask_ai'>('summary');
+  const [activeTab, setActiveTab] = useState<DetailTab>('summary');
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [copyFailedIndex, setCopyFailedIndex] = useState<number | null>(null);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const titleId = useId();
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCopyTimer = () => {
+    if (copyTimerRef.current !== null) {
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
+  };
 
   const handleClose = () => {
     if (abortControllerRef.current) {
@@ -50,23 +68,40 @@ export default function NewsDetailModal({
     setChatHistory([]);
     setQuestion('');
     setAsking(false);
+    clearCopyTimer();
     setCopiedIndex(null);
+    setCopyFailedIndex(null);
+    setConfirmClearOpen(false);
     onClose();
   };
 
-  useEffect(() => {
+  // 닫혀 있는 동안 isOpen 이나 기사 id 가 바뀌면 상태를 초기화한다 (렌더 중 이전 값 비교).
+  const itemId = item?.id;
+  const [prevView, setPrevView] = useState({ isOpen, itemId });
+  if (prevView.isOpen !== isOpen || prevView.itemId !== itemId) {
+    setPrevView({ isOpen, itemId });
     if (!isOpen) {
       setActiveTab('summary');
       setChatHistory([]);
       setQuestion('');
       setAsking(false);
       setCopiedIndex(null);
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
+      setCopyFailedIndex(null);
+      setConfirmClearOpen(false);
     }
-  }, [isOpen, item?.id]);
+  }
+
+  // 닫히면 진행 중인 스트림을 끊고 복사 표시 타이머를 정리한다.
+  useEffect(() => {
+    if (!isOpen && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (!isOpen && copyTimerRef.current !== null) {
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
+  }, [isOpen, itemId]);
 
   useEffect(() => {
     return () => {
@@ -74,21 +109,15 @@ export default function NewsDetailModal({
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
+      if (copyTimerRef.current !== null) {
+        clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
     };
   }, []);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
-
-  if (!isOpen || !item) return null;
+  // Escape·배경막·닫기 버튼은 Dialog(오버레이 스택)가 처리한다.
+  if (!item) return null;
 
   const handleAsk = async (queryToAsk?: string) => {
     const q = (queryToAsk || question).trim();
@@ -158,8 +187,9 @@ export default function NewsDetailModal({
         };
         return updated;
       });
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      const errMessage = err instanceof Error ? err.message : '';
       setChatHistory((prev) => {
         if (prev.length === 0) return prev;
         const updated = [...prev];
@@ -167,7 +197,7 @@ export default function NewsDetailModal({
         if (!last.a) {
           updated[updated.length - 1] = {
             ...last,
-            a: `⚠️ AI 응답 생성 실패: ${err.message || '네트워크 상태를 확인해주세요.'}`,
+            a: `AI 응답 생성 실패: ${errMessage || '네트워크 상태를 확인해주세요.'}`,
             model: 'Error',
             isStreaming: false,
           };
@@ -184,114 +214,125 @@ export default function NewsDetailModal({
     }
   };
 
+  // 복사 결과(복사됨·복사 실패)를 그 답변에 2,000ms 동안 보인다. 타이머는 닫힘·언마운트 때 정리한다.
   const handleCopy = (text: string, index: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2000);
+    void copyText(text).then((ok) => {
+      clearCopyTimer();
+      if (ok) {
+        setCopyFailedIndex(null);
+        setCopiedIndex(index);
+        copyTimerRef.current = setTimeout(() => {
+          copyTimerRef.current = null;
+          setCopiedIndex(null);
+        }, COPY_FEEDBACK_MS);
+      } else {
+        setCopiedIndex(null);
+        setCopyFailedIndex(index);
+        copyTimerRef.current = setTimeout(() => {
+          copyTimerRef.current = null;
+          setCopyFailedIndex(null);
+        }, COPY_FEEDBACK_MS);
+      }
+    });
   };
 
   const handleClearChat = () => {
-    if (window.confirm('AI 대화 내역을 모두 초기화하시겠습니까?')) {
-      setChatHistory([]);
-    }
+    setConfirmClearOpen(true);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-      <div
-        className="fixed inset-0"
-        onClick={handleClose}
-        aria-hidden="true"
-      />
+  const confirmClearChat = () => {
+    setChatHistory([]);
+    setConfirmClearOpen(false);
+  };
 
-      <div className="relative w-full max-w-4xl max-h-[92vh] sm:max-h-[88vh] bg-white border border-slate-200 rounded-xl shadow-2xl flex flex-col overflow-hidden text-slate-800 z-10 animate-in zoom-in-95 duration-150">
-        {/* Modal Header */}
-        <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0 bg-white">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="px-2 py-0.5 rounded font-mono text-[11px] bg-slate-100 text-slate-700 border border-slate-200 shrink-0 font-medium">
-              {item.category}
-            </span>
+  const header = (
+    <div className="shrink-0 border-b border-border">
+      <div className="flex items-start gap-2 px-4 pt-3 md:px-5">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+            <Badge>{categoryLabel(item.category)}</Badge>
             {item.is_high_signal && (
-              <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1 shrink-0">
-                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+              <Badge tone="warning" icon={<Star className="fill-current" />}>
                 Must-Read
-              </span>
+              </Badge>
             )}
-            <h3 className="text-sm sm:text-base font-semibold text-slate-900 truncate">
-              {item.title}
-            </h3>
           </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => onToggleBookmark(item)}
-              className={`p-1.5 rounded-md hover:bg-slate-100 text-xs transition-colors cursor-pointer ${
-                isBookmarked ? 'text-amber-500' : 'text-slate-400 hover:text-slate-700'
-              }`}
-              title={isBookmarked ? '보관됨' : '보관하기'}
-            >
-              <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-amber-500' : ''}`} />
-            </button>
-            <button
-              onClick={handleClose}
-              className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="px-4 border-b border-slate-200 bg-slate-50 flex gap-4 text-xs shrink-0">
-          <button
-            onClick={() => setActiveTab('summary')}
-            className={`py-2.5 font-medium border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'summary'
-                ? 'border-blue-600 text-blue-600 font-semibold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
+          <h2
+            id={titleId}
+            className="line-clamp-2 text-base font-semibold text-fg break-keep [overflow-wrap:anywhere] md:text-lg"
           >
-            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            <span>AI 요약 & 시사점</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('ask_ai')}
-            className={`py-2.5 font-medium border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'ask_ai'
-                ? 'border-blue-600 text-blue-600 font-semibold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Ask AI 질의응답</span>
-            {chatHistory.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full font-mono text-[10px] bg-blue-100 text-blue-700 font-semibold">
-                {chatHistory.length}
-              </span>
-            )}
-          </button>
+            {item.title}
+          </h2>
         </div>
+        <div className="-mr-2 flex shrink-0 items-center gap-1">
+          <IconButton
+            label={isBookmarked ? '보관됨' : '보관하기'}
+            icon={<Bookmark className={isBookmarked ? 'fill-current text-accent' : undefined} />}
+            onClick={() => onToggleBookmark(item)}
+          />
+          <IconButton label="닫기" icon={<X />} onClick={handleClose} />
+        </div>
+      </div>
+      <Tabs
+        label="기사 보기"
+        idPrefix={TAB_ID_PREFIX}
+        tabs={[
+          { id: 'summary', label: 'AI 요약 & 시사점' },
+          {
+            id: 'ask_ai',
+            label: 'AI 질의응답',
+            badge: chatHistory.length > 0 ? chatHistory.length : undefined,
+          },
+        ]}
+        value={activeTab}
+        onChange={setActiveTab}
+        className="mt-2 border-b-0 px-2 md:px-3"
+      />
+    </div>
+  );
 
-        {/* Tab Contents */}
+  const footer = (
+    <>
+      <div className="mr-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
+        <span>
+          출처: <strong className="font-semibold text-fg">{sourceLabel(item.source)}</strong>
+        </span>
+        {item.author && <span className="max-md:hidden">by {item.author}</span>}
+      </div>
+      <a
+        href={item.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={buttonClasses('primary', 'md')}
+      >
+        <span>원문 링크 방문</span>
+        <ExternalLink aria-hidden="true" className="size-4" />
+      </a>
+    </>
+  );
+
+  return (
+    <>
+      <Dialog
+        open={isOpen}
+        onClose={handleClose}
+        size="xl"
+        header={header}
+        labelledBy={titleId}
+        footer={footer}
+        bodyClassName="flex flex-col p-0"
+      >
         {activeTab === 'summary' ? (
-          <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 bg-white">
-            {/* Title & Insight */}
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug mb-3">
-                {item.title}
-              </h2>
-              {item.why_it_matters && (
-                <div className="p-3 sm:p-3.5 rounded-lg bg-blue-50/70 border-l-4 border-blue-500 text-xs sm:text-sm text-slate-700 leading-relaxed shadow-xs">
-                  <div className="font-semibold text-blue-700 flex items-center gap-1 mb-1 font-mono">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Why It Matters (개발자를 위한 시사점):</span>
-                  </div>
+          <TabPanel id="summary" idPrefix={TAB_ID_PREFIX} className="flex flex-col gap-6 px-4 py-4 md:px-5 md:py-5">
+            {item.why_it_matters && (
+              <section className="flex flex-col gap-2">
+                <h3 className="text-base font-semibold text-fg">개발자 시사점</h3>
+                <p className="rounded-lg border-l-4 border-accent bg-surface-muted p-3 text-sm leading-relaxed text-fg">
                   {item.why_it_matters}
-                </div>
-              )}
-            </div>
+                </p>
+              </section>
+            )}
 
-            {/* Dedicated AI Chat Handover Banner */}
             <HandoverCtaButton
               item={item}
               variant="modal-banner"
@@ -302,87 +343,71 @@ export default function NewsDetailModal({
               }}
             />
 
-            {/* 3-Bullet TL;DR */}
             {item.tldr_bullets && item.tldr_bullets.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider font-mono">
-                  3-Bullet Executive TL;DR
-                </h4>
-                <ul className="space-y-2 text-xs sm:text-sm text-slate-700 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+              <section className="flex flex-col gap-2">
+                <h3 className="text-base font-semibold text-fg">핵심 요약 3줄</h3>
+                <ul className="flex flex-col gap-2 rounded-lg border border-border bg-surface-muted p-3 text-sm leading-relaxed text-fg">
                   {item.tldr_bullets.map((bullet, idx) => (
                     <li key={idx} className="flex items-start gap-2">
-                      <span className="text-blue-600 mt-0.5 font-bold">•</span>
-                      <span>{bullet}</span>
+                      <span aria-hidden="true" className="font-semibold text-accent">
+                        •
+                      </span>
+                      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{bullet}</span>
                     </li>
                   ))}
                 </ul>
-              </div>
+              </section>
             )}
 
-            {/* Tech Stack */}
             {item.tech_stack && item.tech_stack.length > 0 && (
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider font-mono">
-                  추출된 기술 스택 / 모델
-                </h4>
-                <div className="flex flex-wrap gap-1.5">
+              <section className="flex flex-col gap-2">
+                <h3 className="text-base font-semibold text-fg">기술 스택</h3>
+                <ul className="flex flex-wrap gap-1.5">
                   {item.tech_stack.map((tech, idx) => (
-                    <span
-                      key={idx}
-                      className="px-2 py-0.5 rounded font-mono text-[11px] bg-slate-100 text-blue-700 border border-slate-200 font-medium"
-                    >
-                      {tech}
-                    </span>
+                    <li key={idx}>
+                      <Badge tone="accent">{tech}</Badge>
+                    </li>
                   ))}
-                </div>
-              </div>
+                </ul>
+              </section>
             )}
 
-            {/* Summary Text */}
             {item.summary && (
-              <div className="space-y-1.5">
-                <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider font-mono">
-                  상세 본문 요약
-                </h4>
-                <div className="text-xs sm:text-sm text-slate-700 leading-relaxed bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+              <section className="flex flex-col gap-2">
+                <h3 className="text-base font-semibold text-fg">상세 본문 요약</h3>
+                <div className="rounded-lg border border-border p-3">
                   <MarkdownViewer content={item.summary} />
                 </div>
-              </div>
+              </section>
             )}
-          </div>
+          </TabPanel>
         ) : (
-          <AskAiPanel
-            item={item}
-            question={question}
-            setQuestion={setQuestion}
-            asking={asking}
-            chatHistory={chatHistory}
-            copiedIndex={copiedIndex}
-            onAsk={handleAsk}
-            onCopy={handleCopy}
-            onClearChat={handleClearChat}
-          />
+          <TabPanel id="ask_ai" idPrefix={TAB_ID_PREFIX} className="flex min-h-0 flex-1 flex-col">
+            <AskAiPanel
+              item={item}
+              question={question}
+              setQuestion={setQuestion}
+              asking={asking}
+              chatHistory={chatHistory}
+              copiedIndex={copiedIndex}
+              copyFailedIndex={copyFailedIndex}
+              onAsk={handleAsk}
+              onCopy={handleCopy}
+              onClearChat={handleClearChat}
+            />
+          </TabPanel>
         )}
+      </Dialog>
 
-        {/* Modal Footer */}
-        <div className="p-3 sm:p-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs shrink-0">
-          <div className="flex items-center gap-3 text-slate-500">
-            <span>
-              출처: <strong className="text-slate-800">{item.source}</strong>
-            </span>
-            {item.author && <span className="hidden sm:inline">by {item.author}</span>}
-          </div>
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-800 hover:text-blue-600 rounded-md flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
-          >
-            <span>원문 링크 방문</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        </div>
-      </div>
-    </div>
+      <ConfirmDialog
+        open={isOpen && confirmClearOpen}
+        title="대화 초기화"
+        description="AI 대화 내역을 모두 초기화하시겠습니까?"
+        confirmLabel="초기화"
+        tone="danger"
+        onConfirm={confirmClearChat}
+        onCancel={() => setConfirmClearOpen(false)}
+      />
+    </>
   );
 }

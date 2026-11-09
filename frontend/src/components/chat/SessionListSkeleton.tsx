@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import { cn } from '@/lib/cn';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 export interface SessionListSkeletonProps {
   count?: number;
@@ -14,21 +16,16 @@ export default function SessionListSkeleton({
   return (
     <div
       data-testid="session-list-skeleton"
+      role="status"
       aria-label="대화 기록을 불러오는 중..."
-      className={`space-y-2 p-2 ${className}`}
+      className={cn('flex flex-col gap-2 p-2', className)}
     >
       {Array.from({ length: count }).map((_, index) => (
-        <div
-          key={index}
-          className="p-2.5 rounded-lg border-l-4 border-l-transparent bg-slate-50 animate-pulse flex flex-col gap-2"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <div className="h-3.5 bg-slate-200 rounded w-3/4" />
-            <div className="h-3 w-3 bg-slate-200 rounded shrink-0" />
-          </div>
+        <div key={index} className="flex flex-col gap-2 rounded-lg px-3 py-2.5">
+          <Skeleton className="h-4 w-3/4" />
           <div className="flex items-center gap-2">
-            <div className="h-3 bg-slate-200 rounded w-12" />
-            <div className="h-2.5 bg-slate-200 rounded w-10" />
+            <Skeleton className="h-3 w-12" />
+            <Skeleton className="h-3 w-10" />
           </div>
         </div>
       ))}

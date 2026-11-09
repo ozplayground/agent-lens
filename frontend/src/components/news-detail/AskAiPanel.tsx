@@ -4,7 +4,6 @@ import React, { useRef, useEffect } from 'react';
 import {
   Sparkles,
   Send,
-  Loader2,
   Bot,
   Copy,
   Check,
@@ -13,9 +12,17 @@ import {
   ShieldCheck,
   Cpu,
   Layers,
+  TriangleAlert,
 } from 'lucide-react';
 import { NewsItem } from '@/types/news';
 import MarkdownViewer from '../MarkdownViewer';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { ChipGroup } from '@/components/ui/Chip';
+import { Spinner } from '@/components/ui/Spinner';
+import { TextField } from '@/components/ui/TextField';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { COPY_STATUS_LABELS } from '@/hooks/useCopyToClipboard';
 
 export interface ChatMessage {
   q: string;
@@ -32,6 +39,8 @@ interface AskAiPanelProps {
   asking: boolean;
   chatHistory: ChatMessage[];
   copiedIndex: number | null;
+  /** 복사에 실패한 답변 번호. 그 답변의 복사 버튼이 `복사 실패` 를 보인다. */
+  copyFailedIndex?: number | null;
   onAsk: (queryToAsk?: string) => void;
   onCopy: (text: string, index: number) => void;
   onClearChat: () => void;
@@ -39,177 +48,181 @@ interface AskAiPanelProps {
 
 export const QUICK_PROMPTS = [
   {
-    label: '💡 핵심 원리 및 구조',
+    label: '핵심 원리 및 구조',
     icon: Cpu,
     query: '이 기술의 핵심 동작 원리와 아키텍처 구조를 구체적으로 설명해줘',
   },
   {
-    label: '🛠️ 실무 프로젝트 도입',
+    label: '실무 프로젝트 도입',
     icon: Layers,
     query: '우리 개발 프로젝트와 워크플로우에 이 기술을 어떻게 도입/적용할 수 있어?',
   },
   {
-    label: '⚖️ 차별점 및 한계',
+    label: '차별점 및 한계',
     icon: Sparkles,
     query: '기존의 유사 기술이나 방식과 비교했을 때 차별점, 장점, 한계점은 뭐야?',
   },
   {
-    label: '🔒 보안 및 샌드박스',
+    label: '보안 및 샌드박스',
     icon: ShieldCheck,
     query: '자율 에이전트 도입 시 보안 격리나 샌드박스 관점에서 검토해야 할 점은?',
   },
 ];
 
 export default function AskAiPanel({
-  item,
   question,
   setQuestion,
   asking,
   chatHistory,
   copiedIndex,
+  copyFailedIndex = null,
   onAsk,
   onCopy,
   onClearChat,
 }: AskAiPanelProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
-  }, [chatHistory, asking]);
+    chatEndRef.current?.scrollIntoView?.({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
+  }, [chatHistory, asking, reduceMotion]);
+
+  // 질문 입력의 Escape 는 대화상자를 닫지 않는다 (R26). 기본 동작을 막으면 오버레이 스택이 무시하고,
+  // 포커스를 Ask AI 탭 패널로 옮긴다. 패널에서 누른 다음 Escape 는 지금처럼 맨 위 레이어를 닫는다.
+  const handleQuestionKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Escape' && e.key !== 'Esc') return;
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    const panel = e.currentTarget.closest<HTMLElement>('[role="tabpanel"]');
+    panel?.focus();
+  };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
-      {/* Ask AI Sub-Header */}
-      <div className="p-3 sm:px-4 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
-            <Bot className="w-3 h-3" />
-          </div>
-          <span className="text-xs font-semibold text-slate-900">
-            Deep-Dive AI 대화형 질의응답
-          </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-emerald-50 text-emerald-700 border border-emerald-200">
-            Gemini 실시간 스트리밍 가동
-          </span>
+    <div className="flex min-h-0 flex-1 flex-col md:min-h-[28rem]">
+      {/* 머리줄: 제목 + 대화 초기화 */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2 md:px-5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Bot aria-hidden="true" className="size-4 shrink-0 text-accent" />
+          <span className="text-sm font-semibold text-fg">Deep-Dive AI 대화형 질의응답</span>
+          <Badge tone="success">Gemini 실시간 스트리밍 가동</Badge>
         </div>
         {chatHistory.length > 0 && (
-          <button
-            onClick={onClearChat}
-            className="text-[11px] text-slate-500 hover:text-red-600 flex items-center gap-1 transition-colors cursor-pointer"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>대화 초기화</span>
-          </button>
+          <Button variant="ghost" size="sm" leadingIcon={<RotateCcw />} onClick={onClearChat}>
+            대화 초기화
+          </Button>
         )}
       </div>
 
-      {/* Quick suggestion pills */}
-      <div className="px-3 sm:px-4 py-2 bg-white border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none shrink-0">
-        {QUICK_PROMPTS.map((p, idx) => {
-          const Icon = p.icon;
-          return (
+      {/* 빠른 질문: 한 줄 가로 스크롤 */}
+      <div className="shrink-0 border-b border-border px-4 py-2 md:px-5">
+        <ChipGroup label="빠른 질문" scrollable bleed>
+          {QUICK_PROMPTS.map((p) => (
             <button
-              key={idx}
+              key={p.query}
+              type="button"
               onClick={() => onAsk(p.query)}
               disabled={asking}
-              className="px-2.5 py-1 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-blue-300 text-[11px] text-slate-700 hover:text-blue-600 flex items-center gap-1 shrink-0 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+              className="inline-flex h-11 shrink-0 snap-start items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-sm font-medium whitespace-nowrap text-fg-muted transition-colors duration-150 ease-standard hover:bg-surface-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-50 md:h-8"
             >
-              <Icon className="w-3 h-3 text-blue-600" />
-              <span>{p.label}</span>
+              <p.icon aria-hidden="true" className="size-4" />
+              {p.label}
             </button>
-          );
-        })}
+          ))}
+        </ChipGroup>
       </div>
 
-      {/* Chat Conversation Stream */}
-      <div className="p-4 overflow-y-auto space-y-4 flex-1">
+      {/* 대화 */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 md:px-5">
         {chatHistory.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-500">
-            <div className="w-12 h-12 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
-              <Bot className="w-6 h-6" />
-            </div>
-            <div className="space-y-1 max-w-md">
-              <h4 className="text-sm font-semibold text-slate-900">
-                이 소식에 대해 무엇이든 질문해보세요
-              </h4>
-              <p className="text-xs text-slate-600 leading-relaxed">
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-2 py-8 text-center">
+            <span
+              aria-hidden="true"
+              className="inline-flex size-12 items-center justify-center rounded-full bg-accent-soft text-accent-soft-fg"
+            >
+              <Bot className="size-6" />
+            </span>
+            <div className="flex max-w-md flex-col gap-1">
+              <h4 className="text-base font-semibold text-fg break-keep">이 소식에 대해 무엇이든 질문해보세요</h4>
+              <p className="text-sm leading-relaxed text-fg-muted">
                 단순 요약이 아닌, 실무 아키텍처 연동 방법, 다른 프레임워크와의 차이점, 하네스 격리 및 보안 주의사항까지 기사 맥락을 바탕으로 전문 분석을 제공합니다.
               </p>
             </div>
-            <div className="pt-2 flex flex-wrap justify-center gap-2 max-w-lg">
-              {QUICK_PROMPTS.map((p, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onAsk(p.query)}
-                  disabled={asking}
-                  className="px-3 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs text-slate-700 text-left hover:border-blue-400 transition-colors shadow-xs cursor-pointer"
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-5">
             {chatHistory.map((c, i) => (
-              <div key={i} className="space-y-3">
-                {/* User Message Bubble */}
+              <div key={i} className="flex flex-col gap-3">
+                {/* 사용자 질문 */}
                 <div className="flex items-start justify-end gap-2">
-                  <div className="max-w-[85%] bg-blue-600 border border-blue-700 rounded-lg rounded-tr-xs p-3 text-xs sm:text-sm text-white shadow-xs">
-                    <p className="m-0 font-medium">{c.q}</p>
-                    <div className="text-[10px] text-blue-100 text-right mt-1 font-mono">
-                      {c.time}
-                    </div>
+                  <div className="max-w-[85%] rounded-xl rounded-tr-sm bg-accent-soft px-3 py-2.5 text-sm text-fg">
+                    <p className="m-0 font-medium break-words [overflow-wrap:anywhere]">{c.q}</p>
+                    <div className="mt-1 text-right text-xs text-fg-muted">{c.time}</div>
                   </div>
-                  <div className="w-7 h-7 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center shrink-0 text-slate-700">
-                    <User className="w-3.5 h-3.5" />
-                  </div>
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-muted text-fg-muted"
+                  >
+                    <User className="size-3.5" />
+                  </span>
                 </div>
 
-                {/* AI Response Bubble */}
-                <div className="flex items-start gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-emerald-100 border border-emerald-300 flex items-center justify-center shrink-0 text-emerald-700 mt-0.5">
-                    <Bot className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 max-w-[90%] bg-white border border-slate-200 rounded-lg rounded-tl-xs p-3.5 space-y-2 shadow-xs text-slate-800">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 text-[11px] text-slate-500">
-                      <div className="flex items-center gap-1.5 font-mono">
-                        <Sparkles className="w-3 h-3 text-blue-600" />
-                        <span className="text-blue-600 font-semibold">
-                          {c.model || 'AgentLens AI'}
-                        </span>
-                        <span>• {c.time}</span>
+                {/* AI 답변 */}
+                <div className="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-success-soft text-success"
+                  >
+                    <Bot className="size-4" />
+                  </span>
+                  <div className="min-w-0 max-w-full flex-1 rounded-xl rounded-tl-sm border border-border bg-surface p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2 border-b border-border pb-1.5 text-xs text-fg-subtle">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <Sparkles aria-hidden="true" className="size-3.5 shrink-0 text-accent" />
+                        <span className="truncate font-semibold text-accent">{c.model || 'AgentLens AI'}</span>
+                        <span className="shrink-0">· {c.time}</span>
                       </div>
-                      <button
-                        onClick={() => onCopy(c.a, i)}
-                        disabled={c.isStreaming || !c.a}
-                        className="flex items-center gap-1 text-slate-400 hover:text-slate-700 disabled:opacity-40 px-1.5 py-0.5 rounded hover:bg-slate-100 transition-colors cursor-pointer"
-                        title="답변 복사"
-                      >
-                        {copiedIndex === i ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-600" />
-                            <span className="text-emerald-600">복사됨</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>복사</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex shrink-0 items-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onCopy(c.a, i)}
+                          disabled={c.isStreaming || !c.a}
+                          title="답변 복사"
+                          leadingIcon={
+                            copyFailedIndex === i ? <TriangleAlert /> : copiedIndex === i ? <Check /> : <Copy />
+                          }
+                          className={
+                            copyFailedIndex === i
+                              ? 'text-xs text-danger'
+                              : copiedIndex === i
+                                ? 'text-xs text-success'
+                                : 'text-xs'
+                          }
+                        >
+                          {copyFailedIndex === i
+                            ? COPY_STATUS_LABELS.failed
+                            : copiedIndex === i
+                              ? COPY_STATUS_LABELS.copied
+                              : COPY_STATUS_LABELS.idle}
+                        </Button>
+                        <span className="sr-only" aria-live="polite">
+                          {copyFailedIndex === i ? COPY_STATUS_LABELS.failed : ''}
+                        </span>
+                      </div>
                     </div>
                     {c.isStreaming && !c.a ? (
-                      <div className="py-2 text-xs text-slate-500 flex items-center gap-2">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                      <div className="flex items-center gap-2 py-2 text-sm text-fg-muted">
+                        <Spinner className="text-accent" />
                         <span>AI가 실시간 스트리밍 답변을 생성하는 중입니다...</span>
                       </div>
                     ) : (
-                      <div className="relative text-slate-800">
+                      <div className="relative">
                         <MarkdownViewer content={c.a} />
                         {c.isStreaming && (
-                          <span className="inline-block w-2 h-4 ml-1 bg-blue-600 animate-pulse align-middle" />
+                          <span
+                            aria-hidden="true"
+                            className="ml-1 inline-block h-4 w-2 bg-accent align-middle motion-safe:animate-pulse"
+                          />
                         )}
                       </div>
                     )}
@@ -222,36 +235,35 @@ export default function AskAiPanel({
         <div ref={chatEndRef} />
       </div>
 
-      {/* Chat Input Bar */}
-      <div className="p-3 bg-white border-t border-slate-200 shrink-0">
+      {/* 입력: 바닥 고정 */}
+      <div className="shrink-0 border-t border-border bg-surface px-4 py-3 md:px-5">
         <form
           onSubmit={(e) => {
             e.preventDefault();
             onAsk();
           }}
-          className="flex gap-2"
+          className="flex items-end gap-2"
         >
-          <input
-            ref={inputRef}
-            type="text"
+          <TextField
+            label="질문 입력"
+            hideLabel
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="이 기술에 대해 자유롭게 질문해보세요 (예: 실제 서비스에 도입할 때 장단점은?)"
+            onKeyDown={handleQuestionKeyDown}
+            placeholder="이 기사에 대해 질문하세요"
             disabled={asking}
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-colors disabled:opacity-50"
+            enterKeyHint="send"
+            containerClassName="flex-1"
           />
-          <button
+          <Button
             type="submit"
-            disabled={asking || !question.trim()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold text-white rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 shadow-xs"
+            variant="primary"
+            loading={asking}
+            disabled={!question.trim()}
+            leadingIcon={<Send />}
           >
-            {asking ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Send className="w-3.5 h-3.5" />
-            )}
-            <span>전송</span>
-          </button>
+            전송
+          </Button>
         </form>
       </div>
     </div>

@@ -68,4 +68,33 @@ describe('ChatMessageList Component', () => {
     expect(logContainer.className).toContain('w-full');
     expect(logContainer.className).toContain('max-w-full');
   });
+
+  it('추천 질문 버튼마다 text-left 를 직접 단다 (spec 14.6)', () => {
+    render(<ChatMessageList {...defaultProps} messages={[]} />);
+
+    const pills = screen.getAllByRole('button', { name: /FastMCP|LangGraph|SWE-bench|동향/i });
+    expect(pills).toHaveLength(4);
+    for (const pill of pills) {
+      expect(pill.className.split(/\s+/)).toContain('text-left');
+    }
+  });
+
+  it('sends the suggestion text without emoji and draws one decorative lucide icon per card (R44)', () => {
+    const handleSelectSuggestion = vi.fn();
+    render(
+      <ChatMessageList {...defaultProps} messages={[]} onSelectPromptSuggestion={handleSelectSuggestion} />
+    );
+
+    const pills = screen.getAllByRole('button', { name: /FastMCP|LangGraph|SWE-bench|동향/i });
+    fireEvent.click(pills[0]);
+    expect(handleSelectSuggestion).toHaveBeenCalledWith('FastMCP로 파이썬 기반 경량 MCP 서버 구축하는 방법');
+
+    for (const pill of pills) {
+      // 카드 앞 아이콘 하나 (오른쪽 화살표 `ArrowRight` 는 원래 있던 장식이라 세지 않는다)
+      const leadIcons = pill.querySelectorAll('svg.text-accent[aria-hidden="true"]');
+      expect(leadIcons).toHaveLength(1);
+      expect(pill.firstElementChild).toBe(leadIcons[0]);
+      expect(pill.textContent ?? '').not.toMatch(/\p{Emoji_Presentation}|\p{Extended_Pictographic}\u{FE0F}/u);
+    }
+  });
 });

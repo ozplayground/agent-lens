@@ -1,6 +1,6 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import ChatHeader from '@/components/chat/ChatHeader';
 import { mockArticles } from '@/mocks/fixtures/chat';
 
@@ -68,39 +68,97 @@ describe('ChatHeader Component', () => {
     expect(newChatBtn).toBeDisabled();
   });
 
-  it('renders ChatModelSelector in header when selectedTier and onSelectTier are provided', () => {
-    const handleSelectTier = vi.fn();
-    render(
-      <ChatHeader
-        {...defaultProps}
-        selectedTier="sonnet"
-        onSelectTier={handleSelectTier}
-      />
-    );
+  it('does not render a model selector in the header (R39: the composer is the only place)', () => {
+    // 예전 모델 prop 을 넘겨도 헤더는 모델 선택을 그리지 않는다 (prop 자체가 없다).
+    const legacyModelProps = { selectedTier: 'sonnet', onSelectTier: vi.fn() } as object;
+    render(<ChatHeader {...defaultProps} {...legacyModelProps} />);
 
-    const modelTrigger = screen.getByRole('button', { name: /Claude 모델 선택|Sonnet/i });
-    expect(modelTrigger).toBeInTheDocument();
-    expect(modelTrigger).toHaveTextContent(/Sonnet 5.5/i);
-
-    fireEvent.click(modelTrigger);
-    const haikuOption = screen.getByRole('radio', { name: /Haiku 5.5/i });
-    fireEvent.click(haikuOption);
-
-    expect(handleSelectTier).toHaveBeenCalledWith('haiku');
+    expect(screen.queryByRole('button', { name: /Claude 모델 선택/ })).toBeNull();
   });
 
-  it('disables ChatModelSelector in header when isStreaming is true', () => {
-    const handleSelectTier = vi.fn();
-    render(
-      <ChatHeader
-        {...defaultProps}
-        selectedTier="sonnet"
-        onSelectTier={handleSelectTier}
-        isStreaming={true}
-      />
-    );
+  it('names the two scope tabs exactly 단일 기사 and 전체 소식 inside the 검색 스코프 모드 group (R37·R38)', () => {
+    render(<ChatHeader {...defaultProps} />);
 
-    const modelTrigger = screen.getByRole('button', { name: /Claude 모델 선택|Sonnet/i });
-    expect(modelTrigger).toBeDisabled();
+    const group = screen.getByRole('group', { name: '검색 스코프 모드' });
+    const tabs = within(group).getAllByRole('button');
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['단일 기사', '전체 소식']);
+    expect(within(group).getByRole('button', { name: '단일 기사' })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: '전체 소식' })).toBeInTheDocument();
+    expect(group).not.toHaveTextContent(/Scoped|Global|코퍼스/);
+  });
+
+  it('puts the 피드로 돌아가기 link before the 대화 기록 보기 button, as the first control in the header (R43)', () => {
+    render(<ChatHeader {...defaultProps} onToggleHistoryDrawer={vi.fn()} />);
+
+    const backLink = screen.getByRole('link', { name: '피드로 돌아가기' });
+    const historyBtn = screen.getByRole('button', { name: '대화 기록 보기' });
+    expect(backLink.compareDocumentPosition(historyBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const header = backLink.closest('header');
+    expect(header).not.toBeNull();
+    const firstControl = header!.querySelector('a[href], button');
+    expect(firstControl).toBe(backLink);
+  });
+
+  describe('기록 버튼 aria-controls (C-1, R24)', () => {
+    it('기록이 닫혀 있으면 aria-controls 를 달지 않고 aria-expanded 는 false', () => {
+      render(<ChatHeader {...defaultProps} onToggleHistoryDrawer={vi.fn()} isHistoryOpen={false} />);
+
+      const historyBtn = screen.getByRole('button', { name: '대화 기록 보기' });
+      expect(historyBtn).toHaveAttribute('aria-expanded', 'false');
+      expect(historyBtn).not.toHaveAttribute('aria-controls');
+    });
+
+    it('기록이 열려 있으면 aria-controls 와 aria-expanded="true" 를 단다', () => {
+      render(<ChatHeader {...defaultProps} onToggleHistoryDrawer={vi.fn()} isHistoryOpen={true} />);
+
+      const historyBtn = screen.getByRole('button', { name: '대화 기록 보기' });
+      expect(historyBtn).toHaveAttribute('aria-expanded', 'true');
+      expect(historyBtn).toHaveAttribute('aria-controls');
+      expect(historyBtn.getAttribute('aria-controls')).toMatch(/^chat-history-(sidebar|drawer)$/);
+    });
+  });
+
+  describe('새 대화 버튼 표시 조건 (!isDesktop || !isSidebarOpen)', () => {
+    const originalMatchMedia = window.matchMedia;
+
+    function mockViewportWidth(width: number) {
+      window.matchMedia = ((query: string) => {
+        const m = /\((min|max)-width:\s*(\d+)px\)/.exec(query);
+        const matches = m ? (m[1] === 'min' ? width >= Number(m[2]) : width <= Number(m[2])) : false;
+        return {
+          matches,
+          media: query,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => false,
+        } as MediaQueryList;
+      }) as typeof window.matchMedia;
+    }
+
+    afterEach(() => {
+      window.matchMedia = originalMatchMedia;
+    });
+
+    it('shows 새 대화 below 1024px even when the sidebar is open, and calls onNewChat', () => {
+      mockViewportWidth(800);
+      const handleNewChat = vi.fn();
+      render(<ChatHeader {...defaultProps} onNewChat={handleNewChat} isSidebarOpen={true} />);
+
+      const newChatBtn = screen.getByRole('button', { name: /새 대화/i });
+      fireEvent.click(newChatBtn);
+
+      expect(handleNewChat).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides 새 대화 at 1024px and above while the sidebar is open', () => {
+      mockViewportWidth(1280);
+      render(<ChatHeader {...defaultProps} isSidebarOpen={true} />);
+
+      expect(screen.queryByRole('button', { name: /새 대화/i })).not.toBeInTheDocument();
+    });
   });
 });

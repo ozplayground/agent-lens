@@ -1,8 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Send, Bell, CheckCircle, AlertCircle, Loader2, Link2 } from 'lucide-react';
 import { testWebhook, sendBriefingToWebhook } from '@/lib/api';
+
+function errorMessage(e: unknown, fallback: string): string {
+  return e instanceof Error && e.message ? e.message : fallback;
+}
 
 interface WebhookSettingsModalProps {
   isOpen: boolean;
@@ -18,12 +22,15 @@ export const WebhookSettingsModal: React.FC<WebhookSettingsModalProps> = ({
   const [isSendingBriefing, setIsSendingBriefing] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
+  // 열릴 때 한 번 저장된 URL 을 읽는다 (렌더 중 이전 값 비교, 키·형식 그대로).
+  const [prevIsOpen, setPrevIsOpen] = useState(false);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen && typeof window !== 'undefined') {
       const saved = localStorage.getItem('agentlens_webhook_url');
       if (saved) setWebhookUrl(saved);
     }
-  }, [isOpen]);
+  }
 
   if (!isOpen) return null;
 
@@ -56,8 +63,8 @@ export const WebhookSettingsModal: React.FC<WebhookSettingsModalProps> = ({
       const res = await testWebhook(webhookUrl.trim());
       setFeedback({ type: 'success', message: res.message });
       handleSaveUrl(webhookUrl.trim());
-    } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || '테스트 발송에 실패했습니다.' });
+    } catch (err: unknown) {
+      setFeedback({ type: 'error', message: errorMessage(err, '테스트 발송에 실패했습니다.') });
     } finally {
       setIsTesting(false);
     }
@@ -75,56 +82,65 @@ export const WebhookSettingsModal: React.FC<WebhookSettingsModalProps> = ({
       const res = await sendBriefingToWebhook(webhookUrl.trim());
       setFeedback({ type: 'success', message: res.message });
       handleSaveUrl(webhookUrl.trim());
-    } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || '브리핑 전송에 실패했습니다.' });
+    } catch (err: unknown) {
+      setFeedback({ type: 'error', message: errorMessage(err, '브리핑 전송에 실패했습니다.') });
     } finally {
       setIsSendingBriefing(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-scrim motion-safe:animate-fade-in">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="webhook-settings-title"
+        className="bg-surface text-fg border border-border rounded-2xl w-full max-w-lg overflow-hidden shadow-overlay"
+      >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-850/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-              <Bell className="w-4 h-4" />
+            <div className="size-8 rounded-lg bg-accent-soft border border-border flex items-center justify-center text-accent-soft-fg">
+              <Bell className="size-4" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="font-semibold text-slate-100 text-base">웹훅 알림 설정</h3>
-              <p className="text-xs text-slate-400">Slack / Discord 채널로 브리핑 및 특종을 자동 전송합니다.</p>
+              <h2 id="webhook-settings-title" className="font-semibold text-fg text-base">웹훅 알림 설정</h2>
+              <p className="text-xs text-fg-muted">Slack / Discord 채널로 브리핑 및 특종을 자동 전송합니다.</p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            aria-label="닫기"
+            title="닫기"
+            className="inline-flex size-11 md:size-9 items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-muted transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="size-5" aria-hidden="true" />
           </button>
         </div>
 
         {/* Modal Body */}
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+            <label htmlFor="webhook-settings-url" className="mb-1.5 flex items-center justify-between text-sm font-medium text-fg">
               <span>Webhook Endpoint URL</span>
               {provider && (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-accent-soft text-accent-soft-fg">
                   {provider} 감지됨
                 </span>
               )}
             </label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                <Link2 className="w-4 h-4" />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-fg-subtle">
+                <Link2 className="size-4" aria-hidden="true" />
               </div>
               <input
+                id="webhook-settings-url"
                 type="url"
                 value={webhookUrl}
                 onChange={(e) => handleSaveUrl(e.target.value)}
                 placeholder="https://hooks.slack.com/services/... 또는 Discord Webhook URL"
-                className="w-full pl-9 pr-3 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                className="w-full h-11 md:h-9 pl-9 pr-3 bg-surface border border-border-strong rounded-lg text-base md:text-sm font-mono text-fg placeholder:text-fg-subtle transition-colors"
               />
             </div>
           </div>
@@ -132,57 +148,59 @@ export const WebhookSettingsModal: React.FC<WebhookSettingsModalProps> = ({
           {/* Feedback Message */}
           {feedback && (
             <div
-              className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
-                feedback.type === 'success'
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                  : 'bg-red-500/10 border-red-500/30 text-red-300'
+              role={feedback.type === 'error' ? 'alert' : 'status'}
+              className={`p-3 rounded-lg border border-border flex items-start gap-2.5 text-sm ${
+                feedback.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
               }`}
             >
               {feedback.type === 'success' ? (
-                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <CheckCircle className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <AlertCircle className="size-4 shrink-0 mt-0.5" aria-hidden="true" />
               )}
               <span>{feedback.message}</span>
             </div>
           )}
 
           {/* Buttons */}
-          <div className="grid grid-cols-2 gap-2 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
             <button
+              type="button"
               onClick={handleTest}
               disabled={isTesting || !webhookUrl.trim()}
-              className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex h-11 md:h-9 items-center justify-center gap-2 px-4 rounded-lg border border-border-strong bg-surface hover:bg-surface-muted text-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isTesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 text-blue-400" />}
+              {isTesting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />}
               <span>테스트 발송</span>
             </button>
             <button
+              type="button"
               onClick={handleSendBriefing}
               disabled={isSendingBriefing || !webhookUrl.trim()}
-              className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex h-11 md:h-9 items-center justify-center gap-2 px-4 rounded-lg bg-accent-solid hover:bg-accent-solid-hover text-on-accent text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSendingBriefing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+              {isSendingBriefing ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Bell className="size-4" aria-hidden="true" />}
               <span>오늘의 브리핑 즉시 전송</span>
             </button>
           </div>
 
           {/* Guide Tips */}
-          <div className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-3 text-[11px] text-slate-400 space-y-1">
-            <p className="font-semibold text-slate-300">💡 웹훅 URL 생성 방법:</p>
-            <p>• <strong>Slack</strong>: Slack App 생성 &gt; Incoming Webhooks 활성화 &gt; 채널 지정 후 웹훅 URL 복사</p>
-            <p>• <strong>Discord</strong>: 채널 설정 &gt; 연동 &gt; 웹후크 생성 &gt; 웹후크 URL 복사</p>
-            <p className="text-slate-500 pt-1">
+          <div className="bg-surface-muted border border-border rounded-lg p-3 text-xs text-fg-muted space-y-1">
+            <p className="font-medium text-fg">웹훅 URL 생성 방법</p>
+            <p>• <strong className="font-medium text-fg">Slack</strong>: Slack App 생성 &gt; Incoming Webhooks 활성화 &gt; 채널 지정 후 웹훅 URL 복사</p>
+            <p>• <strong className="font-medium text-fg">Discord</strong>: 채널 설정 &gt; 연동 &gt; 웹후크 생성 &gt; 웹후크 URL 복사</p>
+            <p className="text-fg-subtle pt-1">
               * 입력하신 URL은 로컬 브라우저에 안전하게 저장되며, 정기 크론 수집 시에도 백엔드 환경변수(`SLACK_WEBHOOK_URL`)로 등록하여 자동 발송할 수 있습니다.
             </p>
           </div>
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-slate-800 bg-slate-850/30 flex justify-end">
+        <div className="px-6 py-3 border-t border-border flex justify-end">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+            className="h-11 md:h-9 px-4 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-surface-muted transition-colors"
           >
             닫기
           </button>

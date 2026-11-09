@@ -1,13 +1,18 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useRef, type RefObject } from 'react';
 import { ExternalLink, BookOpen, X, Globe, FileText } from 'lucide-react';
 import { SourceReference } from '@/types/chat';
+import { Popover } from '@/components/ui/Popover';
+import { Badge } from '@/components/ui/Badge';
+import { categoryShortLabel } from '@/lib/labels';
 
 export interface CitationPopoverProps {
   source: SourceReference;
   isOpen: boolean;
   onClose: () => void;
+  /** 팝오버를 연 인용 배지. 바깥 클릭 판정에서 빼고, Escape 로 닫으면 포커스를 돌려준다. */
+  anchorRef?: RefObject<HTMLElement | null>;
   anchorRect?: DOMRect | null;
   onOpenSourceDetail?: (sourceId: number) => void;
 }
@@ -16,36 +21,10 @@ export default function CitationPopover({
   source,
   isOpen,
   onClose,
+  anchorRef,
   onOpenSourceDetail,
 }: CitationPopoverProps) {
-  const popoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
+  const fallbackAnchorRef = useRef<HTMLElement | null>(null);
   const isSupplementary = source.type === 'supplementary' || String(source.index).startsWith('S');
 
   let domainName = source.domain;
@@ -56,63 +35,55 @@ export default function CitationPopover({
   }
 
   return (
-    <div
-      ref={popoverRef}
+    <Popover
+      open={isOpen}
+      onClose={onClose}
+      anchorRef={anchorRef ?? fallbackAnchorRef}
+      label={isSupplementary ? '보충 검색 출처 상세 프리뷰' : '출처 기사 상세 프리뷰'}
       role="dialog"
-      aria-label={isSupplementary ? '보충 검색 출처 상세 프리뷰' : '출처 기사 상세 프리뷰'}
-      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-80 max-w-[90vw] p-3 rounded-lg bg-white border border-slate-200 shadow-xl text-slate-800 z-50 animate-in fade-in zoom-in-95 duration-150"
+      side="top"
+      className="w-80 p-3 text-left font-sans not-italic whitespace-normal"
     >
       {/* Top row: badge & close button */}
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {isSupplementary ? (
-            <span className="px-1.5 py-0.2 rounded font-mono text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium inline-flex items-center gap-1">
-              <Globe className="w-2.5 h-2.5 text-emerald-600" />
-              <span>보충 검색 [{source.index}]</span>
-            </span>
+            <Badge tone="success" icon={<Globe />}>
+              보충 검색 [{source.index}]
+            </Badge>
           ) : (
-            <span className="px-1.5 py-0.2 rounded font-mono text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-medium inline-flex items-center gap-1">
-              <FileText className="w-2.5 h-2.5 text-blue-600" />
-              <span>출처 [{source.index}]</span>
-            </span>
+            <Badge tone="accent" icon={<FileText />}>
+              출처 [{source.index}]
+            </Badge>
           )}
 
-          {isSupplementary && domainName && (
-            <span className="px-1.5 py-0.2 rounded font-mono text-[10px] bg-slate-100 text-slate-600 border border-slate-200">
-              {domainName}
-            </span>
-          )}
+          {isSupplementary && domainName && <Badge className="min-w-0 truncate">{domainName}</Badge>}
 
-          {!isSupplementary && source.category && (
-            <span className="px-1.5 py-0.2 rounded font-mono text-[10px] bg-slate-100 text-slate-600 border border-slate-200">
-              {source.category}
-            </span>
-          )}
+          {!isSupplementary && source.category && <Badge>{categoryShortLabel(source.category)}</Badge>}
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="팝오버 닫기"
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+          title="팝오버 닫기"
+          className="-mt-1 -mr-1 inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg md:size-8"
         >
-          <X className="w-3.5 h-3.5" />
+          <X aria-hidden="true" className="size-4" />
         </button>
       </div>
 
       {/* Title */}
-      <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-2 mb-1.5">
-        {source.title}
-      </h4>
+      <p className="mb-1.5 line-clamp-2 text-sm leading-snug font-semibold text-fg">{source.title}</p>
 
       {/* Snippet */}
       {source.snippet && (
-        <p className="text-[11px] text-slate-600 leading-relaxed line-clamp-3 bg-slate-50 p-2 rounded border border-slate-200 mb-2">
+        <p className="mb-2 line-clamp-3 rounded-lg bg-surface-muted p-2 text-xs leading-relaxed text-fg-muted">
           {source.snippet}
         </p>
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 text-xs">
+      <div className="flex items-center justify-between gap-2 border-t border-border pt-1 text-sm">
         {!isSupplementary && onOpenSourceDetail && source.id ? (
           <button
             type="button"
@@ -120,9 +91,9 @@ export default function CitationPopover({
               onClose();
               onOpenSourceDetail(source.id!);
             }}
-            className="flex items-center gap-1 text-slate-600 hover:text-blue-600 font-medium cursor-pointer transition-colors"
+            className="inline-flex h-11 items-center gap-1.5 rounded-lg px-2 font-medium text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg md:h-8"
           >
-            <BookOpen className="w-3 h-3" />
+            <BookOpen aria-hidden="true" className="size-4" />
             <span>기사 상세</span>
           </button>
         ) : (
@@ -133,12 +104,12 @@ export default function CitationPopover({
           href={source.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-semibold cursor-pointer transition-colors ml-auto"
+          className="ml-auto inline-flex h-11 items-center gap-1.5 rounded-lg px-2 font-medium text-accent transition-colors hover:bg-surface-muted md:h-8"
         >
           <span>{isSupplementary ? '웹 문서 보기' : '원문 보기'}</span>
-          <ExternalLink className="w-3 h-3" />
+          <ExternalLink aria-hidden="true" className="size-4" />
         </a>
       </div>
-    </div>
+    </Popover>
   );
 }

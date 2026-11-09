@@ -1,8 +1,21 @@
 'use client';
 
-import React from 'react';
-import { ExternalLink, Star, Clock, Bookmark, MessageSquare, ArrowUpRight } from 'lucide-react';
+import React, { useSyncExternalStore } from 'react';
+import { ArrowBigUp, ArrowUpRight, Bookmark, Flame, GitFork, MessageSquare, Star } from 'lucide-react';
 import { NewsItem } from '@/types/news';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { IconButton } from '@/components/ui/IconButton';
+import {
+  COUNT_METRIC_LABELS,
+  SCORE_METRIC_LABELS,
+  categoryLabel,
+  categoryShortLabel,
+  countMetric,
+  scoreMetric,
+  sourceLabel,
+} from '@/lib/labels';
+import { cn } from '@/lib/cn';
 import HandoverCtaButton from './chat/HandoverCtaButton';
 
 interface NewsCardProps {
@@ -10,26 +23,59 @@ interface NewsCardProps {
   onSelect: (item: NewsItem) => void;
   isBookmarked: boolean;
   onToggleBookmark: (item: NewsItem, e: React.MouseEvent) => void;
-  onHandoverToChat?: (item: NewsItem, e: React.MouseEvent) => void;
+  onHandoverToChat?: (item: NewsItem, e?: React.MouseEvent) => void;
   isFocused?: boolean;
+  /** 목록에서 시사점이 반복되는 카드면 `true`: 요약이 있으면 시사점 대신 요약을 보인다 (R18). */
+  preferSummary?: boolean;
 }
 
-const CATEGORY_NAMES: Record<string, string> = {
-  harness: 'Harness',
-  mcp_plugins_skills: 'MCP & Skills',
-  agent_tech: 'Agent Tech',
-  ai_news: 'AI Frontier'
-};
+// 상대 시각 계산에 쓰는 현재 시각. 렌더 중 Date.now() 를 부르지 않도록
+// 분 단위로 갱신되는 외부 저장소로 두고 useSyncExternalStore 로 읽는다.
+const CLOCK_TICK_MS = 60_000;
+let clockNow = Date.now();
+const clockListeners = new Set<() => void>();
+let clockTimer: ReturnType<typeof setInterval> | null = null;
 
-const SOURCE_NAMES: Record<string, string> = {
-  rss_kr: '국내 테크',
-  github: 'GitHub',
-  hackernews: 'HackerNews',
-  arxiv: 'arXiv',
-  huggingface: 'HuggingFace',
-  reddit: 'Reddit',
-  rss: 'Blog'
-};
+function tickClock() {
+  clockNow = Date.now();
+  clockListeners.forEach((listener) => listener());
+}
+
+function subscribeClock(listener: () => void) {
+  clockListeners.add(listener);
+  if (clockTimer === null) {
+    clockNow = Date.now();
+    clockTimer = setInterval(tickClock, CLOCK_TICK_MS);
+  }
+  return () => {
+    clockListeners.delete(listener);
+    if (clockListeners.size === 0 && clockTimer !== null) {
+      clearInterval(clockTimer);
+      clockTimer = null;
+    }
+  };
+}
+
+function getClockSnapshot() {
+  return clockNow;
+}
+
+function useNow() {
+  return useSyncExternalStore(subscribeClock, getClockSnapshot, getClockSnapshot);
+}
+
+// Format relative time (e.g., "3시간 전")
+function getRelativeTime(dateStr: string, now: number) {
+  try {
+    const d = new Date(dateStr);
+    const diff = (now - d.getTime()) / 1000;
+    if (diff < 3600) return `${Math.max(1, Math.floor(diff / 60))}분 전`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+    return `${Math.floor(diff / 86400)}일 전`;
+  } catch {
+    return '';
+  }
+}
 
 export default function NewsCard({
   item,
@@ -38,154 +84,155 @@ export default function NewsCard({
   onToggleBookmark,
   onHandoverToChat,
   isFocused = false,
+  preferSummary = false,
 }: NewsCardProps) {
-  const catLabel = CATEGORY_NAMES[item.category] || item.category;
-  const sourceName = SOURCE_NAMES[item.source] || item.source;
-
-  // Format relative time (e.g., "3시간 전")
-  const getRelativeTime = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      const diff = (Date.now() - d.getTime()) / 1000;
-      if (diff < 3600) return `${Math.max(1, Math.floor(diff / 60))}분 전`;
-      if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-      return `${Math.floor(diff / 86400)}일 전`;
-    } catch {
-      return '';
-    }
-  };
+  const now = useNow();
+  // 원천 점수는 원천이 실제 지표를 주는 소스(GitHub 스타, HackerNews 포인트, Reddit 추천)만 그린다 (R36).
+  const scoreKind = scoreMetric(item.source);
+  // 인기 점수는 raw_score 에서 계산되므로 원천 지표가 없는 소스에서는 합성 값이라 숨긴다 (R41).
+  const showHot = scoreKind !== null && item.hotness_score > 25;
+  const countKind = countMetric(item.source);
+  const ScoreIcon = scoreKind === 'stars' ? Star : ArrowBigUp;
+  const CountIcon = countKind === 'forks' ? GitFork : MessageSquare;
+  const countLabel = COUNT_METRIC_LABELS[countKind];
+  const showInsight = Boolean(item.why_it_matters) && !(preferSummary && item.summary);
+  const techStack = item.tech_stack ? item.tech_stack.slice(0, 3) : [];
+  const hasBadges = item.is_high_signal || techStack.length > 0;
 
   return (
-    <article
-      onClick={() => onSelect(item)}
+    <Card
+      as="article"
+      interactive
+      data-feed-card=""
+      data-source={item.source}
       data-focused={isFocused ? 'true' : undefined}
-      className={`group rounded-lg bg-white dark:bg-[#161b22] border border-slate-200 dark:border-[#30363d] hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md p-4 transition-all duration-150 flex flex-col justify-between cursor-pointer ${
-        isFocused ? 'ring-2 ring-blue-500 dark:ring-blue-400 border-blue-500 shadow-md' : ''
-      }`}
+      onClick={() => onSelect(item)}
+      className={cn(
+        'flex h-full cursor-pointer flex-col gap-3',
+        isFocused ? 'ring-2 ring-accent ring-offset-2 ring-offset-canvas' : null
+      )}
     >
-      <div>
-        {/* Top Metadata & Actions */}
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Category tag */}
-            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-              {catLabel}
-            </span>
-
-            {/* Source label */}
-            <span className="px-1.5 py-0.5 rounded text-[11px] font-mono text-slate-600 bg-slate-50 border border-slate-200">
-              {sourceName}
-            </span>
-
-            {/* ONLY Important: Must-Read High Signal badge */}
-            {item.is_high_signal && (
-              <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
-                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                Must-Read
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {item.hotness_score > 25 && (
-              <span className="text-[11px] font-mono font-semibold text-orange-600">
-                Hot {Math.round(item.hotness_score)}
-              </span>
-            )}
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleBookmark(item, e);
-              }}
-              className={`p-1 rounded transition-colors cursor-pointer ${
-                isBookmarked ? 'text-amber-500' : 'text-slate-400 hover:text-slate-700'
-              }`}
-              title={isBookmarked ? '보관됨' : '보관하기'}
-            >
-              <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-amber-500' : ''}`} />
-            </button>
-          </div>
+      {/* ① 머리줄: 카테고리 · 소스 · 시간 (한 줄, 넘치면 말줄임), 북마크. 배지를 두지 않는다. */}
+      <div data-card-meta="" className="flex h-11 items-center gap-2 md:h-8">
+        <div className="min-w-0 flex-1 truncate text-xs text-fg-subtle">
+          <span className="font-medium text-fg-muted" title={categoryLabel(item.category)}>
+            {categoryShortLabel(item.category)}
+          </span>
+          <span aria-hidden="true"> · </span>
+          <span>{sourceLabel(item.source)}</span>
+          <span aria-hidden="true"> · </span>
+          <time dateTime={item.published_at} suppressHydrationWarning>
+            {getRelativeTime(item.published_at, now)}
+          </time>
         </div>
+        <IconButton
+          label="보관하기"
+          title={isBookmarked ? '보관됨' : '보관하기'}
+          pressed={isBookmarked}
+          size="sm"
+          icon={<Bookmark className={isBookmarked ? 'fill-current text-warning' : undefined} />}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleBookmark(item, e);
+          }}
+        />
+      </div>
 
-        {/* Title */}
-        <h2 className="text-sm sm:text-base font-semibold text-slate-900 group-hover:text-blue-600 leading-snug mb-2 line-clamp-2 transition-colors">
+      {/* ② 제목: 2줄 높이 고정 */}
+      <h3 className="line-clamp-2 min-h-12 text-base leading-6 font-semibold text-fg">
+        <button
+          type="button"
+          className="line-clamp-2 w-full cursor-pointer rounded text-left break-keep [overflow-wrap:anywhere] transition-colors duration-150 ease-standard hover:text-accent"
+        >
           {item.title}
-        </h2>
+        </button>
+      </h3>
 
-        {/* Developer Insight Callout */}
-        {item.why_it_matters && (
-          <div className="my-2.5 p-2 rounded-md bg-blue-50/70 border-l-2 border-blue-500 text-xs text-slate-700 leading-relaxed line-clamp-2">
-            <span className="font-semibold text-blue-700 mr-1.5 font-mono">Insight:</span>
-            {item.why_it_matters}
-          </div>
-        )}
+      {/* ③ 본문: 2줄 높이 고정. 시사점(반복이면 요약), 요약, 둘 다 없으면 빈 자리 */}
+      {showInsight ? (
+        <p className="line-clamp-2 min-h-12 border-l-2 border-accent pl-3 text-sm leading-6 text-fg-muted">
+          <span className="mr-1 font-semibold text-fg">시사점</span>
+          <span>{item.why_it_matters}</span>
+        </p>
+      ) : item.summary ? (
+        <p className="line-clamp-2 min-h-12 text-sm leading-6 text-fg-muted">{item.summary}</p>
+      ) : (
+        <p aria-hidden="true" className="min-h-12" />
+      )}
 
-        {/* Summary text if no insight or extra detail */}
-        {item.summary && !item.why_it_matters && (
-          <p className="text-xs text-slate-600 line-clamp-2 mb-3 leading-relaxed">
-            {item.summary}
-          </p>
-        )}
-      </div>
+      {/* ④ 배지 줄 (있을 때만): Must-Read 1(줄지 않음) + 기술 스택 최대 3(48px~128px 사이로 줄고 말줄임), 한 줄.
+          overflow-hidden 은 안전장치다. */}
+      {hasBadges ? (
+        <div data-card-badges="" className="flex flex-nowrap items-center gap-1.5 overflow-hidden">
+          {item.is_high_signal ? (
+            <Badge tone="warning" icon={<Star className="fill-current" />}>
+              Must-Read
+            </Badge>
+          ) : null}
+          {techStack.map((tech, idx) => (
+            <Badge key={`${tech}-${idx}`} shrink className="min-w-12 max-w-32" title={tech}>
+              <span className="min-w-0 truncate">{tech}</span>
+            </Badge>
+          ))}
+        </div>
+      ) : null}
 
-      <div>
-        {/* Extracted Tech Stack */}
-        {item.tech_stack && item.tech_stack.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap my-2">
-            {item.tech_stack.slice(0, 4).map((tech, idx) => (
-              <span
-                key={idx}
-                className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-slate-100 text-slate-600 border border-slate-200"
-              >
-                {tech}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Meta row */}
-        <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs text-slate-500">
-          <div className="flex items-center gap-3">
-            {item.raw_score > 0 && (
-              <span className="flex items-center gap-1">
-                <Star className="w-3 h-3 text-slate-400" />
-                <span className="font-mono text-slate-600">{item.raw_score.toLocaleString()}</span>
-              </span>
-            )}
-
-            {item.comments_count > 0 && (
-              <span className="flex items-center gap-1">
-                <MessageSquare className="w-3 h-3 text-slate-400" />
-                <span className="font-mono text-slate-600">{item.comments_count}</span>
-              </span>
-            )}
-
-            <span className="flex items-center gap-1 text-[11px] text-slate-500">
-              <Clock className="w-3 h-3 text-slate-400" />
-              <span suppressHydrationWarning>{getRelativeTime(item.published_at)}</span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <HandoverCtaButton
-              item={item}
-              variant="card-compact"
-              onHandoverComplete={onHandoverToChat ? () => onHandoverToChat(item, {} as any) : undefined}
-            />
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="text-[11px] text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors font-medium"
+      {/* ⑤ 바닥: 원천 지표(스타·포인트·추천)·개수(포크·댓글)·인기, 챗 분석, 원문.
+          좁으면 버튼 묶음이 다음 줄 오른쪽으로 내려가고 글자는 모든 폭에서 보인다 (R48). */}
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-border pt-2 text-xs text-fg-subtle">
+        <div className="flex items-center gap-3">
+          {scoreKind && item.raw_score > 0 ? (
+            <span
+              data-card-stat="score"
+              data-metric={scoreKind}
+              title={`${sourceLabel(item.source)} ${SCORE_METRIC_LABELS[scoreKind]}`}
+              className="flex items-center gap-1"
             >
-              <span>원문</span>
-              <ArrowUpRight className="w-3 h-3" />
-            </a>
-          </div>
+              <ScoreIcon aria-hidden="true" className="size-3.5" />
+              <span className="sr-only">{SCORE_METRIC_LABELS[scoreKind]}</span>
+              <span className="tabular-nums">{item.raw_score.toLocaleString()}</span>
+            </span>
+          ) : null}
+          {item.comments_count > 0 ? (
+            <span
+              data-card-stat="count"
+              data-metric={countKind}
+              title={countKind === 'forks' ? `${sourceLabel(item.source)} ${countLabel}` : countLabel}
+              className="flex items-center gap-1"
+            >
+              <CountIcon aria-hidden="true" className="size-3.5" />
+              <span className="sr-only">{countLabel}</span>
+              <span className="tabular-nums">{item.comments_count}</span>
+            </span>
+          ) : null}
+          {showHot ? (
+            <span data-card-stat="hotness" className="flex items-center gap-1">
+              <Flame aria-hidden="true" className="size-3.5 text-warning" />
+              <span className="sr-only">인기 점수</span>
+              <span className="tabular-nums">{Math.round(item.hotness_score)}</span>
+            </span>
+          ) : null}
+        </div>
+
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <HandoverCtaButton
+            item={item}
+            variant="card-compact"
+            onHandoverComplete={onHandoverToChat ? () => onHandoverToChat(item) : undefined}
+          />
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex h-11 items-center gap-1 rounded-lg px-2 text-xs font-medium text-fg-muted transition-colors duration-150 ease-standard hover:bg-surface-muted hover:text-accent md:h-8"
+          >
+            <span>원문</span>
+            <span className="sr-only">(새 탭)</span>
+            <ArrowUpRight aria-hidden="true" className="size-3.5" />
+          </a>
         </div>
       </div>
-    </article>
+    </Card>
   );
 }

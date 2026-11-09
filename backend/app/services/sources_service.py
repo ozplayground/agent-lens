@@ -26,6 +26,7 @@ def find_sources_file() -> Path:
 class SourcesService:
     def __init__(self):
         self._file_path = find_sources_file()
+        self._mirror_path = Path(__file__).resolve().parent.parent / "config" / "sources.json"
 
     def get_file_path(self) -> Path:
         if not self._file_path.exists():
@@ -105,10 +106,19 @@ class SourcesService:
             temp_path = p.with_suffix(".tmp")
             with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            temp_path.replace(p)
+            try:
+                temp_path.replace(p)
+            except OSError as e:
+                # 단일 파일 bind mount(Docker) 위로는 rename 이 EBUSY 로 실패한다 → 대상 파일에 제자리로 쓴다
+                logger.warning(f"sources.json 원자적 교체 실패, 제자리 쓰기로 저장한다 ({p}): {e}")
+                with open(temp_path, "r", encoding="utf-8") as src:
+                    content = src.read()
+                with open(p, "w", encoding="utf-8") as f:
+                    f.write(content)
+                temp_path.unlink(missing_ok=True)
 
             # Sync to fallback location if they are distinct
-            fallback = Path(__file__).resolve().parent.parent / "config" / "sources.json"
+            fallback = self._mirror_path
             if fallback != p:
                 try:
                     fallback.parent.mkdir(parents=True, exist_ok=True)

@@ -38,8 +38,8 @@ describe('FocusBottomSheet Component', () => {
 
     // Category chips
     expect(screen.getByRole('button', { name: /전체 소식/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /하네스·평가/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /MCP·도구/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /하네스 & 벤치마크/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /MCP & 생태계/ })).toBeInTheDocument();
 
     // Time ranges
     expect(screen.getByRole('button', { name: /24시간/i })).toBeInTheDocument();
@@ -87,7 +87,7 @@ describe('FocusBottomSheet Component', () => {
     );
 
     // Select category MCP
-    const mcpBtn = screen.getByRole('button', { name: /MCP·도구/i });
+    const mcpBtn = screen.getByRole('button', { name: /MCP & 생태계/ });
     fireEvent.click(mcpBtn);
 
     // Select time range 7d
@@ -200,5 +200,25 @@ describe('FocusBottomSheet Component', () => {
 
     expect(screen.queryByText(/매칭 소식/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/선택 조건의 소식이 없습니다/i)).not.toBeInTheDocument();
+  });
+  it('labels the category chips with 전체 소식 and the long category labels, in order (R40)', () => {
+    render(
+      <FocusBottomSheet
+        isOpen={true}
+        onClose={vi.fn()}
+        filters={DEFAULT_FOCUS_FILTERS}
+        onApplyFilters={vi.fn()}
+        onResetFilters={vi.fn()}
+        targetCount={5}
+      />
+    );
+
+    const expected = ['전체 소식', '하네스 & 벤치마크', 'MCP & 생태계', '에이전트 아키텍처', '최신 AI 동향'];
+    const chipTexts = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent?.trim() ?? '')
+      .filter((text) => expected.includes(text));
+    expect(chipTexts).toEqual(expected);
+    expect(screen.queryByRole('button', { name: /하네스·평가|MCP·도구|에이전트 기술|AI 뉴스/ })).toBeNull();
   });
 });

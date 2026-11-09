@@ -1,4 +1,4 @@
-import { NewsListResponse, ScheduleStatus, StatsResponse, DailyBriefing, AskQuestionResponse } from '@/types/news';
+import { NewsListResponse, ScheduleStatus, StatsResponse, DailyBriefing, AskQuestionResponse, BriefingSettings } from '@/types/news';
 
 function getApiBase(): string {
   if (typeof window !== 'undefined') {
@@ -105,8 +105,8 @@ export async function askQuestionAboutNewsStream(
       body: JSON.stringify({ question }),
       signal
     });
-  } catch (err: any) {
-    if (err.name === 'AbortError') throw err;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') throw err;
     // 2. Fallback to relative URL if direct backend port is not reachable
     const fallbackBase = getApiBase();
     res = await fetch(`${fallbackBase}/api/news/${newsId}/ask/stream`, {
@@ -455,7 +455,7 @@ export interface ResearchStatus {
   is_running: boolean;
   last_run_time?: string;
   auto_adopted_count: number;
-  last_run_summary: any;
+  last_run_summary: Record<string, unknown>;
   cadence: string;
 }
 
@@ -501,7 +501,7 @@ export async function triggerDeepResearch(maxCandidates = 6): Promise<{ status: 
 
 export async function exportBriefingToNotion(apiKey?: string, pageId?: string): Promise<{ success: boolean; message: string; url?: string }> {
   const base = getApiBase();
-  const body: any = {};
+  const body: { api_key?: string; page_id?: string } = {};
   if (apiKey) body.api_key = apiKey;
   if (pageId) body.page_id = pageId;
 
@@ -518,7 +518,7 @@ export async function exportBriefingToNotion(apiKey?: string, pageId?: string): 
 
 export async function sendBriefingByEmail(toEmail?: string, subject?: string): Promise<{ success: boolean; message: string }> {
   const base = getApiBase();
-  const body: any = {};
+  const body: { to_email?: string; subject?: string } = {};
   if (toEmail) body.to_email = toEmail;
   if (subject) body.subject = subject;
 
@@ -535,7 +535,7 @@ export async function sendBriefingByEmail(toEmail?: string, subject?: string): P
 
 export async function testNotionConnection(apiKey?: string, pageId?: string): Promise<{ success: boolean; message: string }> {
   const base = getApiBase();
-  const body: any = {};
+  const body: { api_key?: string; page_id?: string } = {};
   if (apiKey) body.api_key = apiKey;
   if (pageId) body.page_id = pageId;
 
@@ -570,14 +570,31 @@ export async function testEmailConnection(params: {
   return data;
 }
 
-export async function fetchBriefingSettings(): Promise<any> {
+export async function fetchBriefingSettings(): Promise<BriefingSettings> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/briefing/settings`, { cache: 'no-store' });
   if (!res.ok) throw new Error('브리핑 설정을 불러오지 못했습니다.');
   return res.json();
 }
 
-export async function updateBriefingSettings(update: any): Promise<{ success: boolean; message: string }> {
+/** POST /api/briefing/settings 요청 본문 (backend `BriefingSettingsUpdate`). 보낸 필드만 바뀐다. */
+export interface BriefingSettingsUpdate {
+  notion_api_key?: string;
+  notion_page_id?: string;
+  notion_auto_export?: boolean;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_from?: string;
+  smtp_to?: string;
+  smtp_use_tls?: boolean;
+  email_auto_send?: boolean;
+  slack_webhook_url?: string;
+  discord_webhook_url?: string;
+}
+
+export async function updateBriefingSettings(update: BriefingSettingsUpdate): Promise<{ success: boolean; message: string }> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/briefing/settings`, {
     method: 'POST',

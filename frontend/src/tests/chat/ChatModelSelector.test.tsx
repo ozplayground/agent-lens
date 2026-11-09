@@ -19,7 +19,11 @@ describe('ChatModelSelector Component (v4.0 TDD)', () => {
     const trigger = screen.getByRole('button', { name: /Claude 모델 선택|Sonnet/i });
     expect(trigger).toBeInTheDocument();
     expect(trigger).toHaveTextContent(/Sonnet 5.5/i);
-    expect(trigger).toHaveTextContent('🎯');
+    const tierIcon = trigger.querySelector('[data-tier-icon="sonnet"]');
+    expect(tierIcon).not.toBeNull();
+    expect(tierIcon!.tagName.toLowerCase()).toBe('svg');
+    expect(tierIcon).toHaveAttribute('aria-hidden', 'true');
+    expect(trigger.textContent ?? '').not.toMatch(/\p{Emoji_Presentation}|\p{Extended_Pictographic}\u{FE0F}/u);
   });
 
   it('opens popover on click and renders all 3 Claude tiers with WAI-ARIA radiogroup', () => {
@@ -178,7 +182,7 @@ describe('ModelTierBadge Component (v4.0 TDD)', () => {
     render(<ModelTierBadge tier="haiku" variant="chip" showCost={true} />);
 
     expect(screen.getByText(/Haiku 5.5/i)).toBeInTheDocument();
-    expect(screen.getByText('⚡')).toBeInTheDocument();
+    expect(document.querySelector('[data-tier-icon="haiku"]')).not.toBeNull();
     expect(screen.getByText('$')).toBeInTheDocument();
   });
 
@@ -186,7 +190,7 @@ describe('ModelTierBadge Component (v4.0 TDD)', () => {
     render(<ModelTierBadge tier="sonnet" variant="footer" latencyMs={642} />);
 
     expect(screen.getByText(/Sonnet 5.5/i)).toBeInTheDocument();
-    expect(screen.getByText('🎯')).toBeInTheDocument();
+    expect(document.querySelector('[data-tier-icon="sonnet"]')).not.toBeNull();
     expect(screen.getByText(/642ms/i)).toBeInTheDocument();
   });
 
@@ -199,7 +203,7 @@ describe('ModelTierBadge Component (v4.0 TDD)', () => {
   it('can hide icon when showIcon is false', () => {
     render(<ModelTierBadge tier="opus" showIcon={false} />);
 
-    expect(screen.queryByText('🧠')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-tier-icon]')).toBeNull();
     expect(screen.getByText(/Opus 5.5/i)).toBeInTheDocument();
   });
 });

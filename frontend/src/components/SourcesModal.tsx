@@ -1,12 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import {
-  X,
-  Globe,
-  Sparkles,
-  Radio,
-} from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Radio, Sparkles } from 'lucide-react';
 import {
   fetchSources,
   toggleSource,
@@ -17,6 +12,11 @@ import {
   ResearchStatus,
   ResearchAuditLog,
 } from '@/lib/api';
+import { Dialog } from '@/components/ui/Dialog';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Tabs, TabPanel } from '@/components/ui/Tabs';
+import { Button } from '@/components/ui/Button';
+import { cn } from '@/lib/cn';
 import DeepResearcherTab from './sources/DeepResearcherTab';
 import SourcesListTab from './sources/SourcesListTab';
 
@@ -26,37 +26,76 @@ interface SourcesModalProps {
   onSourcesUpdated?: () => void;
 }
 
+type SourcesTab = 'deep_research' | 'sources';
+
+const TAB_ID_PREFIX = 'sources-modal';
+const DELETE_CONFIRM_TITLE = '이 소스를 목록에서 삭제하시겠습니까?';
+
+interface PendingDelete {
+  sourceType: string;
+  id: string;
+  name: string;
+}
+
+function findSourceName(data: SourcesResponse | null, sourceType: string, id: string): string {
+  if (!data) return id;
+  if (sourceType === 'rss') {
+    const feed = data.data.rss_feeds.find((f) => (f.id || f.url) === id);
+    return feed?.name ?? id;
+  }
+  return id;
+}
+
 export default function SourcesModal({ isOpen, onClose, onSourcesUpdated }: SourcesModalProps) {
-  const [activeTab, setActiveTab] = useState<'sources' | 'deep_research'>('deep_research');
+  const [activeTab, setActiveTab] = useState<SourcesTab>('deep_research');
   const [sourcesData, setSourcesData] = useState<SourcesResponse | null>(null);
   const [researchStatus, setResearchStatus] = useState<ResearchStatus | null>(null);
   const [auditLogs, setAuditLogs] = useState<ResearchAuditLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [srcRes, statRes, logsRes] = await Promise.all([
+  // 데이터를 받아 채운다. 로딩 표시 켜기는 호출하는 쪽이 한다.
+  const fetchAll = useCallback(
+    () =>
+      Promise.all([
         fetchSources(),
         fetchDeepResearchStatus(),
         fetchResearchAuditLogs(30),
-      ]);
-      setSourcesData(srcRes);
-      setResearchStatus(statRes);
-      setAuditLogs(logsRes.logs);
-    } catch {
-      setMsg({ type: 'error', text: '데이터를 불러오지 못했습니다.' });
-    } finally {
-      setLoading(false);
-    }
+      ])
+        .then(([srcRes, statRes, logsRes]) => {
+          setSourcesData(srcRes);
+          setResearchStatus(statRes);
+          setAuditLogs(logsRes.logs);
+        })
+        .catch(() => {
+          setMsg({ type: 'error', text: '데이터를 불러오지 못했습니다.' });
+        })
+        .finally(() => {
+          setLoading(false);
+        }),
+    []
+  );
+
+  const loadData = () => {
+    setLoading(true);
+    void fetchAll();
   };
+
+  // 열릴 때 로딩 표시를 켠다 (렌더 중 이전 값 비교).
+  const [prevIsOpen, setPrevIsOpen] = useState(false);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) setLoading(true);
+  }
 
   useEffect(() => {
     if (isOpen) {
-      loadData();
+      void fetchAll();
     }
-  }, [isOpen]);
+  }, [isOpen, fetchAll]);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setMsg({ type, text });
@@ -74,97 +113,104 @@ export default function SourcesModal({ isOpen, onClose, onSourcesUpdated }: Sour
     }
   };
 
+  // 삭제는 확인 창을 연다 (브라우저 기본 대화상자 대신 ConfirmDialog).
   const handleDelete = async (sourceType: string, id: string) => {
-    if (!window.confirm('이 소스를 목록에서 삭제하시겠습니까?')) return;
+    setDeleteError(null);
+    setPendingDelete({ sourceType, id, name: findSourceName(sourcesData, sourceType, id) });
+  };
+
+  const cancelDelete = () => {
+    if (deleting) return;
+    setPendingDelete(null);
+    setDeleteError(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
     try {
-      await deleteSource(sourceType, id);
+      await deleteSource(pendingDelete.sourceType, pendingDelete.id);
+      setPendingDelete(null);
       showToast('success', '소스가 삭제되었습니다.');
       loadData();
       onSourcesUpdated?.();
     } catch {
-      showToast('error', '소스 삭제에 실패했습니다.');
+      setDeleteError('소스 삭제에 실패했습니다.');
+    } finally {
+      setDeleting(false);
     }
   };
 
-  if (!isOpen) return null;
+  const tabs = [
+    {
+      id: 'deep_research' as const,
+      label: (
+        <>
+          <Sparkles aria-hidden="true" className="size-4" />
+          AI 딥 리서처
+        </>
+      ),
+      badge: researchStatus?.auto_adopted_count ? `+${researchStatus.auto_adopted_count}` : undefined,
+    },
+    {
+      id: 'sources' as const,
+      label: (
+        <>
+          <Radio aria-hidden="true" className="size-4" />
+          등록된 수집원
+        </>
+      ),
+      badge: sourcesData?.stats.active_rss ?? 0,
+    },
+  ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="fixed inset-0" onClick={onClose} aria-hidden="true" />
-
-      <div className="relative w-full max-w-4xl max-h-[92vh] sm:max-h-[88vh] bg-white border border-slate-200 rounded-xl shadow-2xl flex flex-col overflow-hidden text-slate-800 z-10 animate-in zoom-in-95 duration-150">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0 bg-white">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
-              <Globe className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm sm:text-base font-semibold text-slate-900">
-                수집 소스 관리 및 자율 리서처
-              </h3>
-              <p className="text-[11px] text-slate-500">
-                RSS 피드, GitHub 저장소, arXiv, Reddit 수집 대상을 관리합니다.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <>
+      <Dialog
+        open={isOpen}
+        onClose={onClose}
+        size="xl"
+        dismissOnScrim={false}
+        title="소스 & 리서처"
+        bodyClassName="p-0"
+        footer={
+          <>
+            <p className="mr-auto text-xs text-fg-muted">
+              수집 대상의 기준 파일: <span className="font-mono text-fg">sources.json</span>
+            </p>
+            <Button variant="secondary" onClick={onClose}>
+              닫기
+            </Button>
+          </>
+        }
+      >
+        <div className="sticky top-0 z-10 bg-surface px-4 pt-1 md:px-5">
+          <p className="pb-2 text-sm text-fg-muted">RSS 피드, GitHub 저장소, arXiv, Reddit 수집 대상을 관리합니다.</p>
+          <Tabs
+            label="소스 관리 화면"
+            tabs={tabs}
+            value={activeTab}
+            onChange={setActiveTab}
+            idPrefix={TAB_ID_PREFIX}
+          />
         </div>
 
-        {/* Tab Navigation */}
-        <div className="px-4 border-b border-slate-200 bg-slate-50 flex gap-4 text-xs shrink-0">
-          <button
-            onClick={() => setActiveTab('deep_research')}
-            className={`py-2.5 font-medium border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'deep_research'
-                ? 'border-blue-600 text-blue-600 font-semibold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            <span>AI Deep Researcher (자율 발굴/채택)</span>
-            {researchStatus?.auto_adopted_count ? (
-              <span className="px-1.5 py-0.2 rounded-full font-mono text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200">
-                +{researchStatus.auto_adopted_count}
-              </span>
-            ) : null}
-          </button>
-          <button
-            onClick={() => setActiveTab('sources')}
-            className={`py-2.5 font-medium border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'sources'
-                ? 'border-blue-600 text-blue-600 font-semibold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Radio className="w-3.5 h-3.5 text-emerald-600" />
-            <span>등록된 수집원 목록</span>
-            <span className="px-1.5 py-0.2 rounded-full font-mono text-[10px] bg-slate-100 text-slate-600 border border-slate-200">
-              {sourcesData?.stats.active_rss ?? 0}
-            </span>
-          </button>
+        {/* 결과 안내: 대화상자 안의 live 영역 */}
+        <div aria-live="polite" aria-atomic="true" className="px-4 md:px-5">
+          {msg ? (
+            <p
+              className={cn(
+                'mt-3 rounded-lg border border-border px-3 py-2 text-sm',
+                msg.type === 'success' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
+              )}
+            >
+              {msg.text}
+            </p>
+          ) : null}
         </div>
 
-        {/* Toast Alert */}
-        {msg && (
-          <div
-            className={`px-4 py-2 text-xs text-center shrink-0 ${
-              msg.type === 'success'
-                ? 'bg-emerald-50 text-emerald-700 border-b border-emerald-200'
-                : 'bg-red-50 text-red-700 border-b border-red-200'
-            }`}
-          >
-            {msg.text}
-          </div>
-        )}
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto bg-white">
+        <TabPanel id={activeTab} idPrefix={TAB_ID_PREFIX}>
           {activeTab === 'deep_research' ? (
             <DeepResearcherTab
               researchStatus={researchStatus}
@@ -184,21 +230,20 @@ export default function SourcesModal({ isOpen, onClose, onSourcesUpdated }: Sour
               onSourcesUpdated={onSourcesUpdated}
             />
           )}
-        </div>
+        </TabPanel>
+      </Dialog>
 
-        {/* Modal Footer */}
-        <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
-          <span className="font-mono text-[11px]">
-            Single Source of Truth: <strong className="text-slate-900">sources.json</strong>
-          </span>
-          <button
-            onClick={onClose}
-            className="px-3.5 py-1.5 rounded-md bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-medium shadow-xs cursor-pointer"
-          >
-            닫기
-          </button>
-        </div>
-      </div>
-    </div>
+      <ConfirmDialog
+        open={isOpen && pendingDelete !== null}
+        title={DELETE_CONFIRM_TITLE}
+        description={pendingDelete ? `'${pendingDelete.name}' 을(를) 수집 목록에서 지웁니다.` : undefined}
+        confirmLabel="삭제"
+        tone="danger"
+        busy={deleting}
+        error={deleteError}
+        onConfirm={() => void confirmDelete()}
+        onCancel={cancelDelete}
+      />
+    </>
   );
 }

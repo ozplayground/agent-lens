@@ -1,251 +1,162 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ==========================================================================
+   Design tokens (docs: spec 설계 1.2~1.8)
+   라이트가 기본(:root), 다크는 .dark 클래스 하나로 전환한다.
+   ========================================================================== */
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
   color-scheme: light;
+  --al-canvas: #f8fafc;
+  --al-surface: #ffffff;
+  --al-surface-muted: #f1f5f9;
+  --al-fg: #0f172a;
+  --al-fg-muted: #475569;
+  --al-fg-subtle: #5c6b80;
+  --al-border: #e2e8f0;
+  --al-border-strong: #7b8798;
+  --al-accent: #2563eb;
+  --al-accent-solid: #2563eb;
+  --al-accent-solid-hover: #1d4ed8;
+  --al-on-accent: #ffffff;
+  --al-accent-soft: #eff6ff;
+  --al-accent-soft-fg: #1d4ed8;
+  --al-success: #047857;
+  --al-success-soft: #ecfdf5;
+  --al-warning: #b45309;
+  --al-warning-soft: #fffbeb;
+  --al-danger: #b91c1c;
+  --al-danger-soft: #fef2f2;
+  --al-danger-solid: #b91c1c;
+  --al-danger-solid-hover: #991b1b;
+  --al-scrim: rgb(15 23 42 / 0.45);
+  --al-shadow-card: 0 1px 2px rgb(15 23 42 / 0.06);
+  --al-shadow-overlay: 0 12px 32px rgb(15 23 42 / 0.16);
 }
 
-html.dark {
-  --background: #0d1117;
-  --foreground: #f0f6fc;
+.dark {
   color-scheme: dark;
+  --al-canvas: #0e1013;
+  --al-surface: #16191d;
+  --al-surface-muted: #1f2329;
+  --al-fg: #e8eaed;
+  --al-fg-muted: #a9b0ba;
+  --al-fg-subtle: #858d98;
+  --al-border: #2a2f36;
+  --al-border-strong: #6b7480;
+  --al-accent: #60a5fa;
+  --al-accent-solid: #2563eb;
+  --al-accent-solid-hover: #1d4ed8;
+  --al-on-accent: #ffffff;
+  --al-accent-soft: #15233f;
+  --al-accent-soft-fg: #60a5fa;
+  --al-success: #34d399;
+  --al-success-soft: #0f2a20;
+  --al-warning: #fbbf24;
+  --al-warning-soft: #2d2410;
+  --al-danger: #f87171;
+  --al-danger-soft: #2d1517;
+  --al-danger-solid: #b91c1c;
+  --al-danger-solid-hover: #991b1b;
+  --al-scrim: rgb(0 0 0 / 0.6);
+  /* 다크는 그림자 없음(테두리로 구분). box-shadow 목록 안에서 유효하도록 투명 그림자로 둔다. */
+  --al-shadow-card: 0 0 #0000;
+  --al-shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.5);
 }
 
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
+/* 유틸리티가 변수를 직접 참조한다 → 클래스 하나로 테마 전환 */
+@theme inline {
+  --color-canvas: var(--al-canvas);
+  --color-surface: var(--al-surface);
+  --color-surface-muted: var(--al-surface-muted);
+  --color-fg: var(--al-fg);
+  --color-fg-muted: var(--al-fg-muted);
+  --color-fg-subtle: var(--al-fg-subtle);
+  --color-border: var(--al-border);
+  --color-border-strong: var(--al-border-strong);
+  --color-accent: var(--al-accent);
+  --color-accent-solid: var(--al-accent-solid);
+  --color-accent-solid-hover: var(--al-accent-solid-hover);
+  --color-on-accent: var(--al-on-accent);
+  --color-accent-soft: var(--al-accent-soft);
+  --color-accent-soft-fg: var(--al-accent-soft-fg);
+  --color-success: var(--al-success);
+  --color-success-soft: var(--al-success-soft);
+  --color-warning: var(--al-warning);
+  --color-warning-soft: var(--al-warning-soft);
+  --color-danger: var(--al-danger);
+  --color-danger-soft: var(--al-danger-soft);
+  --color-danger-solid: var(--al-danger-solid);
+  --color-danger-solid-hover: var(--al-danger-solid-hover);
+  --color-scrim: var(--al-scrim);
+  --shadow-card: var(--al-shadow-card);
+  --shadow-overlay: var(--al-shadow-overlay);
 }
 
-/* ==========================================================================
-   Light Mode Theme Styles & Mappings (Scoped to html:not(.dark))
-   ========================================================================== */
+/* 테마와 무관한 값 */
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --animate-fade-in: fade-in 150ms cubic-bezier(0.2, 0, 0, 1) both;
+  --animate-dialog-in: dialog-in 200ms cubic-bezier(0.2, 0, 0, 1) both;
+  --animate-sheet-in: sheet-in 240ms cubic-bezier(0.2, 0, 0, 1) both;
+  --animate-drawer-in: drawer-in 240ms cubic-bezier(0.2, 0, 0, 1) both;
 
-html:not(.dark) .bg-\[\#0d1117\] {
-  background-color: #f8fafc !important;
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes dialog-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes sheet-in {
+    from { transform: translateY(100%); }
+    to { transform: none; }
+  }
+  @keyframes drawer-in {
+    from { transform: translateX(-100%); }
+    to { transform: none; }
+  }
 }
 
-html:not(.dark) .bg-\[\#161b22\] {
-  background-color: #ffffff !important;
+@layer base {
+  body {
+    background: var(--al-canvas);
+    color: var(--al-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    /* 한국어는 어절 단위로 줄을 바꾸고, 긴 토큰은 넘칠 때만 끊는다. 마크다운·코드의 유틸리티 클래스가 이긴다. */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+  :focus-visible {
+    outline: 2px solid var(--al-accent);
+    outline-offset: 2px;
+  }
+  ::placeholder {
+    color: var(--al-fg-subtle);
+    opacity: 1;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--al-border-strong) transparent;
+  }
 }
 
-html:not(.dark) .bg-\[\#21262d\] {
-  background-color: #f1f5f9 !important;
-}
-
-html:not(.dark) .bg-\[\#30363d\] {
-  background-color: #e2e8f0 !important;
-}
-
-/* Borders in Light Mode */
-html:not(.dark) .border-\[\#30363d\],
-html:not(.dark) .border-\[\#30363d\]\/60 {
-  border-color: #e2e8f0 !important;
-}
-
-html:not(.dark) .border-\[\#21262d\] {
-  border-color: #cbd5e1 !important;
-}
-
-/* Text colors in Light Mode */
-html:not(.dark) .text-\[\#f0f6fc\] {
-  color: #0f172a !important;
-}
-
-html:not(.dark) .text-\[\#c9d1d9\] {
-  color: #334155 !important;
-}
-
-html:not(.dark) .text-\[\#8b949e\],
-html:not(.dark) .text-\[\#8b949e\]\/70,
-html:not(.dark) .text-\[\#8b949e\]\/80 {
-  color: #64748b !important;
-}
-
-/* Hover effects in Light Mode */
-html:not(.dark) .hover\:bg-\[\#21262d\]:hover {
-  background-color: #f1f5f9 !important;
-}
-
-html:not(.dark) .hover\:bg-\[\#30363d\]:hover {
-  background-color: #e2e8f0 !important;
-}
-
-html:not(.dark) .hover\:bg-\[\#161b22\]:hover {
-  background-color: #f8fafc !important;
-}
-
-html:not(.dark) .hover\:text-\[\#f0f6fc\]:hover {
-  color: #0f172a !important;
-}
-
-html:not(.dark) .hover\:text-\[\#c9d1d9\]:hover {
-  color: #1e293b !important;
-}
-
-html:not(.dark) .hover\:border-\[\#8b949e\]:hover,
-html:not(.dark) .hover\:border-\[\#8b949e\]\/60:hover {
-  border-color: #94a3b8 !important;
-}
-
-/* Accent blue */
-html:not(.dark) .text-\[\#58a6ff\] {
-  color: #2563eb !important;
-}
-
-html:not(.dark) .hover\:text-\[\#58a6ff\]:hover {
-  color: #1d4ed8 !important;
-}
-
-html:not(.dark) .group:hover .group-hover\:text-\[\#58a6ff\] {
-  color: #2563eb !important;
-}
-
-html:not(.dark) .border-\[\#58a6ff\],
-html:not(.dark) .border-\[\#58a6ff\]\/30,
-html:not(.dark) .border-\[\#58a6ff\]\/40,
-html:not(.dark) .border-\[\#58a6ff\]\/50 {
-  border-color: #93c5fd !important;
-}
-
-html:not(.dark) .focus\:border-\[\#58a6ff\]:focus {
-  border-color: #2563eb !important;
-}
-
-html:not(.dark) .bg-\[\#58a6ff\]\/10,
-html:not(.dark) .bg-\[\#1f6feb\]\/10,
-html:not(.dark) .bg-\[\#1f6feb\]\/20,
-html:not(.dark) .bg-\[\#1f6feb\]\/30,
-html:not(.dark) .bg-\[\#388bfd\]\/15 {
-  background-color: #eff6ff !important;
-}
-
-/* Form inputs & Controls in Light Mode */
-html:not(.dark) input,
-html:not(.dark) textarea,
-html:not(.dark) select {
-  background-color: #ffffff !important;
-  border-color: #cbd5e1 !important;
-  color: #0f172a !important;
-}
-
-html:not(.dark) input::placeholder,
-html:not(.dark) textarea::placeholder {
-  color: #94a3b8 !important;
-}
-
-/* Pre / Code blocks in Light Mode */
-html:not(.dark) pre,
-html:not(.dark) code {
-  background-color: #f1f5f9 !important;
-  color: #0f172a !important;
-}
-
-/* ==========================================================================
-   Dark Mode Theme Overrides
-   ========================================================================== */
-
-html.dark body {
-  background-color: #0d1117 !important;
-  color: #f0f6fc !important;
-}
-
-html.dark header {
-  background-color: #161b22 !important;
-  border-color: #30363d !important;
-  color: #f0f6fc !important;
-}
-
-html.dark .bg-white {
-  background-color: #161b22 !important;
-}
-
-html.dark .bg-slate-50 {
-  background-color: #0d1117 !important;
-}
-
-html.dark .bg-slate-100 {
-  background-color: #21262d !important;
-}
-
-html.dark .border-slate-200 {
-  border-color: #30363d !important;
-}
-
-html.dark .text-slate-900 {
-  color: #f0f6fc !important;
-}
-
-html.dark .text-slate-800,
-html.dark .text-slate-700 {
-  color: #e6edf3 !important;
-}
-
-html.dark .text-slate-600,
-html.dark .text-slate-500 {
-  color: #8b949e !important;
-}
-
-html.dark input,
-html.dark textarea,
-html.dark select {
-  background-color: #0d1117 !important;
-  border-color: #30363d !important;
-  color: #f0f6fc !important;
-}
-
-html.dark input::placeholder,
-html.dark textarea::placeholder {
-  color: #6e7681 !important;
-}
-
-html.dark pre,
-html.dark code {
-  background-color: #161b22 !important;
-  color: #f0f6fc !important;
-}
-
-/* Shared Modal shadows & backdrop */
-.shadow-2xl {
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2) !important;
-}
-
-.bg-black\/75,
-.bg-black\/60,
-.bg-black\/70 {
-  background-color: rgba(15, 23, 42, 0.6) !important;
-  backdrop-filter: blur(4px);
-}
-
-/* Scrollbars */
+/* Safari 등 `scrollbar-color` 를 모르는 브라우저용 스크롤바 (토큰 색) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: var(--al-border-strong);
   border-radius: 9999px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
-}
-
 ::-webkit-scrollbar-track {
-  background-color: #f8fafc;
-}
-
-html.dark ::-webkit-scrollbar-thumb {
-  background-color: #30363d;
-}
-
-html.dark ::-webkit-scrollbar-thumb:hover {
-  background-color: #8b949e;
-}
-
-html.dark ::-webkit-scrollbar-track {
-  background-color: #0d1117;
+  background-color: transparent;
 }

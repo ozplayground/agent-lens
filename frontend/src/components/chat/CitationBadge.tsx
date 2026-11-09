@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { SourceReference, ChatSourceType } from '@/types/chat';
+import { cn } from '@/lib/cn';
 import CitationPopover from './CitationPopover';
 
 export interface CitationBadgeProps {
@@ -20,11 +21,12 @@ export default function CitationBadge({
   className = '',
 }: CitationBadgeProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Phantom citation fallback
   if (!source) {
     return (
-      <span className="px-1 py-0.2 mx-0.5 rounded font-mono text-[11px] text-slate-400 bg-slate-100 border border-slate-200 cursor-default select-none inline-block">
+      <span className="mx-0.5 inline-block cursor-default rounded-full bg-surface-muted px-1.5 text-xs text-fg-subtle tabular-nums select-none">
         [{index}]
       </span>
     );
@@ -40,21 +42,35 @@ export default function CitationBadge({
     : `출처 ${index}번: ${source.title}`;
 
   return (
-    <span className="relative inline-block align-baseline mx-0.5">
+    <span className="relative mx-0.5 inline-block align-baseline">
+      {/*
+        모바일(<768)은 누르는 영역 44px. 음수 세로 여백으로 줄 높이는 늘리지 않는다.
+        색 표시는 안쪽 알약(span)이 맡고, 글자색은 버튼에 둔다.
+      */}
       <button
+        ref={buttonRef}
         type="button"
-        role="button"
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         aria-label={ariaLabel}
+        data-tone={isSupplementary ? 'supplementary' : 'primary'}
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`px-1.5 py-0.2 rounded-full font-mono text-[11px] font-semibold transition-colors inline-flex items-center cursor-pointer select-none ${
-          isSupplementary
-            ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 shadow-2xs'
-            : 'text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 shadow-2xs'
-        } ${className}`}
+        className={cn(
+          'group inline-flex cursor-pointer items-center justify-center rounded-full align-baseline text-xs font-semibold tabular-nums select-none max-md:-my-3.5 max-md:min-h-11 max-md:min-w-11',
+          isSupplementary ? 'text-success' : 'text-accent-soft-fg',
+          className
+        )}
       >
-        [{index}]
+        <span
+          className={cn(
+            'inline-flex items-center rounded-full px-1.5 leading-5 ring-current/40 group-hover:ring-1 group-aria-expanded:ring-1',
+            isSupplementary
+              ? 'bg-success-soft'
+              : 'bg-accent-soft'
+          )}
+        >
+          [{index}]
+        </span>
       </button>
 
       {isOpen && (
@@ -62,6 +78,7 @@ export default function CitationBadge({
           source={source}
           isOpen={isOpen}
           onClose={() => setIsOpen(false)}
+          anchorRef={buttonRef}
           onOpenSourceDetail={onOpenSourceDetail}
         />
       )}

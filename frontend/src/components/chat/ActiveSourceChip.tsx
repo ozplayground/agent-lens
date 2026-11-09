@@ -1,9 +1,11 @@
 'use client';
 
 import React from 'react';
-import { X, ExternalLink, Sparkles } from 'lucide-react';
+import { X, Sparkles } from 'lucide-react';
 import { NewsItem } from '@/types/news';
 import { ChatSourceDetailResponse } from '@/types/chat';
+import { cn } from '@/lib/cn';
+import { categoryShortLabel } from '@/lib/labels';
 
 export interface ActiveSourceChipProps {
   source: NewsItem | ChatSourceDetailResponse;
@@ -28,17 +30,18 @@ export default function ActiveSourceChip({
   };
 
   return (
-    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-950 text-xs shadow-2xs transition-all max-w-full">
-      <span className="flex items-center gap-1 px-1.5 py-0.2 rounded bg-indigo-100/80 text-indigo-800 font-mono text-[10px] uppercase tracking-wider shrink-0">
-        <Sparkles className="w-2.5 h-2.5 text-indigo-600" />
-        {source.category}
+    <div className="inline-flex h-11 max-w-full items-center gap-1.5 rounded-full border border-accent/30 bg-accent-soft pl-1.5 text-xs text-accent-soft-fg md:h-8">
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-fg-muted">
+        <Sparkles aria-hidden="true" className="size-3 text-accent" />
+        <span>{categoryShortLabel(source.category)}</span>
       </span>
 
       <span
         onClick={handleTitleClick}
-        className={`truncate font-medium text-slate-800 ${
-          onPreviewClick ? 'cursor-pointer hover:text-indigo-600 hover:underline' : ''
-        }`}
+        className={cn(
+          'min-w-0 truncate text-sm font-medium text-fg',
+          onPreviewClick ? 'cursor-pointer hover:text-accent hover:underline' : null
+        )}
         title={source.title}
       >
         {truncatedTitle}
@@ -49,9 +52,10 @@ export default function ActiveSourceChip({
         onClick={onRemove}
         disabled={disabled}
         aria-label="기사 컨텍스트 해제"
-        className="p-0.5 rounded-full hover:bg-indigo-200/70 text-indigo-600 hover:text-indigo-900 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0 ml-0.5"
+        title="기사 컨텍스트 해제"
+        className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-accent-soft-fg transition-colors duration-150 ease-standard hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50 md:size-8"
       >
-        <X className="w-3.5 h-3.5" />
+        <X aria-hidden="true" className="size-4" />
       </button>
     </div>
   );

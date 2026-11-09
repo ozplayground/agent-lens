@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import {
-  X,
   Sparkles,
   Copy,
   Check,
@@ -11,14 +10,24 @@ import {
   FileText,
   Mail,
   ExternalLink,
-  Loader2,
-  AlertCircle,
   ArrowUpRight,
-  BookOpen,
-  Code
+  MoreHorizontal,
+  TriangleAlert,
+  Lightbulb,
 } from 'lucide-react';
 import { DailyBriefing } from '@/types/news';
 import { exportBriefingToNotion, sendBriefingByEmail } from '@/lib/api';
+import { CATEGORY_LABELS, categoryLabel, sourceLabel } from '@/lib/labels';
+import { FEED_CATEGORIES } from '@/components/feed/FeedToolbar';
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
+import { Dialog } from '@/components/ui/Dialog';
+import { Tabs, TabPanel } from '@/components/ui/Tabs';
+import { Button, buttonClasses } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { MenuButton, type MenuItem } from '@/components/ui/Menu';
+import { InlineAlert } from '@/components/ui/InlineAlert';
+import { TextField } from '@/components/ui/TextField';
+import { Badge } from '@/components/ui/Badge';
 import MarkdownViewer from './MarkdownViewer';
 
 interface DailyBriefingModalProps {
@@ -28,14 +37,32 @@ interface DailyBriefingModalProps {
   onOpenSettings?: () => void;
 }
 
+type BriefingView = 'categorized' | 'markdown';
+
+const TAB_ID_PREFIX = 'daily-briefing';
+
+/** 분야 id 가 긴 라벨 표(`CATEGORY_LABELS`)에 있으면 긴 라벨, 없으면 backend 이름. */
+function categoryTitle(id: string, name: string): string {
+  return Object.prototype.hasOwnProperty.call(CATEGORY_LABELS, id) ? categoryLabel(id) : name;
+}
+
+/** 피드 카테고리 칩과 같은 lucide 아이콘. 표에 없는 id 는 null (backend 이모지 `icon` 은 쓰지 않는다). */
+function categoryIcon(id: string): React.ReactNode {
+  return FEED_CATEGORIES.find((cat) => cat.id === id)?.icon ?? null;
+}
+
+function errorMessage(e: unknown, fallback: string): string {
+  return e instanceof Error && e.message ? e.message : fallback;
+}
+
 export default function DailyBriefingModal({
   briefing,
   isOpen,
   onClose,
   onOpenSettings
 }: DailyBriefingModalProps) {
-  const [activeView, setActiveView] = useState<'categorized' | 'markdown'>('categorized');
-  const [copied, setCopied] = useState(false);
+  const [activeView, setActiveView] = useState<BriefingView>('categorized');
+  const { status: copyStatus, copy } = useCopyToClipboard();
 
   // Notion export state
   const [isExportingNotion, setIsExportingNotion] = useState(false);
@@ -47,12 +74,10 @@ export default function DailyBriefingModal({
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailResult, setEmailResult] = useState<{ success: boolean; message?: string } | null>(null);
 
-  if (!isOpen || !briefing) return null;
+  if (!briefing) return null;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(briefing.markdown_report);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    void copy(briefing.markdown_report);
   };
 
   const handleDownload = () => {
@@ -71,8 +96,8 @@ export default function DailyBriefingModal({
     try {
       const res = await exportBriefingToNotion();
       setNotionResult({ success: true, url: res.url, message: 'Notion 페이지 생성 완료!' });
-    } catch (e: any) {
-      setNotionResult({ success: false, message: e.message || 'Notion 페이지 생성 실패' });
+    } catch (e: unknown) {
+      setNotionResult({ success: false, message: errorMessage(e, 'Notion 페이지 생성 실패') });
     } finally {
       setIsExportingNotion(false);
     }
@@ -82,390 +107,310 @@ export default function DailyBriefingModal({
     setIsSendingEmail(true);
     setEmailResult(null);
     try {
-      const res = await sendBriefingByEmail(targetEmail || emailInput);
+      await sendBriefingByEmail(targetEmail || emailInput);
       setEmailResult({ success: true, message: '이메일이 성공적으로 발송되었습니다.' });
       setShowEmailPrompt(false);
       setTimeout(() => setEmailResult(null), 4000);
-    } catch (e: any) {
-      setEmailResult({ success: false, message: e.message || '이메일 발송 실패' });
+    } catch (e: unknown) {
+      setEmailResult({ success: false, message: errorMessage(e, '이메일 발송 실패') });
     } finally {
       setIsSendingEmail(false);
     }
   };
 
+  /** 개요 줄의 `**이름**` 이 어떤 분야의 backend 이름과 같으면 그 분야의 긴 라벨로 바꾼다. */
+  const overviewName = (name: string): string => {
+    const cat = briefing.categories?.find((c) => c.name === name.trim());
+    return cat ? categoryTitle(cat.id, cat.name) : name;
+  };
+
+  const copyLabel = copyStatus === 'copied' ? '복사됨' : copyStatus === 'failed' ? '복사 실패' : '마크다운 복사';
+  const copyIcon = copyStatus === 'copied' ? <Check /> : copyStatus === 'failed' ? <TriangleAlert /> : <Copy />;
+
+  // 모바일(<768)에서 주 버튼 외 작업을 모은 메뉴.
+  const mobileMenuItems: MenuItem[] = [
+    { type: 'item', label: '이메일 발송', icon: <Mail />, onSelect: () => setShowEmailPrompt(true) },
+    { type: 'item', label: copyLabel, icon: copyIcon, onSelect: handleCopy },
+    { type: 'item', label: '.md 다운로드', icon: <Download />, onSelect: handleDownload },
+  ];
+
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-2">
+      {notionResult?.url ? (
+        <a
+          href={notionResult.url}
+          target="_blank"
+          rel="noreferrer"
+          className={buttonClasses('primary', 'md')}
+        >
+          <FileText aria-hidden="true" className="size-4" />
+          <span>Notion에서 열기</span>
+          <ArrowUpRight aria-hidden="true" className="size-4" />
+        </a>
+      ) : (
+        <Button
+          variant="primary"
+          onClick={handleExportNotion}
+          loading={isExportingNotion}
+          leadingIcon={<FileText />}
+          title="Notion 페이지로 즉시 발행"
+        >
+          Notion 내보내기
+        </Button>
+      )}
+
+      <Button
+        variant="secondary"
+        onClick={() => setShowEmailPrompt((v) => !v)}
+        loading={isSendingEmail}
+        leadingIcon={<Mail />}
+        aria-expanded={showEmailPrompt}
+        aria-controls={showEmailPrompt ? 'daily-briefing-email-form' : undefined}
+        className="max-md:hidden"
+      >
+        이메일 발송
+      </Button>
+      <IconButton
+        label={copyLabel}
+        icon={copyIcon}
+        variant="secondary"
+        onClick={handleCopy}
+        className="max-md:hidden"
+      />
+      <IconButton
+        label=".md 다운로드"
+        icon={<Download />}
+        variant="secondary"
+        onClick={handleDownload}
+        className="max-md:hidden"
+      />
+      <div className="md:hidden">
+        <MenuButton label="브리핑 작업" icon={<MoreHorizontal />} items={mobileMenuItems} variant="secondary" />
+      </div>
+    </div>
+  );
+
+  const footer = (
+    <>
+      <span className="mr-auto text-xs text-fg-subtle max-md:hidden">
+        AgentLens · AI & Agent 기술 큐레이션 및 정기 브리핑
+      </span>
+      {/* 연동 설정 진입은 여기 한 곳 (실패 알림 안의 Notion·이메일 설정 열기는 그 실패의 바로가기) */}
+      {onOpenSettings && (
+        <Button variant="ghost" leadingIcon={<Settings />} onClick={onOpenSettings}>
+          연동 설정
+        </Button>
+      )}
+      <Button variant="secondary" onClick={onClose}>
+        닫기
+      </Button>
+    </>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-      <div className="bg-white border border-slate-200 rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl relative text-slate-800 overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-md bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
-                오늘의 AI 브리핑
-                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                  {briefing.date}
-                </span>
-              </h3>
-              <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
-                {briefing.headline}
-              </p>
-            </div>
-          </div>
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      size="xl"
+      title={
+        <>
+          오늘의 AI 브리핑 <span className="ml-1 text-sm font-normal text-fg-muted">{briefing.date}</span>
+        </>
+      }
+      description={briefing.headline}
+      footer={footer}
+    >
+      <div className="flex flex-col gap-4">
+        {toolbar}
 
-          {/* Action Toolbar */}
-          <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto">
-            {/* Notion Export */}
-            {notionResult?.url ? (
-              <a
-                href={notionResult.url}
-                target="_blank"
-                rel="noreferrer"
-                className="px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Notion에서 열기</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </a>
-            ) : (
-              <button
-                onClick={handleExportNotion}
-                disabled={isExportingNotion}
-                className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
-                title="Notion 페이지로 즉시 발행"
-              >
-                {isExportingNotion ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                ) : (
-                  <FileText className="w-3.5 h-3.5 text-blue-600" />
-                )}
-                <span>Notion 발행</span>
-              </button>
-            )}
-
-            {/* Email Send */}
-            <div className="relative">
-              <button
-                onClick={() => setShowEmailPrompt(!showEmailPrompt)}
-                disabled={isSendingEmail}
-                className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
-                title="이메일로 브리핑 받기"
-              >
-                {isSendingEmail ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                ) : (
-                  <Mail className="w-3.5 h-3.5 text-blue-600" />
-                )}
-                <span>이메일 전송</span>
-              </button>
-
-              {/* Email Prompt Popover */}
-              {showEmailPrompt && (
-                <div className="absolute right-0 top-8 z-50 w-72 p-3 bg-white border border-slate-200 rounded-lg shadow-xl text-xs space-y-2 text-slate-800">
-                  <div className="font-semibold text-slate-900">이메일로 브리핑 받기</div>
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="수신자 이메일 주소"
-                    className="w-full px-2.5 py-1.5 rounded bg-slate-50 border border-slate-200 focus:border-blue-500 text-xs text-slate-900 focus:bg-white focus:outline-none"
-                  />
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      onClick={() => handleSendEmail()}
-                      disabled={isSendingEmail}
-                      className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium cursor-pointer disabled:opacity-50 shadow-xs"
-                    >
-                      {emailInput ? '발송' : '기본 수신자로 발송'}
-                    </button>
-                    <button
-                      onClick={() => setShowEmailPrompt(false)}
-                      className="text-slate-500 hover:text-slate-800 text-xs cursor-pointer"
-                    >
-                      취소
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Copy Markdown */}
-            <button
-              onClick={handleCopy}
-              className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-              title="Markdown 클립보드 복사"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
-              <span>{copied ? '복사됨' : '복사'}</span>
-            </button>
-
-            {/* Download */}
-            <button
-              onClick={handleDownload}
-              className="p-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 cursor-pointer shadow-xs"
-              title="Markdown 파일 다운로드"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-
-            {/* Settings */}
-            {onOpenSettings && (
-              <button
-                onClick={onOpenSettings}
-                className="p-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 cursor-pointer shadow-xs"
-                title="Notion / 이메일 / 웹훅 설정"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            )}
-
-            {/* Close */}
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Status Alerts */}
-        {notionResult && (
-          <div
-            className={`px-4 py-2 border-b text-xs flex items-center justify-between ${
-              notionResult.success
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                : 'bg-red-50 border-red-200 text-red-700'
-            }`}
+        {showEmailPrompt && (
+          <form
+            id="daily-briefing-email-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleSendEmail();
+            }}
+            className="flex flex-col gap-2 rounded-lg border border-border bg-surface-muted p-3 sm:flex-row sm:items-end"
           >
+            <TextField
+              label="수신자 이메일"
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder="비워 두면 기본 수신자로 보냅니다"
+              autoComplete="email"
+              containerClassName="flex-1"
+            />
             <div className="flex items-center gap-2">
-              {notionResult.success ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-red-600" />}
-              <span>{notionResult.message}</span>
+              <Button type="submit" variant="primary" loading={isSendingEmail}>
+                {emailInput ? '발송' : '기본 수신자로 발송'}
+              </Button>
+              <Button variant="ghost" onClick={() => setShowEmailPrompt(false)}>
+                취소
+              </Button>
             </div>
-            {!notionResult.success && onOpenSettings && (
-              <button
-                onClick={onOpenSettings}
-                className="underline hover:text-red-900 font-medium cursor-pointer ml-2"
-              >
-                Notion 설정 열기
-              </button>
-            )}
-          </div>
+          </form>
+        )}
+
+        {notionResult && (
+          <InlineAlert
+            tone={notionResult.success ? 'success' : 'danger'}
+            action={
+              !notionResult.success && onOpenSettings ? (
+                <Button variant="secondary" size="sm" onClick={onOpenSettings}>
+                  Notion 설정 열기
+                </Button>
+              ) : undefined
+            }
+          >
+            {notionResult.message}
+          </InlineAlert>
         )}
 
         {emailResult && (
-          <div
-            className={`px-4 py-2 border-b text-xs flex items-center justify-between ${
-              emailResult.success
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                : 'bg-red-50 border-red-200 text-red-700'
-            }`}
+          <InlineAlert
+            tone={emailResult.success ? 'success' : 'danger'}
+            action={
+              !emailResult.success && onOpenSettings ? (
+                <Button variant="secondary" size="sm" onClick={onOpenSettings}>
+                  이메일 설정 열기
+                </Button>
+              ) : undefined
+            }
           >
-            <div className="flex items-center gap-2">
-              {emailResult.success ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-red-600" />}
-              <span>{emailResult.message}</span>
-            </div>
-            {!emailResult.success && onOpenSettings && (
-              <button
-                onClick={onOpenSettings}
-                className="underline hover:text-red-900 font-medium cursor-pointer ml-2"
-              >
-                이메일 설정 열기
-              </button>
-            )}
-          </div>
+            {emailResult.message}
+          </InlineAlert>
         )}
 
-        {/* View Switcher Tabs */}
-        <div className="flex items-center border-b border-slate-200 bg-slate-50 px-4 pt-2 gap-2 text-xs font-medium shrink-0">
-          <button
-            onClick={() => setActiveView('categorized')}
-            className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-colors cursor-pointer ${
-              activeView === 'categorized'
-                ? 'border-blue-600 text-blue-600 font-semibold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>카테고리별 요약</span>
-          </button>
-          <button
-            onClick={() => setActiveView('markdown')}
-            className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-colors cursor-pointer ${
-              activeView === 'markdown'
-                ? 'border-blue-600 text-blue-600 font-semibold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Code className="w-3.5 h-3.5" />
-            <span>마크다운 전문</span>
-          </button>
-        </div>
+        <Tabs
+          label="브리핑 보기"
+          idPrefix={TAB_ID_PREFIX}
+          tabs={[
+            { id: 'categorized', label: '카테고리별 요약' },
+            { id: 'markdown', label: '마크다운 전문' },
+          ]}
+          value={activeView}
+          onChange={setActiveView}
+        />
 
-        {/* Body Content */}
-        <div className="p-5 overflow-y-auto space-y-4 text-xs sm:text-sm leading-relaxed text-slate-700 bg-white">
-          {activeView === 'categorized' ? (
-            <div className="space-y-4">
-              {/* Overview Callout */}
-              <div className="p-4 rounded-lg bg-blue-50/70 border border-blue-200 space-y-2">
-                <div className="flex items-center gap-2 text-blue-700 font-semibold text-xs sm:text-sm">
-                  <Sparkles className="w-4 h-4" />
-                  <span>오늘의 핵심 요약 (Overview)</span>
-                </div>
-                <div className="text-xs sm:text-sm text-slate-900 font-medium leading-relaxed">
-                  {briefing.headline}
-                </div>
-                {briefing.overview && (
-                  <div className="pt-2 border-t border-blue-200/60 text-xs text-slate-600 space-y-1.5 leading-relaxed">
-                    {briefing.overview.split('\n').map((line, idx) => {
-                      const match = line.match(/^•\s*\*\*(.*?)\*\*:\s*(.*)$/);
-                      if (match) {
-                        return (
-                          <div key={idx} className="flex items-start gap-1.5">
-                            <span className="text-blue-600 shrink-0">•</span>
-                            <span>
-                              <strong className="text-slate-900 font-semibold">{match[1]}:</strong>{' '}
-                              <span className="text-slate-700">{match[2]}</span>
-                            </span>
-                          </div>
-                        );
-                      }
-                      return <div key={idx}>{line}</div>;
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* 4 Category Sections */}
-              {briefing.categories && briefing.categories.length > 0 ? (
-                <div className="space-y-4">
-                  {briefing.categories.map((cat) => (
-                    <div
-                      key={cat.id}
-                      className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3"
-                    >
-                      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">{cat.icon}</span>
-                          <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
-                            {cat.name}
-                          </h4>
+        {activeView === 'categorized' ? (
+          <TabPanel id="categorized" idPrefix={TAB_ID_PREFIX} className="flex flex-col gap-4 text-sm leading-relaxed text-fg">
+            {/* 오늘의 핵심 요약 — 헤드라인은 대화상자 설명에만 두고 여기에는 개요만. 개요가 없으면 칸을 그리지 않는다. */}
+            {briefing.overview ? (
+              <section className="flex flex-col gap-2 rounded-xl border border-border bg-accent-soft p-4">
+                <h3 className="flex items-center gap-2 text-base font-semibold text-accent-soft-fg">
+                  <Sparkles aria-hidden="true" className="size-4" />
+                  <span>오늘의 핵심 요약</span>
+                </h3>
+                <div className="flex flex-col gap-1.5 text-fg-muted">
+                  {briefing.overview.split('\n').map((line, idx) => {
+                    const match = line.match(/^•\s*\*\*(.*?)\*\*:\s*(.*)$/);
+                    if (match) {
+                      return (
+                        <div key={idx} className="flex items-start gap-1.5">
+                          <span aria-hidden="true" className="shrink-0 text-accent">•</span>
+                          <span>
+                            <strong className="font-semibold text-fg">{overviewName(match[1])}:</strong> {match[2]}
+                          </span>
                         </div>
-                        <span className="text-[11px] font-mono text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-xs">
-                          {cat.items.length}건
+                      );
+                    }
+                    return <div key={idx}>{line}</div>;
+                  })}
+                </div>
+              </section>
+            ) : null}
+
+            {/* 카테고리별 */}
+            {briefing.categories && briefing.categories.length > 0 ? (
+              briefing.categories.map((cat) => (
+                <section key={cat.id} className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+                  <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+                    <h3 className="flex min-w-0 items-center gap-2 text-base font-semibold text-fg">
+                      {categoryIcon(cat.id) ? (
+                        <span aria-hidden="true" className="inline-flex shrink-0 text-accent [&>svg]:size-4">
+                          {categoryIcon(cat.id)}
                         </span>
-                      </div>
+                      ) : null}
+                      <span className="min-w-0 break-keep [overflow-wrap:anywhere]">{categoryTitle(cat.id, cat.name)}</span>
+                    </h3>
+                    <Badge>{cat.items.length}건</Badge>
+                  </div>
 
-                      {cat.summary && (
-                        <div className="text-xs text-slate-600 italic bg-white p-2.5 rounded border border-slate-200">
-                          <span className="font-semibold text-blue-600 not-italic mr-1">동향:</span>
-                          {cat.summary}
-                        </div>
-                      )}
+                  {cat.summary && (
+                    <p className="rounded-lg bg-surface-muted p-3 text-fg-muted">
+                      <span className="mr-1 font-semibold text-accent">동향:</span>
+                      {cat.summary}
+                    </p>
+                  )}
 
-                      {/* Items */}
-                      <div className="space-y-2.5 pt-1">
-                        {cat.items.map((item, idx) => (
-                          <div
-                            key={idx}
-                            className="p-2.5 rounded-md bg-white border border-slate-200 hover:border-blue-400 shadow-xs transition-colors space-y-1.5"
+                  <ul className="flex flex-col gap-2.5">
+                    {cat.items.map((item, idx) => (
+                      <li
+                        key={idx}
+                        className="flex flex-col gap-1.5 rounded-lg border border-border p-3 transition-colors duration-150 ease-standard hover:border-border-strong"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group inline-flex min-w-0 items-start gap-1 font-semibold text-fg hover:text-accent"
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <a
-                                href={item.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-semibold text-slate-900 hover:text-blue-600 transition-colors flex items-center gap-1 group text-xs sm:text-sm leading-snug"
-                              >
-                                <span>{item.title}</span>
-                                <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-blue-600 shrink-0" />
-                              </a>
-                              {item.source && (
-                                <span className="text-[10px] font-mono text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
-                                  {item.source}
-                                </span>
-                              )}
-                            </div>
+                            <span className="break-keep [overflow-wrap:anywhere]">{item.title}</span>
+                            <ExternalLink aria-hidden="true" className="mt-1 size-3.5 shrink-0 text-fg-subtle group-hover:text-accent" />
+                          </a>
+                          {item.source && <Badge className="shrink-0">{sourceLabel(item.source)}</Badge>}
+                        </div>
 
-                            {item.why_it_matters && (
-                              <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 p-2 rounded leading-relaxed">
-                                <span className="font-semibold mr-1">💡 시사점:</span>
-                                {item.why_it_matters}
-                              </div>
-                            )}
+                        {item.why_it_matters && (
+                          <p className="rounded-md bg-success-soft p-2 text-success">
+                            <span className="mr-1 inline-flex items-center gap-1 align-text-bottom font-semibold">
+                              <Lightbulb aria-hidden="true" className="size-4" />
+                              시사점:
+                            </span>
+                            {item.why_it_matters}
+                          </p>
+                        )}
 
-                            {item.summary && !item.why_it_matters && (
-                              <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed m-0">
-                                {item.summary}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                /* Fallback to split markdown rendering if categories array not present */
-                <div className="space-y-2 text-xs text-slate-700">
-                  {briefing.markdown_report.split('\n').map((line, idx) => (
-                    <p key={idx} className="m-0">{line}</p>
-                  ))}
-                </div>
-              )}
-
-              {/* Action Items */}
-              {briefing.action_items && briefing.action_items.length > 0 && (
-                <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2">
-                  <div className="font-bold text-emerald-800 text-xs sm:text-sm flex items-center gap-1.5">
-                    <Check className="w-4 h-4" />
-                    <span>오늘의 추천 Action Items</span>
-                  </div>
-                  <div className="space-y-1.5 pt-1">
-                    {briefing.action_items.map((act, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs text-slate-800">
-                        <span className="font-mono text-emerald-700 font-bold shrink-0">{i + 1}.</span>
-                        <span>{act}</span>
-                      </div>
+                        {item.summary && !item.why_it_matters && (
+                          <p className="m-0 line-clamp-2 text-fg-muted">{item.summary}</p>
+                        )}
+                      </li>
                     ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Tab 2: Raw Markdown View */
-            <div className="p-1">
-              <MarkdownViewer content={briefing.markdown_report} />
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-3.5 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 shrink-0">
-          <span className="text-[11px] font-mono">
-            AgentLens • AI & Agent 기술 큐레이션 및 정기 브리핑
-          </span>
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            {onOpenSettings && (
-              <button
-                onClick={onOpenSettings}
-                className="text-xs text-blue-600 hover:underline flex items-center gap-1 cursor-pointer font-medium"
-              >
-                <Settings className="w-3 h-3" />
-                <span>연동 설정 관리</span>
-              </button>
+                  </ul>
+                </section>
+              ))
+            ) : (
+              /* categories 가 없으면 마크다운을 줄 단위로 */
+              <div className="flex flex-col gap-2 text-fg-muted">
+                {briefing.markdown_report.split('\n').map((line, idx) => (
+                  <p key={idx} className="m-0">{line}</p>
+                ))}
+              </div>
             )}
-            <button
-              onClick={onClose}
-              className="px-3 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 shadow-xs cursor-pointer"
-            >
-              닫기
-            </button>
-          </div>
-        </div>
+
+            {/* 추천 Action Items */}
+            {briefing.action_items && briefing.action_items.length > 0 && (
+              <section className="flex flex-col gap-2 rounded-xl border border-border bg-success-soft p-4">
+                <h3 className="flex items-center gap-1.5 text-base font-semibold text-success">
+                  <Check aria-hidden="true" className="size-4" />
+                  <span>오늘의 추천 Action Items</span>
+                </h3>
+                <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-fg marker:font-semibold marker:text-success">
+                  {briefing.action_items.map((act, i) => (
+                    <li key={i}>{act}</li>
+                  ))}
+                </ol>
+              </section>
+            )}
+          </TabPanel>
+        ) : (
+          <TabPanel id="markdown" idPrefix={TAB_ID_PREFIX}>
+            <MarkdownViewer content={briefing.markdown_report} />
+          </TabPanel>
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 }

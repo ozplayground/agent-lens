@@ -110,4 +110,24 @@ describe('ChatPromptInput Component', () => {
 
     expect(screen.getByText(/2005 \/ 2000/)).toBeInTheDocument();
   });
+  describe('모델 선택 (R39: 헤더에서 옮김, 모든 폭에서 입력창 아래 한 곳)', () => {
+    it('renders the model trigger with Sonnet 5.5 and calls onSelectTier with haiku', () => {
+      const handleSelectTier = vi.fn();
+      render(<ChatPromptInput {...defaultProps} selectedTier="sonnet" onSelectTier={handleSelectTier} />);
+
+      const modelTrigger = screen.getByRole('button', { name: /Claude 모델 선택/ });
+      expect(modelTrigger).toHaveTextContent(/Sonnet 5.5/);
+
+      fireEvent.click(modelTrigger);
+      fireEvent.click(screen.getByRole('radio', { name: /Haiku 5.5/ }));
+
+      expect(handleSelectTier).toHaveBeenCalledWith('haiku');
+    });
+
+    it('disables the model trigger while streaming', () => {
+      render(<ChatPromptInput {...defaultProps} isStreaming={true} selectedTier="sonnet" onSelectTier={vi.fn()} />);
+
+      expect(screen.getByRole('button', { name: /Claude 모델 선택/ })).toBeDisabled();
+    });
+  });
 });

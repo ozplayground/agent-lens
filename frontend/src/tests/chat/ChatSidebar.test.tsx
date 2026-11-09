@@ -222,7 +222,7 @@ describe('ChatSidebar & Session UI Components (FUNC-CHAT-012 TDD)', () => {
   });
 
   describe('SessionItemCard & DeleteConfirmPopover', () => {
-    it('renders active session highlight with border-l-indigo-600 and bg-indigo-50', () => {
+    it('renders active session highlight with data-active, bg-accent-soft and border-accent', () => {
       const handleSelect = vi.fn();
       const handleDelete = vi.fn().mockResolvedValue(undefined);
 
@@ -237,8 +237,9 @@ describe('ChatSidebar & Session UI Components (FUNC-CHAT-012 TDD)', () => {
 
       const card = screen.getByRole('button', { name: /대화:.*LangGraph/i });
       expect(card).toHaveAttribute('aria-current', 'true');
-      expect(card.className).toContain('border-l-indigo-600');
-      expect(card.className).toContain('bg-indigo-50');
+      expect(card).toHaveAttribute('data-active', 'true');
+      expect(card.className).toContain('bg-accent-soft');
+      expect(card.className).toContain('border-accent');
     });
 
     it('renders truncated title, relative time, and scope badge', () => {
@@ -252,11 +253,40 @@ describe('ChatSidebar & Session UI Components (FUNC-CHAT-012 TDD)', () => {
       );
 
       // Scope badge
-      expect(screen.getByText(/Scoped/i)).toBeInTheDocument();
+      expect(screen.getByText('단일 기사')).toBeInTheDocument();
       // Relative time (5 minutes ago -> "5분 전")
       expect(screen.getByText(/5분 전/i)).toBeInTheDocument();
       // Title
       expect(screen.getByText(/LangGraph v0.2 아키텍처/i)).toBeInTheDocument();
+    });
+
+    it('uses 단일 기사 / 전체 소식 for the scope badge and accessible name, with no Scoped·Global text (R38)', () => {
+      const globalSession = mockSessions.find((s) => s.scopeMode === 'global');
+      expect(globalSession).toBeDefined();
+
+      const { unmount } = render(
+        <SessionItemCard
+          session={globalSession!}
+          isActive={false}
+          onSelect={vi.fn()}
+          onDelete={vi.fn().mockResolvedValue(undefined)}
+        />
+      );
+      expect(screen.getByText('전체 소식')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /전체 소식 모드$/ })).toBeInTheDocument();
+      expect(screen.queryByText(/Scoped|Global/)).toBeNull();
+      unmount();
+
+      render(
+        <SessionItemCard
+          session={mockSessions[0]}
+          isActive={false}
+          onSelect={vi.fn()}
+          onDelete={vi.fn().mockResolvedValue(undefined)}
+        />
+      );
+      expect(screen.getByRole('button', { name: /단일 기사 모드$/ })).toBeInTheDocument();
+      expect(screen.queryByText(/Scoped|Global/)).toBeNull();
     });
 
     it('opens delete confirmation popover on delete click, cancels on 취소, and executes onDelete on 삭제', async () => {

@@ -47,11 +47,13 @@ import {
   ModelSwitchEvent,
   ChatTimelineItem,
   ChatHeaderProps,
+  ChatSessionSummary,
   sanitizeModelTier,
   formatModelDisplayName,
   getModelLabel,
 } from '@/types/chat';
 import {
+  NewsItem,
   NewsItemSchema,
   NewsListResponseSchema,
   SourceConfigSchema,
@@ -531,7 +533,7 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       // Verify it appears in subsequent list fetch
       const listRes = await fetch('/api/chat/sessions');
       const listData = await listRes.json();
-      expect(listData.some((s: any) => s.id === created.id)).toBe(true);
+      expect(listData.some((s: ChatSessionSummary) => s.id === created.id)).toBe(true);
     });
 
     it('handles POST /api/chat/sessions 400 error trigger', async () => {
@@ -773,8 +775,8 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
       const res = await fetch('/api/news?category=mcp_plugins_skills&high_signal_only=true');
       expect(res.status).toBe(200);
       const data = await res.json();
-      expect(data.items.every((i: any) => i.category === 'mcp_plugins_skills')).toBe(true);
-      expect(data.items.every((i: any) => i.quality_score >= 7.8 || i.is_high_signal)).toBe(true);
+      expect(data.items.every((i: NewsItem) => i.category === 'mcp_plugins_skills')).toBe(true);
+      expect(data.items.every((i: NewsItem) => i.quality_score >= 7.8 || i.is_high_signal)).toBe(true);
     });
 
     it('handles GET /api/news 400 Bad Request fallback (invalid page)', async () => {
