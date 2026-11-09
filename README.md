@@ -84,7 +84,8 @@ make docker-down            # 내린다 (데이터 volume agentlens-data 는 남
 backend/            FastAPI 앱 (app/), 테스트 (tests/)
 frontend/           Next.js 앱 (src/app, src/components, src/tests)
 scripts/            dev.sh (make dev), collect.py (make collect)
-docs/               제품·기술·운영 문서, 기능별 작업 산출물 (docs/features/)
+docs/               제품·기술·운영 문서, 산출물 템플릿 (docs/templates/), 서브에이전트 산출물 (docs/<서브에이전트>/)
+.claude/            Claude Code 하네스: 서브에이전트 (agents/), 스킬 (skills/), 규칙 (rules/)
 docker-compose.yml  backend + frontend 컨테이너
 Makefile            개발·검사·실행 명령
 ```
@@ -102,6 +103,9 @@ Makefile            개발·검사·실행 명령
 | [docs/test-strategy.md](docs/test-strategy.md), [docs/test-cases.md](docs/test-cases.md) | 테스트 전략과 목록 |
 | [docs/known-issues.md](docs/known-issues.md) | 알려진 문제 |
 | [docs/releases.md](docs/releases.md) | 릴리스 이력 |
+
+## 개발 하네스
+Claude Code 로 개발한다. 기획 → 설계·계약 → 병렬 TDD → 리뷰 → QA·배포의 5단계를 서브에이전트 12개가 나눠 맡는다. 구성과 규칙은 [CLAUDE.md](CLAUDE.md) 에 있다.
 
 ## 알아 둘 점
 - 사용자 인증이 없고 CORS 가 열려 있다. 로컬이나 신뢰할 수 있는 네트워크에서만 띄운다.

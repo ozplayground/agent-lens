@@ -54,7 +54,7 @@ import { parseArgs } from 'node:util';
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..');
 const DEFAULT_BASE = 'http://localhost:3001';
-const DEFAULT_OUT = path.join(REPO_ROOT, 'docs', 'features', 'ui-redesign', 'audit');
+const DEFAULT_OUT = path.join(REPO_ROOT, 'docs', 'qa-engineer', 'ui-audit');
 const THEME_STORAGE_KEY = 'agentlens_theme';
 
 const ROUTES = [
@@ -188,7 +188,7 @@ modelPicker, focusLabels), 보정 9 판정(feedAreas, chatHeader, pictograph, br
 
 옵션
   --base <url>             앱 주소 (기본 ${DEFAULT_BASE})
-  --out <dir>              결과 폴더 (기본 <저장소>/docs/features/ui-redesign/audit)
+  --out <dir>              결과 폴더 (기본 <저장소>/docs/qa-engineer/ui-audit)
   --commit <sha>           report.json environment.commit 에 남길 커밋 (기본 git rev-parse HEAD)
   --screenshots <mode>     key | all | none (기본 key)
                              key: / 와 /chat × 5개 폭 × light, dark 20장

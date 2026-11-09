@@ -9,67 +9,114 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 - 로컬 실행: `make dev` (backend :8000 `--reload` + frontend :3000 을 함께 띄운다. Ctrl-C 로 둘 다 내린다. 포트가 쓰이고 있으면 띄우지 않고 실패한다)
 - Docker 실행: `make docker-up` (healthy 까지 기다린다) / `make docker-down` / `make docker-logs` (따라가기, Ctrl-C 로 끝낸다) · 이미지: `make docker-build`
 - 수집: `make collect` (backend 가 떠 있으면 그 backend 에 수집시키고, 없으면 `backend/agentlens.db` 에 직접 수집한다. 외부 소스·LLM 을 실제로 호출한다)
+- 초기화: `make reset` (수집 데이터를 모두 지우고 재수집한다. 대상 `AGENTLENS_API_URL`, 기본 `http://localhost:8000`)
 - `make check` 의 pytest 는 LLM 호출을 흉내 내고 `config.json`·`sources.json` 은 임시 사본에 쓴다. 스크래퍼·Notion·SMTP 호출은 실제로 나간다 (`docs/test-strategy.md`). 돌린 뒤 `git status` 로 추적 파일이 바뀌지 않았는지 확인한다.
 
-## SDLC
-작업은 기능 단위로 스테이지를 따른다. 각 스테이지는 산출물을 커밋하고, 다음 스테이지는 그것을 읽고 시작한다.
+## 최우선 규칙
+1. **사용자의 직접 지시가 최우선이다.** 사용자가 지시한 작업은 원본·사본, 위험 여부와 상관없이 그대로 실행한다. 파이프라인·단계·게이트를 이유로 미루거나 사용자에게 떠넘기지 않는다. Claude Code 권한처럼 Claude 가 풀 수 없는 것에 막히면 사용자가 붙여 넣을 `!` 명령 한 줄과 그 명령이 하는 일 한 줄만 준다.
+2. **그다음은 파이프라인이다.** 기능 작업은 아래 5단계 파이프라인을 따른다. 오케스트레이터(메인 세션)는 근거를 적고 단계를 건너뛸 수 있다 (예: 문서만 고치는 작업은 Stage 1·2 생략).
+3. **임의 해석 금지.** 요구사항이 모호하면 산출물에 '열린 질문' 으로 남기고, 사용자 결정이 필요한 것만 묻는다.
+4. **간결하게 (KISS/YAGNI).** 과한 추상화·계층 분리·오버엔지니어링을 하지 않고 요구사항에 충실한 가장 단순한 코드로 구현한다.
+5. **테스트를 고쳐 통과시키지 않는다.** 코드를 고친다. 버그 수정은 실패하는 테스트를 먼저 쓴다.
 
-| 스테이지 | 기능별 산출물 (`docs/features/<기능-id>/`) | 승인 | 스킬 |
+## 하네스: 풀스택 개발팀
+메인 세션은 오케스트레이터다. 단계마다 `.claude/agents/` 의 서브에이전트를 Agent 도구로 부르고(`subagent_type: <이름>`), 서브에이전트는 `.claude/skills/` 의 스킬 절차와 `docs/templates/` 의 템플릿으로 산출물을 쓴다. 공통 규칙은 `.claude/rules/` 에 있다.
+
+| 트랙 | 서브에이전트 | 역할 | 산출물 폴더 |
 |---|---|---|---|
-| (선택) Research | research.md | — | `/research-product`, `/research-tech` |
-| Plan | intent.md | 제품 오너 (본인) | `/write-intent` |
-| Design | spec.md | 제품 오너 (본인) | `/write-spec` |
-| Build | plan.md → 코드 | 엔지니어 (본인) | `/write-plan`, `/implement-plan` |
-| Test | verify.md | 코드 오너 (본인) | `/verify-change` |
-| Deploy | release.md (PR 리뷰는 REVIEW.md) | 코드 오너, 태그 push 는 릴리스 관리자 (모두 본인) | `/review-change`, `/prepare-release` |
-| Maintain | 새 intent.md | 서비스 오너 (본인) | `/triage-signal` |
+| 기획 | `market-analyst` | 경쟁·유사 서비스 조사, 킬러 기능·페인포인트·기회 영역 | `docs/market-analyst/` |
+| | `spec-writer` | PRD, 기능 인덱스, 도메인별 모듈러 FSD, 정책·엣지 케이스 | `docs/spec-writer/` |
+| 설계·계약 | `fullstack-architect` | 기술 스택·아키텍처 결정 기록(ADR) | `docs/fullstack-architect/` |
+| | `system-designer` | backend 계층, ERD, REST API, OpenAPI | `docs/system-designer/` |
+| | `ui-system-designer` | 컴포넌트 트리, RSC/RCC 경계, 반응형, UI 5대 상태, 접근성 | `docs/ui-system-designer/` |
+| | `contract-integrator` | Pydantic ↔ TS/zod ↔ MSW 계약 동기화 (병렬화 허브) | `docs/contract-integrator/` |
+| 병렬 구현 | `backend-tdd-engineer` | FastAPI + pytest TDD | `docs/backend-tdd-engineer/` |
+| | `frontend-tdd-engineer` | Next.js + Vitest/RTL/MSW TDD | `docs/frontend-tdd-engineer/` |
+| 리뷰 | `backend-code-reviewer` | backend 5-Pillar 감사 | `docs/backend-code-reviewer/` |
+| | `frontend-code-reviewer` | frontend 5-Pillar 감사 | `docs/frontend-code-reviewer/` |
+| QA·배포 | `qa-engineer` | API·UI E2E, 회귀, 출시 판정 | `docs/qa-engineer/` |
+| | `devops-engineer` | Docker·compose·환경변수·헬스체크 검증, 배포 명세 | `docs/devops-engineer/` |
 
-- 현재 상태: `/sdlc-status`
-- 문서 경로는 모두 저장소 루트 기준이다. 하위 폴더에서 시작한 세션도 루트의 `docs/`, `tasks/` 에 쓴다.
-- Research 는 선택 스테이지다. 사용자가 지시하거나, 열린 질문이 외부 사실(시장, 경쟁 제품, 기술 성능)로만 답할 수 있을 때 실행한다. 출처 없는 주장과 측정하지 않은 숫자는 쓰지 않는다. 측정 코드는 `bench/<주제>/` 에 둔다 (런타임: python3 `.venv`, node pnpm). 더 깊은 조사는 `/deep-research <질문>` (사용자가 실행)
-- 산출물의 `Status:` 를 승인 상태로 바꾸는 것은 승인자만 한다: `! python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve <파일>`
-- 자동 승인: `.claude/hooks/sdlc-config.local.json` 에 `{"auto_approve": true}` (git 에 올리지 않음) 나 환경 변수 `SDLC_AUTO_APPROVE=1` 이 있으면 켜진다 (`SDLC_AUTO_APPROVE=0` 이 우선해서 끈다). 켜져 있으면 세션 시작 메시지에 표시되고, 스킬이 '승인 명령을 알린다' 고 한 자리에서 Claude 가 산출물을 템플릿·이전 산출물과 대조해 자체 검토한 뒤 `python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve --auto <파일>` 로 승인하고 다음 스테이지로 넘어간다. 승인자는 `자동 승인 (Claude)` 로 남는다. Status 를 직접 고치는 것은 자동 승인이 켜져 있어도 막힌다. 원격 태그 push 와 수집 데이터 삭제 게이트는 자동 승인과 상관없이 그대로다.
-- 승인된 plan.md 의 '변경 파일' 에 없는 `backend/app/**`, `frontend/src/**` 경로는 편집이 막힌다 (`frontend/src/tests/**`, `backend/app/config/sources.json` 포함). 범위를 바꾸려면 plan.md 를 고치고 재승인받는다.
-- 테스트를 고쳐 통과시키지 않는다. 코드를 고친다.
-- Deploy 는 프로덕션 배포가 없다: release.md 승인, 버전 bump, 버전 태그, releases.md 기록만 한다. 원격 태그 push(`git push --tags`, `git push … v<숫자>`)와 수집 데이터 삭제(`make reset`, `curl … reset-and-collect`)는 Claude 가 스스로 판단해 실행하면 hook 이 막는다. 사용자가 이번 메시지(작업 중 보낸 메시지 포함)에서 지시하면 원본·사본 가리지 않고 통과한다. 지시로 보는 낱말은 `.claude/hooks/sdlc-config.json` 의 `user_override_keywords` 다 (태그: '태그'·'tag', 삭제: 'reset'·'초기화'·'데이터 삭제' 등). `RELEASE_APPROVAL` 세션도 통과한다. `make -n` 은 실행하지 않으므로 막지 않는다.
-- 계약(`backend/app/schemas/` ↔ `frontend/src/types/` ↔ `frontend/src/mocks/`)은 손으로 맞춘다. 고칠 때 `.claude/rules/contracts.md` 를 따른다.
+### 파이프라인
+```mermaid
+flowchart TD
+    subgraph S1 ["Stage 1: 기획"]
+        MA["market-analyst"] --> SW["spec-writer"]
+    end
+    SW --> G1{"Planning Gate"}
+    subgraph S2 ["Stage 2: 설계·계약"]
+        G1 --> FA["fullstack-architect"]
+        G1 --> SD["system-designer"]
+        G1 --> UI["ui-system-designer"]
+        SD & UI --> CI["contract-integrator"]
+    end
+    CI --> G2{"Contract Lock"}
+    subgraph S3 ["Stage 3: 병렬 TDD"]
+        G2 --> BE["backend-tdd-engineer"]
+        G2 --> FE["frontend-tdd-engineer"]
+    end
+    subgraph S4 ["Stage 4: 병렬 리뷰"]
+        BE --> BR["backend-code-reviewer"]
+        FE --> FR["frontend-code-reviewer"]
+    end
+    BR & FR --> G3{"Review Approval"}
+    subgraph S5 ["Stage 5: QA·배포"]
+        G3 --> QA["qa-engineer"] --> DO["devops-engineer"]
+    end
+```
 
-## 문서 지도
-통합 문서(`docs/*.md`)는 지금 제품·시스템의 모습만 적는다. 기능별 산출물은 그 작업이 바꾸는 것을 적는다. 문서를 만들고 고치는 규칙은 이 표와 각 스킬에 있고, 통합 문서 안에는 적지 않는다.
+| 게이트 | 통과 조건 |
+|---|---|
+| Planning Gate | PRD 의 MoSCoW 우선순위 확정, 도메인 FSD 의 단위 기능마다 7대 명세와 UI 8대 컬럼 표 완비 |
+| Contract Lock | `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` 발행. 이후 backend·frontend TDD 를 동시에 띄운다 (서로 다른 파일만 고치므로 병렬 가능) |
+| Review Approval | 두 리뷰어 판정이 모두 `APPROVED`. `REQUEST_CHANGES` 면 해당 TDD 엔지니어에게 되돌린다 |
+| 출시 | `qa-engineer` 가 `RELEASE_APPROVED` (Blocker·Critical 0), `devops-engineer` 배포 명세 완료, `make check` 통과 |
 
-| 문서 | 만드는 것 | 고치는 것 | 읽는 것 |
+### 산출물과 템플릿
+| 단계 | 서브에이전트 | 템플릿 (`docs/templates/`) | 산출물 |
 |---|---|---|---|
-| `docs/features/<id>/intent.md` | `/write-intent`, `/triage-signal` | 같은 스킬 | `/write-spec`, `/write-plan`, `/research-product` |
-| `docs/features/<id>/research.md` | `/research-product`, `/research-tech` | 같은 스킬 | `/write-spec` |
-| `docs/features/<id>/spec.md` | `/write-spec` | 같은 스킬 | `/write-plan`, `/review-change` |
-| `docs/features/<id>/plan.md` | `/write-plan` | 범위가 바뀌면 고치고 재승인 | `/implement-plan`, `/verify-change`, `/review-change` |
-| `tasks/<id>/NN-<slug>.md` | `/implement-plan` | 같은 스킬 | `/sdlc-status` |
-| `docs/features/<id>/verify.md` | `/verify-change` | 같은 스킬 | `/prepare-release` |
-| `docs/features/<id>/release.md` | `/prepare-release` | 같은 스킬 | — |
-| `docs/product.md` | 하네스 생성 | `/write-spec` (범위, 사용자, 원칙, 기능 목록), `/research-product` (근거) | `/write-intent`, `/research-product` |
-| `docs/tech-spec.md` | 하네스 생성 | `/implement-plan` (구현 반영, 기술 선택과 근거, 변경 이력), `/research-tech` (기술 선택과 근거) | `/write-spec`, `/write-plan`, `/research-tech`, `/prepare-release` |
-| `docs/test-strategy.md` | 하네스 생성 | `/implement-plan` (검사 명령이나 테스트 종류가 바뀔 때) | `/write-plan`, `/verify-change`, `/prepare-release` |
-| `docs/releases.md` | 하네스 생성 | `/prepare-release` (버전 문자열 위치, 이력) | `/prepare-release` |
-| `docs/research/product.md` | `/research-product` (제품 전체 조사) | 같은 스킬 (번호를 이어 추가) | `/research-product` |
-| `docs/research/tech.md` | `/research-tech` (시스템 전체 조사) | 같은 스킬 (번호를 이어 추가) | `/write-spec`, `/research-tech` |
-| `docs/functional-spec/*.md` | 코드 역분석 (2026-11-06) | `/implement-plan` (기능 동작이 바뀐 영역 문서, 새 영역이면 파일과 색인 행 추가) | `/write-intent`, `/write-spec`, `/write-plan`, `/verify-change` |
-| `docs/ui-spec.md` | 코드 역분석 | `/implement-plan` (화면·모달·상태·localStorage 가 바뀔 때) | `/write-spec`, `/write-plan` |
-| `docs/api.md` | 코드 역분석 | `/implement-plan` (엔드포인트·스키마·SSE 가 바뀔 때) | `/write-spec`, `/write-plan`, `/review-change` |
-| `docs/data-model.md` | 코드 역분석 | `/implement-plan` (테이블·열·설정 파일 구조가 바뀔 때) | `/write-spec`, `/write-plan` |
-| `docs/operations.md` | 코드 역분석 | `/implement-plan` (실행·설정·스케줄·외부 의존이 바뀔 때) | `/write-plan`, `/prepare-release`, `/triage-signal` |
-| `docs/test-cases.md` | 코드 역분석 | `/implement-plan` (테스트를 추가·삭제할 때) | `/write-plan`, `/verify-change` |
-| `docs/known-issues.md` | 코드 역분석 | `/implement-plan` (고친 문제 행 삭제), `/triage-signal` (새 문제 행 추가) | `/write-intent`, `/triage-signal` |
+| 1a | `market-analyst` | `01_MARKET_BENCHMARK_TEMPLATE.md` | `docs/market-analyst/01_MARKET_BENCHMARK.md` |
+| 1b | `spec-writer` | `02_PRD_TEMPLATE.md` | `docs/spec-writer/01_PRD.md` |
+| | | `03_FUNCTIONAL_SPECIFICATION_INDEX_TEMPLATE.md` | `docs/spec-writer/02_FUNCTIONAL_SPECIFICATION.md` |
+| | | `fsd/DOMAIN_FSD_TEMPLATE.md` | `docs/spec-writer/fsd/{DOMAIN}_SPECIFICATION.md` |
+| | | `04_POLICY_AND_EDGES_TEMPLATE.md` | `docs/spec-writer/03_POLICIES_AND_EDGES.md` |
+| 2a | `fullstack-architect` | `05_FULLSTACK_ADR_TEMPLATE.md` | `docs/fullstack-architect/01_ARCHITECTURE_ADR.md` |
+| 2b | `system-designer` | `06_SYSTEM_DESIGN_TEMPLATE.md` | `docs/system-designer/01_SYSTEM_DESIGN.md`, `02_OPENAPI_SPEC.yaml` |
+| 2c | `ui-system-designer` | `07_COMPONENT_SPEC_TEMPLATE.md` | `docs/ui-system-designer/01_COMPONENT_SPEC.md` |
+| 2d | `contract-integrator` | `08_CONTRACT_AND_MSW_TEMPLATE.md` | `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` |
+| 3a | `backend-tdd-engineer` | `09_BACKEND_TDD_LOG_TEMPLATE.md` | `docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md` |
+| 3b | `frontend-tdd-engineer` | `10_FRONTEND_TDD_LOG_TEMPLATE.md` | `docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md` |
+| 4a | `backend-code-reviewer` | `11_CODE_REVIEW_REPORT_TEMPLATE.md` | `docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md` |
+| 4b | `frontend-code-reviewer` | `11_CODE_REVIEW_REPORT_TEMPLATE.md` | `docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md` |
+| 5a | `qa-engineer` | `12_QA_TEST_PLAN_TEMPLATE.md`, `13_QA_TEST_REPORT_TEMPLATE.md` | `docs/qa-engineer/01_QA_TEST_PLAN.md`, `02_QA_TEST_REPORT.md` |
+| 5b | `devops-engineer` | `14_DEPLOYMENT_SPEC_TEMPLATE.md` | `docs/devops-engineer/01_DEPLOYMENT_SPEC.md` |
 
-## 진행 기록과 이어서 하기
-- plan 의 작업 순서 단계마다 `tasks/<기능-id>/NN-<slug>.md` 에 상태(todo, doing, done, blocked), 한 일, 바꾼 파일, 결정, 막힌 점, 다음을 남긴다. `/implement-plan` 이 만들고 고친다. `tasks/` 는 로컬 전용이다 (`.gitignore`, git 에 올리지 않는다).
-- 서브에이전트에 단계를 맡기면 받은 agent ID 를 task 파일 `Agent:` 에 적는다. 서브에이전트가 멈추면 새로 띄우지 않고 그 ID 로 SendMessage 를 보내 이어서 시킨다.
-- Claude Code 를 다시 시작했으면 `claude --resume <세션 이름>` 으로 같은 세션을 연 뒤 이어서 시킨다.
+산출물은 기능 작업마다 같은 파일을 고쳐 쓴다. 이전 내용은 git 이력에 남는다.
 
-## 세션
-| 세션 | 시작 명령 | 담당 범위 |
-|---|---|---|
-| main | `claude -n main` (저장소 루트) | 저장소 전체 (`**`) |
+### FSD 단위 기능 규격 (`spec-writer`)
+단위 기능(`FUNC-<도메인>-001`)마다 7대 명세를 채운다.
+1. 기본 정보: 기능 ID, 기능명, 화면 코드(`SCR-xxx`), 우선순위(Must/Should), 액터
+2. 사전 조건
+3. 인터랙션 흐름과 Mermaid `flowchart TD`
+4. UI 데이터 항목 표 (8대 컬럼): `항목명 | 화면 표시/입력 | UI 컴포넌트 | 필수 여부 | 데이터 타입/제약 | 기본값 | 유효성 검증 규칙 | 노출/수정 조건`
+5. 비즈니스 규칙
+6. 예외 처리·엣지 케이스 (네트워크 장애, 연타, 빈 화면)
+7. 비즈니스 에러 코드 매핑
 
-- 단일 세션이다. 반복 역할은 서브에이전트로 부른다: researcher, benchmarker, spec-writer, planner, implementer, verifier, reviewer, triager.
-- 역할 게이트 (hook 이 강제): `docs/features/*/spec.md` 는 spec-writer, `docs/features/*/plan.md` 는 planner, `backend/app/**`·`frontend/src/**` 는 implementer, `bench/**` 는 benchmarker 서브에이전트만 쓴다. 메인 세션이 Write/Edit 나 Bash(리다이렉트, `sed -i`, `cp`/`mv`/`rm`, 스크립트로 파일 쓰기, 패치 적용)로 고치려 하면 막힌다. 메인 세션은 intent·verify·release 산출물, 통합·상세 문서, tasks 기록, 서브에이전트 조율을 맡는다. 매핑은 `.claude/hooks/sdlc-config.json` 의 `role_owners`. 사람이 끄려면 세션을 `SDLC_ROLE_GATE=0` 으로 띄운다.
-- 같은 파일을 동시에 고치는 세션을 만들지 않는다.
+## 지금 시스템 문서
+새 기능을 기획·설계할 때 먼저 읽는 현재 시스템 설명이다. 구현이 바뀌면 해당 문서를 같은 작업에서 고친다.
+
+| 문서 | 내용 |
+|---|---|
+| `docs/product.md` | 제품 범위, 사용자, 원칙, 기능 목록 |
+| `docs/tech-spec.md` | 시스템 구성, 기술 선택과 근거, 변경 이력 |
+| `docs/functional-spec/*.md` | 영역별 기능 동작 (NEWS, CHAT, COLL, BRF, SRC, MCP, UI) |
+| `docs/ui-spec.md`, `docs/design-system.md` | 화면, 디자인 토큰·공통 부품 |
+| `docs/api.md`, `docs/data-model.md` | REST·SSE API, DB·설정 파일 구조 |
+| `docs/operations.md` | 실행, 설정, 스케줄, 외부 의존, 문제 해결 |
+| `docs/test-strategy.md`, `docs/test-cases.md` | 검사 명령, 테스트 목록 |
+| `docs/known-issues.md` | 알려진 문제 |
+| `docs/releases.md` | 버전 문자열 위치, 릴리스 이력 |
+
+## 릴리스
+버전 bump (`docs/releases.md` '버전 문자열 위치' 의 파일 모두와 로컬 `.env`·`backend/.env` 의 `VERSION`) → `make check` → 커밋 → `git tag -a v<버전>` → `git push origin main v<버전>` → `gh release create v<버전>` → `docs/releases.md` 이력 행 추가.

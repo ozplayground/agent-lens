@@ -99,5 +99,3 @@ bench/**/node_modules/
 # Playwright MCP 산출물
 .playwright-mcp/
 
-# SDLC 하네스 작업 진행 기록 (로컬 전용)
-tasks/

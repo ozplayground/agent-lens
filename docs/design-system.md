@@ -449,7 +449,7 @@ node scripts/ui-audit.mjs --routes feed --themes dark --viewports 390x844 --skip
 | 옵션 | 기본 |
 |---|---|
 | `--base <url>` | `http://localhost:3001` |
-| `--out <dir>` | 스크립트의 `DEFAULT_OUT` |
+| `--out <dir>` | `docs/qa-engineer/ui-audit` (스크립트의 `DEFAULT_OUT`) |
 | `--commit <sha>` | `git rev-parse HEAD` (`report.json` 의 `environment.commit`) |
 | `--screenshots key\|all\|none` | `key`: `/`·`/chat` × 5개 폭 × light·dark 20장 + 뉴스 상세·일일 브리핑 × 390x844·1440x900 × light 4장. `all` 은 대화상자·추가 상태까지 모든 조합 |
 | `--routes`, `--themes`, `--viewports` | `feed,chat` × `light,dark` × `360x780,390x844,768x1024,1024x768,1440x900` |
