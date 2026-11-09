@@ -7,6 +7,7 @@
 - 같은 단계의 독립 작업은 한 메시지에서 동시에 띄운다 (Stage 2 의 architect·system·ui 설계, Stage 3 의 backend·frontend TDD, Stage 4 의 두 리뷰).
 - 단계를 건너뛸 때는 이유를 보고에 적는다. 예: 버그 수정은 Stage 1·2 를 건너뛰고 TDD 부터, 문서만 고치는 작업은 리뷰·QA 생략.
 - 서브에이전트가 멈추면 새로 띄우지 않고 SendMessage 로 같은 에이전트에게 이어서 시킨다.
+- 병렬로 도는 서브에이전트는 작업 트리 전체를 바꾸는 git 명령(`git stash`, `git checkout -- .`, `git reset --hard`, `git clean`)을 쓰지 않는다. 다른 에이전트의 변경을 지우거나 섞는다. 자기 파일만 되돌릴 때는 파일 경로를 지정한다. 커밋은 오케스트레이터만 한다.
 
 ## Stage 1: 기획
 1. `market-analyst` 가 `docs/market-analyst/01_MARKET_BENCHMARK.md` 를 쓴다 (외부 사실이 필요할 때만).

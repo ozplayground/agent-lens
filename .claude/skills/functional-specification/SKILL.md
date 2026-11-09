@@ -5,7 +5,7 @@ description: 기능 트리(1Depth 도메인 > 2Depth 화면·모듈 > 3Depth 단
 
 # 상세 기능 정의 (FSD)
 
-1. **기능 트리**: 1Depth(도메인) > 2Depth(화면·모듈) > 3Depth(단위 기능). 도메인 코드는 지금 기능명세와 맞춘다: NEWS, CHAT, COLL, BRF, SRC, MCP, UI (`docs/functional-spec/README.md`).
+1. **기능 트리**: 1Depth(도메인) > 2Depth(화면·모듈) > 3Depth(단위 기능). 도메인 코드는 지금 기능명세와 맞춘다: NEWS, CHAT, COLL, BRF, SRC, MCP, UI (`docs/spec-writer/02_FUNCTIONAL_SPECIFICATION.md`).
 2. **기능 인덱스**: `docs/templates/03_FUNCTIONAL_SPECIFICATION_INDEX_TEMPLATE.md` 구조대로 `docs/spec-writer/02_FUNCTIONAL_SPECIFICATION.md`.
 3. **도메인 FSD**: `docs/templates/fsd/DOMAIN_FSD_TEMPLATE.md` 구조대로 `docs/spec-writer/fsd/{DOMAIN}_SPECIFICATION.md`. 단위 기능 ID `FUNC-<도메인>-001` 마다 7대 명세:
    1. 기본 정보 (ID, 화면 코드 `SCR-xxx`, 우선순위, 액터)
@@ -16,6 +16,6 @@ description: 기능 트리(1Depth 도메인 > 2Depth 화면·모듈 > 3Depth 단
    6. 예외·엣지 케이스 (네트워크 장애, 연타, 빈 화면, LLM 미가용)
    7. 비즈니스 에러 코드 매핑 (API 상태 코드·`detail` ↔ 화면 메시지)
 4. **전역 정책**: `docs/templates/04_POLICY_AND_EDGES_TEMPLATE.md` 구조대로 `docs/spec-writer/03_POLICIES_AND_EDGES.md`. 엔티티 상태 전이는 Mermaid `stateDiagram-v2`.
-5. **지금 동작과의 관계**: 기존 기능을 바꾸면 해당 `docs/functional-spec/*.md` 의 항목을 인용하고 바뀌는 점만 적는다.
+5. **지금 동작과의 관계**: 기존 기능을 바꾸면 해당 `docs/spec-writer/fsd/*.md` 의 FUNC 항목을 고치고 바뀌는 점만 적는다.
 
 Planning Gate: 모든 단위 기능에 7대 명세와 8대 컬럼 표가 있어야 한다.

@@ -71,6 +71,9 @@ class FakeLLM:
 
     def __init__(self) -> None:
         self.claude_enabled = True
+        # 흉내 Claude 스트림 끝 모양: stop_reason 값, 또는 첫 조각 뒤에 보낼 SSE error 이벤트의 error 객체
+        self.claude_stream_stop_reason = "end_turn"
+        self.claude_stream_error: Optional[Dict[str, Any]] = None
         self.openai_enabled = False
         self._ollama: Dict[Tuple[str, int], _OllamaServer] = {}
         self._requests: List[RecordedRequest] = []
@@ -205,10 +208,15 @@ class FakeLLM:
                     "type": "content_block_delta", "index": 0,
                     "delta": {"type": "text_delta", "text": piece},
                 }))
-            events.append(("content_block_stop", {"type": "content_block_stop", "index": 0}))
-            events.append(("message_delta", {"type": "message_delta", "delta": {"stop_reason": "end_turn"},
-                                             "usage": {"output_tokens": 20}}))
-            events.append(("message_stop", {"type": "message_stop"}))
+                if self.claude_stream_error is not None:
+                    events.append(("error", {"type": "error", "error": self.claude_stream_error}))
+                    break
+            else:
+                events.append(("content_block_stop", {"type": "content_block_stop", "index": 0}))
+                events.append(("message_delta", {"type": "message_delta",
+                                                 "delta": {"stop_reason": self.claude_stream_stop_reason},
+                                                 "usage": {"output_tokens": 20}}))
+                events.append(("message_stop", {"type": "message_stop"}))
             sse = "".join(
                 f"event: {name}\r\ndata: {json.dumps(data, ensure_ascii=False)}\r\n\r\n" for name, data in events
             )

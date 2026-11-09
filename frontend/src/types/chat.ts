@@ -379,20 +379,41 @@ export type ChatMessageHistory = z.infer<typeof ChatMessageHistorySchema>;
 export const ScopeModeSchema = z.enum(['scoped', 'global']);
 export type ScopeMode = z.infer<typeof ScopeModeSchema>;
 
-export const ChatStreamRequestSchema = z.object({
-  question: z
-    .string()
-    .min(1, '질문을 입력해주세요.')
-    .max(2000, '질문은 최대 2,000자까지 입력 가능합니다.'),
-  model: ChatModelSchema.optional().default('claude-sonnet-5-5'),
-  model_tier: ModelTierSchema.optional(),
-  scope: ScopeModeSchema.default('global'),
-  source_id: z.number().int().positive().nullable().optional(),
-  session_id: z.string().uuid().nullable().optional(),
-  history: z.array(ChatMessageHistorySchema).optional(),
-  top_k: z.number().int().min(1).max(10).default(5),
-  filters: ChatFocusFilterSchema.nullable().optional(),
-});
+/** 서버가 이 턴을 저장할 때 쓸 메시지 id 의 최대 길이 (DB `chat_messages.id` 가 `String(36)`). */
+export const CHAT_MESSAGE_ID_MAX_LENGTH = 36;
+
+/** 클라이언트가 만든 메시지 id (`msg-user-xxxxxxx`·`msg-asst-xxxxxxx` 16자, 또는 UUID 36자). */
+export const ChatClientMessageIdSchema = z.string().min(1).max(CHAT_MESSAGE_ID_MAX_LENGTH);
+
+export const ChatStreamRequestSchema = z
+  .object({
+    question: z
+      .string()
+      .min(1, '질문을 입력해주세요.')
+      .max(2000, '질문은 최대 2,000자까지 입력 가능합니다.'),
+    model: ChatModelSchema.optional().default('claude-sonnet-5-5'),
+    model_tier: ModelTierSchema.optional(),
+    scope: ScopeModeSchema.default('global'),
+    source_id: z.number().int().positive().nullable().optional(),
+    session_id: z.string().uuid().nullable().optional(),
+    history: z.array(ChatMessageHistorySchema).optional(),
+    top_k: z.number().int().min(1).max(10).default(5),
+    filters: ChatFocusFilterSchema.nullable().optional(),
+    /** 서버가 이 턴의 질문을 저장할 id. 없으면 서버가 UUID 를 만든다. */
+    user_message_id: ChatClientMessageIdSchema.nullable().optional(),
+    /** 서버가 이 턴의 답을 저장할 id. 없으면 서버가 UUID 를 만든다. */
+    assistant_message_id: ChatClientMessageIdSchema.nullable().optional(),
+  })
+  .refine(
+    (req) =>
+      !req.user_message_id ||
+      !req.assistant_message_id ||
+      req.user_message_id !== req.assistant_message_id,
+    {
+      message: 'user_message_id 와 assistant_message_id 는 서로 달라야 합니다.',
+      path: ['assistant_message_id'],
+    }
+  );
 export type ChatStreamRequest = z.infer<typeof ChatStreamRequestSchema>;
 
 export const ChatQueryRequestSchema = z.object({

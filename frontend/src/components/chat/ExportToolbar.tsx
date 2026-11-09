@@ -1,15 +1,12 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Copy, Check, Download, Share2, TriangleAlert, FileText } from 'lucide-react';
+import { Copy, Check, Download, TriangleAlert, FileText } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 
 export interface ExportToolbarProps {
-  /** 어시스턴트 메시지 고유 식별자 */
-  messageId: string;
   /** 4단 구조화 리포트 마크다운 전문 */
   markdownContent: string;
   /** 분석 대상 기사 제목 (파일명 생성용) */
@@ -18,31 +15,28 @@ export interface ExportToolbarProps {
   isStreaming?: boolean;
   /** 원클릭 마크다운 복사 완료 콜백 */
   onCopySuccess?: () => void;
-  /** Notion 연동 성공 콜백 (생성된 페이지 URL 반환) */
-  onNotionSuccess?: (pageUrl: string) => void;
   /** 추가 클래스 */
   className?: string;
 }
 
 /**
+ * 챗 답 내보내기: 마크다운 복사, .md 다운로드.
+ * Notion 동기화는 서버 API 가 없어 그리지 않는다 (FE-22). 챗 답 내보내기 API 가 생기면 그때 연결한다.
+ *
  * 버튼 하나에 아이콘 + 글자. 768px 미만은 글자를 숨긴 44px 아이콘 버튼이다 (접근 이름은 `aria-label` 그대로).
  */
 const TOOL_BUTTON_CLASSES = 'max-md:w-11 max-md:px-0';
 const TOOL_LABEL_CLASSES = 'max-md:sr-only';
 
 export default function ExportToolbar({
-  messageId,
   markdownContent,
   sourceTitle = 'AgentLens_Engineering_Report',
   isStreaming = false,
   onCopySuccess,
-  onNotionSuccess,
   className = '',
 }: ExportToolbarProps) {
   const { status: copyStatus, copy } = useCopyToClipboard();
   const [downloading, setDownloading] = useState(false);
-  const [notionSyncing, setNotionSyncing] = useState(false);
-  const [notionSynced, setNotionSynced] = useState(false);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -82,21 +76,6 @@ export default function ExportToolbar({
       URL.revokeObjectURL(url);
     } finally {
       later(() => setDownloading(false), 500);
-    }
-  };
-
-  const handleSyncNotion = async () => {
-    if (isStreaming || !markdownContent || notionSyncing) return;
-    setNotionSyncing(true);
-    try {
-      // Export Notion page URL
-      const notionPageUrl = `https://notion.so/agentlens/report-${messageId}`;
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      setNotionSynced(true);
-      onNotionSuccess?.(notionPageUrl);
-      later(() => setNotionSynced(false), 3000);
-    } finally {
-      setNotionSyncing(false);
     }
   };
 
@@ -151,22 +130,6 @@ export default function ExportToolbar({
         className={TOOL_BUTTON_CLASSES}
       >
         <span className={TOOL_LABEL_CLASSES}>.md 다운로드</span>
-      </Button>
-
-      {/* Sync Notion Button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={handleSyncNotion}
-        disabled={isStreaming || notionSyncing}
-        aria-label="Notion 동기화"
-        title="Notion 동기화"
-        leadingIcon={notionSyncing ? <Spinner /> : notionSynced ? <Check /> : <Share2 />}
-        className={cn(TOOL_BUTTON_CLASSES, notionSynced && 'text-success')}
-      >
-        <span aria-live="polite" className={TOOL_LABEL_CLASSES}>
-          {notionSyncing ? 'Notion 연동 중...' : notionSynced ? 'Notion 연동됨' : 'Notion 동기화'}
-        </span>
       </Button>
     </div>
   );

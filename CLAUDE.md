@@ -10,7 +10,7 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 - Docker 실행: `make docker-up` (healthy 까지 기다린다) / `make docker-down` / `make docker-logs` (따라가기, Ctrl-C 로 끝낸다) · 이미지: `make docker-build`
 - 수집: `make collect` (backend 가 떠 있으면 그 backend 에 수집시키고, 없으면 `backend/agentlens.db` 에 직접 수집한다. 외부 소스·LLM 을 실제로 호출한다)
 - 초기화: `make reset` (수집 데이터를 모두 지우고 재수집한다. 대상 `AGENTLENS_API_URL`, 기본 `http://localhost:8000`)
-- `make check` 의 pytest 는 LLM 호출을 흉내 내고 `config.json`·`sources.json` 은 임시 사본에 쓴다. 스크래퍼·Notion·SMTP 호출은 실제로 나간다 (`docs/test-strategy.md`). 돌린 뒤 `git status` 로 추적 파일이 바뀌지 않았는지 확인한다.
+- `make check` 의 pytest 는 LLM 호출을 흉내 내고 `config.json`·`sources.json` 은 임시 사본에 쓴다. 스크래퍼·Notion·SMTP 호출은 실제로 나간다 (`docs/qa-engineer/01_QA_TEST_PLAN.md`). 돌린 뒤 `git status` 로 추적 파일이 바뀌지 않았는지 확인한다.
 
 ## 최우선 규칙
 1. **사용자의 직접 지시가 최우선이다.** 사용자가 지시한 작업은 원본·사본, 위험 여부와 상관없이 그대로 실행한다. 파이프라인·단계·게이트를 이유로 미루거나 사용자에게 떠넘기지 않는다. Claude Code 권한처럼 Claude 가 풀 수 없는 것에 막히면 사용자가 붙여 넣을 `!` 명령 한 줄과 그 명령이 하는 일 한 줄만 준다.
@@ -18,6 +18,8 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 3. **임의 해석 금지.** 요구사항이 모호하면 산출물에 '열린 질문' 으로 남기고, 사용자 결정이 필요한 것만 묻는다.
 4. **간결하게 (KISS/YAGNI).** 과한 추상화·계층 분리·오버엔지니어링을 하지 않고 요구사항에 충실한 가장 단순한 코드로 구현한다.
 5. **테스트를 고쳐 통과시키지 않는다.** 코드를 고친다. 버그 수정은 실패하는 테스트를 먼저 쓴다.
+6. **검사 범위 밖 (수용된 위험)**: 인증 없음과 CORS 전체 허용, SSRF, 비밀값 평문 저장, 설정 조회로 비밀값 노출, 설정 재적용 누락은 리뷰·QA 에서 검사하지 않고 판정 근거로 쓰지 않는다. 산출물에는 사실로만 남긴다.
+7. **인증 정보는 원격에 올리지 않는다.** API key, secret key, 토큰, 비밀번호, 웹훅 URL 같은 인증 정보는 커밋·push 하지 않는다. `.env`·`backend/.env`·`frontend/.env.local` 은 git 밖이고, git 이 추적하는 `config.json` 은 UI 에서 저장하면 비밀값이 들어갈 수 있다. 커밋 전에 `git diff --cached` 에 인증 정보가 없는지, `config.json` 의 `llm.*_api_key`·`briefing.notion.api_key`·`briefing.email.smtp_user`/`smtp_password`·`webhooks.*_url` 이 비어 있는지 확인하고, 들어 있으면 그 변경을 커밋에서 뺀다. 문서·예시에는 `sk-ant-...` 처럼 자리표시만 쓴다.
 
 ## 하네스: 풀스택 개발팀
 메인 세션은 오케스트레이터다. 단계마다 `.claude/agents/` 의 서브에이전트를 Agent 도구로 부르고(`subagent_type: <이름>`), 서브에이전트는 `.claude/skills/` 의 스킬 절차와 `docs/templates/` 의 템플릿으로 산출물을 쓴다. 공통 규칙은 `.claude/rules/` 에 있다.
@@ -104,18 +106,22 @@ flowchart TD
 7. 비즈니스 에러 코드 매핑
 
 ## 지금 시스템 문서
-새 기능을 기획·설계할 때 먼저 읽는 현재 시스템 설명이다. 구현이 바뀌면 해당 문서를 같은 작업에서 고친다.
+하네스 산출물이 곧 지금 시스템의 설명이다. 새 기능을 기획·설계할 때 먼저 읽고, 구현이 바뀌면 해당 산출물을 같은 작업에서 고친다.
 
 | 문서 | 내용 |
 |---|---|
-| `docs/product.md` | 제품 범위, 사용자, 원칙, 기능 목록 |
-| `docs/tech-spec.md` | 시스템 구성, 기술 선택과 근거, 변경 이력 |
-| `docs/functional-spec/*.md` | 영역별 기능 동작 (NEWS, CHAT, COLL, BRF, SRC, MCP, UI) |
-| `docs/ui-spec.md`, `docs/design-system.md` | 화면, 디자인 토큰·공통 부품 |
-| `docs/api.md`, `docs/data-model.md` | REST·SSE API, DB·설정 파일 구조 |
-| `docs/operations.md` | 실행, 설정, 스케줄, 외부 의존, 문제 해결 |
-| `docs/test-strategy.md`, `docs/test-cases.md` | 검사 명령, 테스트 목록 |
-| `docs/known-issues.md` | 알려진 문제 |
+| `docs/market-analyst/01_MARKET_BENCHMARK.md` | 경쟁·유사 서비스, 기회 영역 |
+| `docs/spec-writer/01_PRD.md` | 제품 범위, 사용자, 원칙, 요구사항(REQ), KPI |
+| `docs/spec-writer/02_FUNCTIONAL_SPECIFICATION.md`, `fsd/*.md` | 기능 인덱스, 도메인별 기능 동작 (NEWS, CHAT, COLL, BRF, SRC, MCP, UI) |
+| `docs/spec-writer/03_POLICIES_AND_EDGES.md` | 전역 정책, 상태 전이, 엣지 케이스 |
+| `docs/fullstack-architect/01_ARCHITECTURE_ADR.md` | 시스템 구성, 기술 결정과 근거, 변경 이력 |
+| `docs/system-designer/01_SYSTEM_DESIGN.md`, `02_OPENAPI_SPEC.yaml` | backend 계층, ERD·설정 파일 구조, REST·SSE API |
+| `docs/ui-system-designer/01_COMPONENT_SPEC.md`, `02_DESIGN_SYSTEM.md` | 화면·컴포넌트, 디자인 토큰·공통 부품, ui-audit |
+| `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` | backend ↔ TS/zod ↔ MSW 계약과 불일치 |
+| `docs/backend-tdd-engineer/`, `docs/frontend-tdd-engineer/` `01_TDD_CYCLE_LOG.md` | 테스트 목록, 격리, TDD 이력 |
+| `docs/backend-code-reviewer/`, `docs/frontend-code-reviewer/` `01_CODE_REVIEW_REPORT.md` | 코드 감사 결과 |
+| `docs/qa-engineer/01_QA_TEST_PLAN.md`, `02_QA_TEST_REPORT.md` | 검사 전략·명령, QA 결과, 알려진 결함 |
+| `docs/devops-engineer/01_DEPLOYMENT_SPEC.md` | 실행, 설정·환경 변수, 스케줄, 외부 의존, 문제 해결 |
 | `docs/releases.md` | 버전 문자열 위치, 릴리스 이력 |
 
 ## 릴리스

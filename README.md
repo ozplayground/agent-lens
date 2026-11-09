@@ -18,7 +18,7 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 | MCP 서버 | 외부 MCP 클라이언트용 도구 4개 (stdio, `python -m app.mcp.server`) |
 | UI | 디자인시스템 기반 반응형 화면(모바일·태블릿·PC), 라이트·다크 테마, 단축키, 커맨드 팔레트 |
 
-기능별 상세 동작은 [기능명세](docs/functional-spec/README.md) 에 있다.
+기능별 상세 동작은 [기능 인덱스](docs/spec-writer/02_FUNCTIONAL_SPECIFICATION.md) 와 도메인별 [FSD](docs/spec-writer/fsd/) 에 있다.
 
 ## 빠른 시작
 
@@ -76,7 +76,7 @@ make docker-down            # 내린다 (데이터 volume agentlens-data 는 남
 
 - LLM 은 Claude(Anthropic)를 기본으로 쓴다.
 - 키가 없으면 OpenAI 키, 그다음 로컬 Ollama(설정한 모델이 설치돼 있을 때)를 쓴다. 셋 다 없으면 관련성·품질 점수는 휴리스틱으로 매기고, AI 챗·질문은 503 으로 응답한다.
-- 설정 우선순위와 전체 항목은 [운영 가이드](docs/operations.md#설정과-환경-변수) 에 있다.
+- 설정 우선순위와 전체 항목은 [배포 명세](docs/devops-engineer/01_DEPLOYMENT_SPEC.md) 에 있다.
 
 ## 프로젝트 구조
 
@@ -94,14 +94,17 @@ Makefile            개발·검사·실행 명령
 
 | 문서 | 내용 |
 |---|---|
-| [docs/product.md](docs/product.md) | 제품 개요, 범위, 원칙 |
-| [docs/tech-spec.md](docs/tech-spec.md) | 시스템 구조와 기술 선택 |
-| [docs/operations.md](docs/operations.md) | 실행, 설정, 스케줄, 외부 의존, 문제 해결 |
-| [docs/api.md](docs/api.md) | REST·SSE API |
-| [docs/data-model.md](docs/data-model.md) | DB 테이블과 설정 파일 구조 |
-| [docs/ui-spec.md](docs/ui-spec.md), [docs/design-system.md](docs/design-system.md) | 화면과 디자인시스템 |
-| [docs/test-strategy.md](docs/test-strategy.md), [docs/test-cases.md](docs/test-cases.md) | 테스트 전략과 목록 |
-| [docs/known-issues.md](docs/known-issues.md) | 알려진 문제 |
+| [PRD](docs/spec-writer/01_PRD.md) | 제품 범위, 사용자, 원칙, 요구사항 |
+| [기능 인덱스](docs/spec-writer/02_FUNCTIONAL_SPECIFICATION.md), [FSD](docs/spec-writer/fsd/), [정책](docs/spec-writer/03_POLICIES_AND_EDGES.md) | 기능 동작, 전역 정책·엣지 케이스 |
+| [아키텍처 ADR](docs/fullstack-architect/01_ARCHITECTURE_ADR.md) | 시스템 구조와 기술 결정 |
+| [시스템 설계](docs/system-designer/01_SYSTEM_DESIGN.md), [OpenAPI](docs/system-designer/02_OPENAPI_SPEC.yaml) | backend 계층, DB, REST·SSE API |
+| [컴포넌트 명세](docs/ui-system-designer/01_COMPONENT_SPEC.md), [디자인시스템](docs/ui-system-designer/02_DESIGN_SYSTEM.md) | 화면과 디자인시스템 |
+| [계약](docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md) | backend ↔ frontend 계약, MSW |
+| [backend TDD](docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md), [frontend TDD](docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md) | 테스트 목록과 이력 |
+| [backend 리뷰](docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md), [frontend 리뷰](docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md) | 코드 감사 |
+| [QA 계획](docs/qa-engineer/01_QA_TEST_PLAN.md), [QA 결과](docs/qa-engineer/02_QA_TEST_REPORT.md) | 검사 전략, 결과, 알려진 결함 |
+| [배포 명세](docs/devops-engineer/01_DEPLOYMENT_SPEC.md) | 실행, 설정, 스케줄, 외부 의존, 문제 해결 |
+| [시장 벤치마크](docs/market-analyst/01_MARKET_BENCHMARK.md) | 경쟁·유사 서비스 |
 | [docs/releases.md](docs/releases.md) | 릴리스 이력 |
 
 ## 개발 하네스

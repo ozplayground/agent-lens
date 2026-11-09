@@ -418,21 +418,25 @@ describe('ChatWorkspace Container', () => {
   it('flushes remaining decoder bytes and processes trailing SSE event block in buffer when stream ends without trailing double newline', async () => {
     const encoder = new TextEncoder();
     const firstEvent = 'event: token\ndata: {"token":"첫 번째 청크 "}\n\n';
-    // Final SSE block intentionally lacks trailing \n\n to verify buffer.trim() flush on done=true
-    const finalEventWithoutDoubleNewline = 'event: token\ndata: {"token":"마지막 버퍼 청크 완료"}';
+    const secondEvent = 'event: token\ndata: {"token":"마지막 버퍼 청크 완료"}\n\n';
+    // Final SSE block (done) intentionally lacks trailing \n\n to verify buffer.trim() flush on done=true.
+    // `done` 이 없으면 잘린 스트림으로 오류 처리하므로(FE-03) 마지막 블록은 done 이다.
+    const finalEventWithoutDoubleNewline = 'event: done\ndata: {"model":"claude-sonnet-5-5"}';
 
     const firstBytes = encoder.encode(firstEvent);
+    const secondBytes = encoder.encode(secondEvent);
+    // Split a multibyte UTF-8 sequence ("완", 3 bytes) across two chunks
+    const splitIndex = encoder.encode(secondEvent.slice(0, secondEvent.indexOf('완'))).length + 1;
+    const chunk2 = secondBytes.slice(0, splitIndex);
+    const chunk3 = secondBytes.slice(splitIndex);
     const finalBytes = encoder.encode(finalEventWithoutDoubleNewline);
-    // Split multibyte UTF-8 sequence across two chunks
-    const splitIndex = finalBytes.length - 5;
-    const chunk2 = finalBytes.slice(0, splitIndex);
-    const chunk3 = finalBytes.slice(splitIndex);
 
     const customStream = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(firstBytes);
         controller.enqueue(chunk2);
         controller.enqueue(chunk3);
+        controller.enqueue(finalBytes);
         controller.close();
       },
     });
@@ -460,6 +464,9 @@ describe('ChatWorkspace Container', () => {
       await waitFor(() => {
         expect(screen.getByText(/첫 번째 청크 마지막 버퍼 청크 완료/)).toBeInTheDocument();
       });
+      // 끝 버퍼의 done 블록까지 처리되어 완료된 답의 내보내기 도구줄이 보인다.
+      expect(await screen.findByRole('group', { name: '리포트 익스포트 툴바' })).toBeInTheDocument();
+      expect(screen.queryByText(/응답이 중간에 끊겼습니다/)).not.toBeInTheDocument();
     } finally {
       fetchSpy.mockRestore();
     }

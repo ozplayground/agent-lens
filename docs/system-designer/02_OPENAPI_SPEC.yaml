@@ -1,0 +1,4285 @@
+# AgentLens OpenAPI 3.1 — docs/system-designer/02_OPENAPI_SPEC.yaml
+# Updated: 2026-11-09
+# 기준: v0.4.1 (main)
+# 생성: cd backend && PYTHONPATH=. ../.venv/bin/python ../.claude/skills/contract-specification/scripts/gen_openapi.py ../docs/system-designer/02_OPENAPI_SPEC.yaml 로 app.openapi() 를 뽑고 코드 사실을 보충했다 (lifespan 은 돌지 않는다).
+# 표시: 자동 생성(/openapi.json)과 다른 곳은 x-agentlens-supplemented: true, operation 별 x-agentlens-diff.
+openapi: 3.1.0
+info:
+  title: AgentLens
+  version: 0.4.1
+  description: |-
+    AgentLens backend REST API (FastAPI). 기준: v0.4.1 (main), Updated: 2026-11-09.
+
+    이 파일은 `app.openapi()` (FastAPI 0.162.2 자동 생성, 런타임 `/openapi.json` 과 같은 내용)를 뽑은 뒤 코드에서 확인한 사실을 보충한 것이다.
+    - 자동 생성과 다른 곳: 추가·교체한 응답·요청 본문·컴포넌트에는 `x-agentlens-supplemented: true`, 각 operation 에는 `x-agentlens-diff` 목록을 단다.
+    - `x-agentlens-code`: 라우터·서비스 위치 (path:line). `x-agentlens-frontend`: frontend/src/lib/api.ts 호출 함수나 직접 fetch 위치.
+    - 인증 없음. CORS allow_origins=['*'], allow_credentials=True (backend/app/main.py:50).
+    - 오류 형식이 라우터마다 다르다: HTTPExceptionDetail {detail}, FastAPI 422 HTTPValidationError, chat ErrorResponse {error_code, message, details}, 전역 500 GlobalErrorResponse {detail, error}. 처리하지 않은 예외는 어느 operation 에서든 GlobalErrorResponse 500 이 된다 (명시하지 않은 곳 포함).
+    - 설계 문서: docs/system-designer/01_SYSTEM_DESIGN.md
+  x-agentlens-supplemented: true
+servers:
+- url: http://localhost:8000
+  description: backend (uvicorn app.main:app, BACKEND_PORT 기본 8000)
+  x-agentlens-supplemented: true
+- url: http://localhost:3000
+  description: frontend Next rewrite (/api/:path* → INTERNAL_API_URL). / 와 /health 는 프록시하지 않는다
+  x-agentlens-supplemented: true
+tags:
+- name: News
+  description: 뉴스 목록·단건·Ask AI(동기·SSE)·RSS. 라우터 backend/app/api/news.py
+- name: Chat
+  description: AI 챗 질의(동기·SSE)·코퍼스 검색·세션. 라우터 backend/app/api/chat.py. 오류는 ErrorResponse
+- name: Daily Briefing
+  description: 브리핑 생성·Notion·이메일·설정. 라우터 backend/app/api/briefing.py
+- name: Schedule
+  description: 수집 스케줄·진행·수동 수집·리셋. 라우터 backend/app/api/schedule.py
+- name: sources
+  description: sources.json 소스 관리. 라우터 backend/app/api/sources.py
+- name: research
+  description: URL 탐지·후보 추천·딥 리서치. 라우터 backend/app/api/research.py
+- name: trends
+  description: 기술 레이더. 라우터 backend/app/api/trends.py
+- name: Webhook Dispatcher
+  description: Slack/Discord/generic 웹훅. 라우터 backend/app/api/webhook.py
+- name: Stats
+  description: 뉴스 개수 통계. 라우터 backend/app/api/stats.py
+- name: MCP
+  description: MCP 서버 정보. 라우터 backend/app/api/mcp.py
+- name: System
+  description: GET /, GET /health (backend/app/main.py). 자동 생성에는 태그가 없어 보충했다
+  x-agentlens-supplemented: true
+paths:
+  /api/news:
+    get:
+      tags:
+      - News
+      summary: Get News Feed
+      operationId: get_news_feed_api_news_get
+      parameters:
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+      - name: source
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Search
+      - name: high_signal_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: High Signal Only
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          default: hot
+          title: Sort
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-agentlens-code: backend/app/api/news.py:47
+      x-agentlens-frontend: fetchNewsFeed
+      description: |-
+        [보충]
+        category·source 는 소문자로 바꿔 일치 비교(all 이면 필터 없음). search 는 앞뒤 공백 제거 후 title·summary·tags·tech_stack·why_it_matters 에 ILIKE %search% (OR). sort: latest(published_at desc), top(raw_score desc), quality(quality_score desc, hotness_score desc), 그 밖의 값은 모두 hot(hotness_score desc, published_at desc). offset=(page-1)*size, total_pages=ceil(total/size) (total 0 이면 1). tags·tech_stack 은 쉼표 문자열을 배열로, tldr_bullets 는 JSON 파싱(실패 시 []), quality_score 0/NULL 은 6.0 (news.py:17).
+      x-agentlens-diff:
+      - description 보충
+  /api/news/all:
+    delete:
+      tags:
+      - News
+      summary: Delete All News
+      description: |-
+        Deletes all news items from database.
+
+        ---
+        [보충]
+        news_items 전체 DELETE 후 커밋. FTS 트리거 news_items_ad 가 색인에서도 지운다. crawl_logs 는 지우지 않는다. 확인 절차·인증·수집 실행 중 검사 없음. chat_sessions.active_source_id 는 FK ON DELETE SET NULL.
+      operationId: delete_all_news_api_news_all_delete
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteAllNewsResponse'
+          x-agentlens-supplemented: true
+        '500':
+          description: DB 예외 (전역 처리)
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalErrorResponse'
+      x-agentlens-code: backend/app/api/news.py:96
+      x-agentlens-frontend: deleteAllNews (정의만 있고 호출처 없음)
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 500'
+  /api/news/{news_id}:
+    get:
+      tags:
+      - News
+      summary: Get News Detail
+      operationId: get_news_detail_api_news__news_id__get
+      parameters:
+      - name: news_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: News Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsItemResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: '{"detail": "News item not found"}'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/news.py:104
+      x-agentlens-frontend: 없음
+      description: |-
+        [보충]
+        GET /api/news/all 도 이 경로에 걸려 422 가 난다.
+      x-agentlens-diff:
+      - description 보충
+      - '오류 응답 추가: 404'
+  /api/news/{news_id}/ask:
+    post:
+      tags:
+      - News
+      summary: Ask About News Item
+      operationId: ask_about_news_item_api_news__news_id__ask_post
+      parameters:
+      - name: news_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: News Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskQuestionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskQuestionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: '{"detail": "News item not found"}'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/news.py:111
+      x-agentlens-frontend: askQuestionAboutNews (정의만 있고 호출처 없음)
+      description: |-
+        [보충]
+        question 길이 제약 없음(빈 문자열도 통과). llm_processor.answer_question_with_meta 가 메모리 캐시(_qa_cache, 키 '<제목>:<질문 소문자>')를 먼저 보고, 없으면 generate_live_answer(Anthropic → OpenAI → Ollama). LLM 이 모두 실패하면 휴리스틱 답변과 model_used 'AgentLens Heuristic Engine' 으로 200 (llm_processor.py:756, :853). LLM 실패가 HTTP 오류로 드러나지 않는다.
+      x-agentlens-diff:
+      - description 보충
+      - '오류 응답 추가: 404'
+  /api/news/{news_id}/ask/stream:
+    post:
+      tags:
+      - News
+      summary: Ask About News Item Stream
+      operationId: ask_about_news_item_stream_api_news__news_id__ask_stream_post
+      parameters:
+      - name: news_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: News Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskQuestionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: 'data: <NewsAskStreamEvent JSON>\n\n 의 연속'
+              x-agentlens-event-schema:
+                $ref: '#/components/schemas/NewsAskStreamEvent'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: '{"detail": "News item not found"} (스트림을 열기 전에 확인)'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/news.py:137, backend/app/services/llm_processor.py:855
+      x-agentlens-frontend: askQuestionAboutNewsStream (getDirectApiBase 로 backend 직결, 실패 시 상대 경로로 재시도)
+      description: |
+        [보충]
+        프레임: `event:` 줄 없이 `data: <JSON>\n\n` (backend/app/api/news.py:157). 종류는 JSON 의 event 필드 (NewsAskStreamEvent).
+        응답 헤더: `text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`.
+        순서: meta → token* → done. 토큰 전에 Anthropic 이 실패하면 OpenAI, 그다음 휴리스틱으로 넘어간다. 토큰을 보낸 뒤 Anthropic·OpenAI 가 실패하면 이어 붙이지 않고 done 없이 끝내며 캐시하지 않는다 (backend/app/services/llm_processor.py:895-977, :917-919, :950-951).
+        오류 이벤트는 없다. 토큰 전 실패는 휴리스틱 답변으로 대체한다. 토큰 뒤 실패와 휴리스틱 단계 예외는 오류 이벤트 없이 끊긴다. done 은 full_text 가 비어 있지 않을 때만 보낸다.
+        캐시 적중이면 meta 의 model 이 '<model> (캐시됨)' 이고 답을 4단어씩 token 으로 나눠 보낸다.
+      x-agentlens-diff:
+      - description 보충
+      - 200 content 를 text/event-stream 으로 교체 (자동 생성은 application/json)
+      - '오류 응답 추가: 404'
+  /api/news/feed/rss.xml:
+    get:
+      tags:
+      - News
+      summary: Get Rss Feed
+      operationId: get_rss_feed_api_news_feed_rss_xml_get
+      parameters:
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/xml:
+              schema:
+                type: string
+                description: RSS 2.0 XML
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '500':
+          description: summary 나 published_at 이 NULL 인 행이 있으면 saxutils.escape(None)/None.strftime 예외 (news.py:182, :184)
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalErrorResponse'
+      x-agentlens-code: backend/app/api/news.py:169
+      x-agentlens-frontend: 없음 (Header.tsx 의 링크 href)
+      description: |-
+        [보충]
+        published_at 내림차순 최대 50건. category 는 all 이 아니면 일치 비교 (GET /api/news 와 달리 소문자로 바꾸지 않는다). channel link 는 http://localhost:3000 고정. 항목: title, link, description(summary), category(XML 이스케이프 안 함), pubDate('%a, %d %b %Y %H:%M:%S GMT'), guid(url).
+      x-agentlens-diff:
+      - description 보충
+      - 200 content 를 application/xml 로 교체
+      - '오류 응답 추가: 500'
+  /api/schedule/status:
+    get:
+      tags:
+      - Schedule
+      summary: Get Schedule Status
+      operationId: get_schedule_status_api_schedule_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleStatusResponse'
+      x-agentlens-code: backend/app/api/schedule.py:14
+      x-agentlens-frontend: fetchScheduleStatus
+      description: |-
+        [보충]
+        schedule_hours·timezone 은 config.json 값(표시만). next_run 은 APScheduler job daily_crawl 의 next_run_time. recent_logs 는 crawl_logs 최근 5행(id desc). last_crawl_status 는 로그 상태가 아니라 메모리 플래그 collector_manager.is_running 으로 running/idle.
+      x-agentlens-diff:
+      - description 보충
+  /api/schedule/progress:
+    get:
+      tags:
+      - Schedule
+      summary: Get Crawl Progress
+      description: Returns live progressive ingestion status, current source, and saved count.
+      operationId: get_crawl_progress_api_schedule_progress_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrawlProgressResponse'
+          x-agentlens-supplemented: true
+      x-agentlens-code: backend/app/api/schedule.py:43
+      x-agentlens-frontend: fetchCrawlProgress
+      x-agentlens-diff:
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /api/schedule/trigger:
+    post:
+      tags:
+      - Schedule
+      summary: Trigger Manual Crawl
+      description: |-
+        Starts progressive streaming collection in background and responds instantly.
+
+        ---
+        [보충]
+        BackgroundTasks 로 collector_manager.collect_all() 을 시작하고 바로 응답한다. 외부 소스 6종 호출, 항목별 LLM 평가, news_items INSERT/UPDATE, 끝에 crawl_logs 1행.
+      operationId: trigger_manual_crawl_api_schedule_trigger_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerCollectResponse'
+          x-agentlens-supplemented: true
+      x-agentlens-code: backend/app/api/schedule.py:48
+      x-agentlens-frontend: triggerManualCollect
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /api/schedule/reset-and-collect:
+    post:
+      tags:
+      - Schedule
+      summary: Reset And Collect
+      description: |-
+        Deletes all existing news items and crawl logs, then triggers fresh progressive collection.
+
+        ---
+        [보충]
+        수집 중이 아니면 DELETE FROM news_items, DELETE FROM crawl_logs 후 커밋, 수집기 메모리 카운터 초기화, 백그라운드 collect_all(). 확인 절차·인증 없음. source_research_logs·chat_* 는 지우지 않는다.
+      operationId: reset_and_collect_api_schedule_reset_and_collect_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetAndCollectResponse'
+          x-agentlens-supplemented: true
+      x-agentlens-code: backend/app/api/schedule.py:69
+      x-agentlens-frontend: resetAndRecollect (make reset 도 curl 로 부른다)
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /api/stats:
+    get:
+      tags:
+      - Stats
+      summary: Get System Stats
+      operationId: get_system_stats_api_stats_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+      x-agentlens-code: backend/app/api/stats.py:11
+      x-agentlens-frontend: fetchStats
+      description: |-
+        [보충]
+        last_updated 는 데이터 갱신 시각이 아니라 응답 시각.
+      x-agentlens-diff:
+      - description 보충
+  /api/mcp/info:
+    get:
+      tags:
+      - MCP
+      summary: Get Mcp Info
+      operationId: get_mcp_info_api_mcp_info_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpInfoResponse'
+          x-agentlens-supplemented: true
+      x-agentlens-code: backend/app/api/mcp.py:6
+      x-agentlens-frontend: 없음
+      description: |-
+        [보충]
+        MCP 서버(stdio, python -m app.mcp.server) 소개와 Claude Desktop 설정 예시. MCP 프로토콜 자체는 HTTP 로 열지 않는다.
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /api/briefing/today:
+    get:
+      tags:
+      - Daily Briefing
+      summary: Get Today Briefing
+      operationId: get_today_briefing_api_briefing_today_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyBriefingResponse'
+        '500':
+          description: 명시 분기 없음 (전역 처리)
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalErrorResponse'
+      x-agentlens-code: backend/app/api/briefing.py:25, backend/app/services/briefing_service.py:106
+      x-agentlens-frontend: fetchDailyBriefing
+      description: |-
+        [보충]
+        카테고리 4개(harness, mcp_plugins_skills, agent_tech, ai_news)별 상위 기사 최대 3건. 저장·캐시 없이 부를 때마다 만든다. LLM 호출 없음. date 는 '%Y년 %m월 %d일'.
+      x-agentlens-diff:
+      - description 보충
+      - '오류 응답 추가: 500'
+  /api/briefing/generate:
+    post:
+      tags:
+      - Daily Briefing
+      summary: Regenerate Briefing
+      operationId: regenerate_briefing_api_briefing_generate_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyBriefingResponse'
+      x-agentlens-code: backend/app/api/briefing.py:40
+      x-agentlens-frontend: 없음
+      description: |-
+        [보충]
+        GET /api/briefing/today 와 같은 함수·같은 응답. 저장된 브리핑이 없어 '재생성' 의미가 없다.
+      x-agentlens-diff:
+      - description 보충
+  /api/briefing/export/notion:
+    post:
+      tags:
+      - Daily Briefing
+      summary: Export To Notion
+      operationId: export_to_notion_api_briefing_export_notion_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/NotionExportRequest'
+              - type: 'null'
+              title: Req
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotionExportResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: '키 없음, 부모 페이지 없음, Notion API 오류, 네트워크 오류 모두 {detail: <서비스 메시지>}'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/briefing.py:55, backend/app/services/notion_service.py:208
+      x-agentlens-frontend: exportBriefingToNotion
+      description: |-
+        [보충]
+        본문 생략 가능. api_key·page_id 가 null 이면 settings.NOTION_API_KEY·NOTION_PAGE_ID. page_id 는 URL·하이픈 섞인 ID 를 clean_id 로 정리. Notion API(https://api.notion.com/v1) POST /pages 로 페이지 생성.
+      x-agentlens-diff:
+      - description 보충
+      - '오류 응답 추가: 400'
+  /api/briefing/send/email:
+    post:
+      tags:
+      - Daily Briefing
+      summary: Send Briefing By Email
+      operationId: send_briefing_by_email_api_briefing_send_email_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/EmailSendRequest'
+              - type: 'null'
+              title: Req
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailSendResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: SMTP 호스트 미설정, 수신자 없음, 인증 실패, 연결 실패, 기타 발송 오류
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/briefing.py:75, backend/app/services/email_service.py:226
+      x-agentlens-frontend: sendBriefingByEmail
+      description: |-
+        [보충]
+        본문 생략 가능. SMTP 설정은 항상 settings(config.json). to_email null → settings.SMTP_TO (쉼표 등으로 여러 명, _parse_recipients). subject null → '[AgentLens] 오늘의 AI 브리핑 - <date>'. smtplib 은 asyncio.to_thread 로 돈다.
+      x-agentlens-diff:
+      - description 보충
+      - '오류 응답 추가: 400'
+  /api/briefing/test/notion:
+    post:
+      tags:
+      - Daily Briefing
+      summary: Test Notion Connection
+      operationId: test_notion_connection_api_briefing_test_notion_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestNotionRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessageResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: 토큰 없음, 인증 실패, 페이지 권한 오류, 네트워크 오류
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/briefing.py:95, backend/app/services/notion_service.py:33
+      x-agentlens-frontend: testNotionConnection
+      description: |-
+        [보충]
+        토큰 인증과 (주어지면) 페이지 접근 권한 확인. 성공 message: 'Notion 연동 성공! (연결된 통합: <bot>)'.
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 400'
+  /api/briefing/test/email:
+    post:
+      tags:
+      - Daily Briefing
+      summary: Test Email Connection
+      operationId: test_email_connection_api_briefing_test_email_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestEmailRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessageResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: 호스트 없음, 수신자 없음, 인증·연결 실패 등
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/briefing.py:102, backend/app/services/email_service.py:180
+      x-agentlens-frontend: testEmailConnection
+      description: |-
+        [보충]
+        요청자가 준 SMTP 호스트·포트로 접속·인증하고 테스트 메일을 실제로 보낸다. 값이 null 이면 settings 값. to_email 이 없고 SMTP_TO 도 없으면 smtp_user 가 이메일 형식일 때 그 주소.
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 400'
+  /api/briefing/settings:
+    get:
+      tags:
+      - Daily Briefing
+      summary: Get Briefing Settings
+      operationId: get_briefing_settings_api_briefing_settings_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BriefingSettingsResponse'
+          x-agentlens-supplemented: true
+      x-agentlens-code: backend/app/api/briefing.py:116
+      x-agentlens-frontend: fetchBriefingSettings
+      x-agentlens-diff:
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+    post:
+      tags:
+      - Daily Briefing
+      summary: Update Briefing Settings
+      operationId: update_briefing_settings_api_briefing_settings_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BriefingSettingsUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessageResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '500':
+          description: '{"detail": "설정 파일(config.json) 저장에 실패했습니다."}'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/briefing.py:161
+      x-agentlens-frontend: updateBriefingSettings
+      description: |-
+        [보충]
+        null 필드는 건드리지 않는다. notion_api_key·smtp_password 가 '***' 이면 무시. notion_auto_export 를 주면 notion.enabled = auto_export or api_key 있음, email_auto_send 를 주면 email.enabled = auto_send or smtp_host 있음. 웹훅 URL·SMTP 값 검증 없음. config.json 전체를 indent=2 로 다시 쓰고 settings.reload(). dict(settings.raw_json_config) 는 얕은 복사라 저장 전에 메모리 설정의 중첩 값이 먼저 바뀐다.
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 500'
+  /api/trends/radar:
+    get:
+      tags:
+      - trends
+      summary: Get Tech Radar
+      description: Returns aggregated tech radar data, categories, surging tags and velocities.
+      operationId: get_tech_radar_api_trends_radar_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechRadarResponse'
+          x-agentlens-supplemented: true
+      x-agentlens-code: backend/app/api/trends.py:6, backend/app/services/trend_service.py:40
+      x-agentlens-frontend: fetchTechRadar
+      x-agentlens-diff:
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /api/webhook/test:
+    post:
+      tags:
+      - Webhook Dispatcher
+      summary: Test Webhook
+      operationId: test_webhook_api_webhook_test_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookTestRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessageResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: '''유효한 HTTP/HTTPS 웹훅 URL을 입력해주세요.'' 또는 전송 실패 메시지'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/webhook.py:19, backend/app/services/webhook_service.py:17
+      x-agentlens-frontend: testWebhook
+      description: |-
+        [보충]
+        webhook_url 은 'http' 로 시작해야 한다(그 밖의 검증 없음). provider auto 면 URL 로 판별(slack.com → slack, discord.com/discordapp.com → discord, 그 밖 generic). 그 밖 값은 그대로 쓰고 slack/discord 가 아니면 generic 페이로드. 대상에 HTTP POST(타임아웃 8초). 200/204 가 아니면 실패이고 메시지에 응답 본문 앞 100자.
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 400'
+  /api/webhook/send-briefing:
+    post:
+      tags:
+      - Webhook Dispatcher
+      summary: Send Briefing To Webhook
+      operationId: send_briefing_to_webhook_api_webhook_send_briefing_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookBriefingRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessageResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: URL 형식, 전송 실패
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/webhook.py:28
+      x-agentlens-frontend: sendBriefingToWebhook
+      description: |-
+        [보충]
+        provider 는 받기만 하고 쓰지 않는다(항상 URL 로 판별). 페이로드 executive_summary = headline + markdown_report 앞 600자 + '...', top_highlights = [].
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 400'
+  /api/sources:
+    get:
+      tags:
+      - sources
+      summary: Get All Sources
+      description: |-
+        모든 등록된 수집 대상 소스 목록 및 요약 통계를 반환합니다.
+
+        ---
+        [보충]
+        파일을 못 읽으면 내장 기본 소스(_default_sources). 파일이 없으면 기본 경로의 상위 디렉터리를 mkdir.
+      operationId: get_all_sources_api_sources_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcesListResponse'
+          x-agentlens-supplemented: true
+      x-agentlens-code: backend/app/api/sources.py:22
+      x-agentlens-frontend: fetchSources
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /api/sources/rss:
+    post:
+      tags:
+      - sources
+      summary: Add Rss Source
+      description: |-
+        신규 RSS/Atom 피드를 sources.json에 등록합니다.
+
+        ---
+        [보충]
+        같은 URL(끝 / 무시)이 있으면 그 항목을 enabled=true, name·category_hint 덮어쓰기. 새 id 는 name 소문자에서 [^a-zA-Z0-9_] 를 _ 로 바꾼 값 (중복 방지 없음). URL 형식·category_hint·country 검증 없음. save_sources 실패(False)를 확인하지 않아 성공으로 응답한다.
+      operationId: add_rss_source_api_sources_rss_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddRssRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddRssResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: '{"detail": "Name and URL are required"} (빈 문자열)'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/sources.py:49, backend/app/services/sources_service.py:195
+      x-agentlens-frontend: addRssSource
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 400'
+  /api/sources/github:
+    post:
+      tags:
+      - sources
+      summary: Add Github Repo
+      description: |-
+        지속 모니터링할 GitHub 저장소를 sources.json에 등록합니다.
+
+        ---
+        [보충]
+        같은 repo(대소문자 무시)가 있으면 enabled=true, category 덮어쓰기. owner/repo 형식 검증 없음.
+      operationId: add_github_repo_api_sources_github_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddGitHubRepoRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddGitHubRepoResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: '{"detail": "Repository is required"}'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/sources.py:64, backend/app/services/sources_service.py:222
+      x-agentlens-frontend: 없음
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 400'
+  /api/sources/{source_type}/{item_id}/toggle:
+    patch:
+      tags:
+      - sources
+      summary: Toggle Source
+      description: |-
+        특정 소스 또는 전체 소스 유형의 수집 활성화/비활성화를 토글합니다.
+
+        ---
+        [보충]
+        source_type: rss(item_id 는 피드 id 또는 url), github_repo(item_id 는 repo), github·reddit·hackernews·arxiv·huggingface(유형 전체 토글, item_id 무시). 경로 선언은 {item_id:path} 라 item_id 에 '/' 가 들어간다 (owner/repo, URL id). OpenAPI 경로 문자열에는 :path 가 나타나지 않는다.
+      operationId: toggle_source_api_sources__source_type___item_id__toggle_patch
+      parameters:
+      - name: source_type
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Source Type
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Item Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusMessageResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: '{"detail": "Source not found or invalid type"}'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/sources.py:77, backend/app/services/sources_service.py:169
+      x-agentlens-frontend: toggleSource
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 404'
+  /api/sources/{source_type}/{item_id}:
+    delete:
+      tags:
+      - sources
+      summary: Delete Source
+      description: |-
+        등록된 소스를 sources.json에서 제거합니다.
+
+        ---
+        [보충]
+        rss(id 또는 url 일치 항목 모두), github_repo(repo 일치)만 지원. 경로 선언은 {item_id:path} 라 item_id 에 '/' 가 들어간다.
+      operationId: delete_source_api_sources__source_type___item_id__delete
+      parameters:
+      - name: source_type
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Source Type
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Item Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusMessageResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: '{"detail": "Source not found or failed to delete"} (그 밖의 유형 포함)'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/sources.py:85, backend/app/services/sources_service.py:245
+      x-agentlens-frontend: deleteSource
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 404'
+  /api/research/inspect-url:
+    post:
+      tags:
+      - research
+      summary: Inspect Url
+      description: |-
+        입력된 임의의 URL(블로그, 웹사이트, GitHub 레포)을 분석하여
+        RSS/Atom 피드를 자동 감지하고 최신 기사 및 신호 적합도 점수를 산출합니다.
+
+        ---
+        [보충]
+        http(s):// 가 없으면 https:// 를 붙인다. GitHub 저장소 URL 이면 releases.atom 먼저. XML 이면 피드로, HTML 이면 <link rel=alternate> 탐지. 점수는 동기 휴리스틱 evaluate_quality_and_signal (LLM 없음). 서버가 요청자 URL 로 GET(리다이렉트 따라감, 타임아웃 10초/8초).
+      operationId: inspect_url_api_research_inspect_url_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectUrlRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectUrlResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: '{"detail": "URL is required"} (빈 문자열)'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/research.py:24, backend/app/services/source_researcher.py:179
+      x-agentlens-frontend: inspectUrl
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 400'
+  /api/research/discover:
+    post:
+      tags:
+      - research
+      summary: Discover Sources
+      description: |-
+        키워드 또는 카테고리를 기반으로 AI 에이전트/하네스/MCP 생태계의
+        신규 고품질 소스 후보군을 자율 발굴하고 적합도 점수를 매겨 추천합니다.
+
+        ---
+        [보충]
+        코드 안 CURATED_ECOSYSTEM_CATALOG 에서 고른다(외부 탐색 없음). query 는 이름·설명·카테고리·태그 부분 일치(소문자), category 는 category_hint 일치. limit 상한 없음, 0 이면 8 (req.limit or 8).
+      operationId: discover_sources_api_research_discover_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoverRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-agentlens-code: backend/app/api/research.py:35, backend/app/services/source_researcher.py:331
+      x-agentlens-frontend: discoverSources (정의만 있고 호출처 없음)
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /api/research/register-candidate:
+    post:
+      tags:
+      - research
+      summary: Register Candidate
+      description: |-
+        리서치된 추천 후보 소스를 원클릭으로 sources.json에 정규화하여
+        스크래핑 파이프라인에 즉시 등록합니다.
+
+        ---
+        [보충]
+        sources_service.add_rss_source 재사용.
+      operationId: register_candidate_api_research_register_candidate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterCandidateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterCandidateResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: '{"detail": "name과 feed_url은 필수입니다."} (빈 문자열)'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPExceptionDetail'
+      x-agentlens-code: backend/app/api/research.py:48, backend/app/services/source_researcher.py:385
+      x-agentlens-frontend: registerCandidate (정의만 있고 호출처 없음)
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+      - '오류 응답 추가: 400'
+  /api/research/status:
+    get:
+      tags:
+      - research
+      summary: Get Deep Research Status
+      description: 백엔드 자율 딥 리서치 엔진의 현재 실행 상태와 통계를 반환합니다.
+      operationId: get_deep_research_status_api_research_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeepResearchStatusResponse'
+          x-agentlens-supplemented: true
+      x-agentlens-code: backend/app/api/research.py:62, backend/app/services/deep_researcher.py:147
+      x-agentlens-frontend: fetchDeepResearchStatus
+      x-agentlens-diff:
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /api/research/audit-logs:
+    get:
+      tags:
+      - research
+      summary: Get Research Audit Logs
+      description: |-
+        자율 딥 리서치가 수행한 소스 평가 결과, 판정(AUTO_ADOPTED/WATCHLIST/REJECTED), AI 판정 이유를 반환합니다.
+
+        ---
+        [보충]
+        source_research_logs 를 created_at 내림차순. limit 범위 제약 없음.
+      operationId: get_research_audit_logs_api_research_audit_logs_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 30
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResearchAuditLogsResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-agentlens-code: backend/app/api/research.py:67, backend/app/services/deep_researcher.py:156
+      x-agentlens-frontend: fetchResearchAuditLogs
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /api/research/run-deep:
+    post:
+      tags:
+      - research
+      summary: Trigger Deep Research
+      description: |-
+        백엔드 자율 딥 리서치 엔진을 즉시 기동합니다.
+        인용 도메인 마이닝, 피드 실증, LLM 4축 평가를 거쳐 고신호 소스를 sources.json에 자동 채택합니다.
+
+        ---
+        [보충]
+        max_candidates 는 본문이 아니라 쿼리(범위 제약 없음). asyncio.create_task 로 run_deep_research 를 띄운다(태스크 참조를 보관하지 않음). 후보는 최근 기사에서 뽑은 외부 도메인을 먼저, 시드 사이트를 뒤에 두고 앞에서 max_candidates 개만 평가한다. 피드 탐지 HTTP 요청, 휴리스틱 평가, AUTO_ADOPTED 면 sources.json 에 RSS 자동 추가, source_research_logs INSERT. is_running 은 finally 로 해제 (backend/app/services/deep_researcher.py:376-496).
+      operationId: trigger_deep_research_api_research_run_deep_post
+      parameters:
+      - name: max_candidates
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 6
+          title: Max Candidates
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunDeepResponse'
+          x-agentlens-supplemented: true
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      x-agentlens-code: backend/app/api/research.py:77
+      x-agentlens-frontend: triggerDeepResearch
+      x-agentlens-diff:
+      - description 보충
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /api/chat/sources/{source_id}:
+    get:
+      tags:
+      - Chat
+      summary: Get Chat Source
+      description: |-
+        Fetch handover article metadata for context chip and citation popover.
+
+        ---
+        [보충]
+        날짜는 isoformat 문자열. full_content·scraped_at 포함.
+      operationId: get_chat_source_api_chat_sources__source_id__get
+      parameters:
+      - name: source_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Source Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSourceDetailResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: 'ERR_HANDOVER_SOURCE_NOT_FOUND: 해당 id 의 뉴스 없음'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-agentlens-code: backend/app/api/chat.py:49, backend/app/services/chat_service.py:86
+      x-agentlens-frontend: 없음 (ChatWorkspace.tsx 가 직접 fetch)
+      x-agentlens-diff:
+      - description 보충
+      - '오류 응답 추가: 404'
+  /api/chat/search:
+    get:
+      tags:
+      - Chat
+      summary: Search Chat Corpus
+      description: |-
+        Corpus knowledge search preview using SQLite FTS5 + BM25 + Quality + Recency with Focus Filters.
+
+        ---
+        [보충]
+        SQLite FTS5(BM25)·품질·최신성 점수로 청크를 미리 보여준다. category·time_range·sort 는 ChatFocusFilter 리터럴이어야 하는데 쿼리 스키마는 자유 문자열이라, 리터럴 밖 값은 500 ERR_RETRIEVER_INDEX_ERROR 가 된다. 부수 효과: news_fts·트리거가 없으면 만들고 rebuild, 색인 행 수가 news_items 보다 적으면 rebuild 하고 커밋한다 (backend/app/services/retriever.py:62) — GET 이 스키마를 바꿀 수 있다.
+      operationId: search_chat_corpus_api_chat_search_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Search query string
+          title: Q
+        description: Search query string
+      - name: top_k
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 20
+          minimum: 1
+          default: 5
+          title: Top K
+      - name: min_quality
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 10.0
+          minimum: 1.0
+          default: 5.0
+          title: Min Quality
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: all
+          title: Category
+      - name: time_range
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: all
+          title: Time Range
+      - name: sort
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: hot
+          title: Sort
+      - name: high_signal_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: High Signal Only
+      - name: source
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSearchResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          description: 'ERR_SEARCH_QUERY_TOO_SHORT: q 가 없거나 공백 제거 후 2자 미만'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 'ERR_RETRIEVER_INDEX_ERROR: 그 밖의 모든 예외(필터 리터럴 오류 포함), details.error 에 예외 문자열'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-agentlens-code: backend/app/api/chat.py:66, backend/app/services/chat_service.py:127
+      x-agentlens-frontend: 없음
+      x-agentlens-diff:
+      - description 보충
+      - '오류 응답 추가: 400, 500'
+  /api/chat/query:
+    post:
+      tags:
+      - Chat
+      summary: Chat Query
+      description: |-
+        Synchronous single-shot chat question answering.
+
+        ---
+        [보충]
+        scoped 면 기사 본문(full_content, 없으면 스크래핑해 news_items 갱신)을 단일 출처로. global 이면 ReAct 계획(_plan_react_action, 도메인 신호가 있으면 haiku LLM 호출)으로 검색 여부를 정하고 FTS5 결과를 후보로 쓴다. 답변 뒤 global 은 [N] 인용·제목 토큰이 등장한 출처만 남긴다. 대화 세션에 저장하지 않는다 (/stream 과 다르다).
+      operationId: chat_query_api_chat_query_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatQueryResponse'
+        '400':
+          description: 'ERR_INVALID_PAYLOAD: 본문이 JSON 이 아님 / ERR_CHAT_PAYLOAD_EMPTY: question 이 문자열이 아니거나 비어 있음 / ERR_CHAT_PAYLOAD_TOO_LARGE: 2000자 초과 / ERR_INVALID_SCOPE_PARAM: scope 값 오류'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 'ERR_HANDOVER_SOURCE_NOT_FOUND: scoped 인데 source_id 가 없거나 기사가 없음'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 'ERR_CLAUDE_API_KEY_MISSING: Anthropic 키 없음·인증 실패'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: 'ERR_CLAUDE_QUOTA_EXCEEDED (분기는 있으나 generate_live_answer 가 Anthropic 429 를 LLMQuotaExceededException 으로 바꿔 실제로는 ERR_LLM_QUOTA_EXCEEDED 가 나갈 것으로 보임) / ERR_LLM_QUOTA_EXCEEDED: Anthropic/OpenAI
+            429'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '529':
+          description: 'ERR_CLAUDE_OVERLOADED: Anthropic 503/529'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 'ERR_LLM_PROVIDER_UNAVAILABLE: 쓸 수 있는 LLM 없음 (원인은 서버 로그 WARNING 에만)'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: 'ERR_LLM_UPSTREAM_FAILED: 모든 프로바이더 호출 실패'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 'ERR_SERVER_INTERNAL: 그 밖의 예외. model_tier·filters·top_k·history 검증 실패도 여기 (400 아님). details.error 에 예외 문자열'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-agentlens-code: backend/app/api/chat.py:125, backend/app/services/chat_service.py:478
+      x-agentlens-frontend: 없음
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatQueryRequest'
+        x-agentlens-supplemented: true
+      x-agentlens-diff:
+      - description 보충
+      - requestBody 추가 (ChatQueryRequest, 라우터가 request.json() 으로 직접 읽어 자동 생성에 없음)
+      - '오류 응답 추가: 400, 401, 404, 429, 500, 502, 503, 529'
+  /api/chat/stream:
+    post:
+      tags:
+      - Chat
+      summary: Chat Stream
+      description: |
+        Server-Sent Events (SSE) streaming chat endpoint (sources -> token -> done).
+
+        ---
+        [보충]
+        프레임: `event: <종류>\ndata: <JSON>\n\n` (backend/app/services/chat_service.py:576).
+        응답 헤더: Content-Type `text/event-stream; charset=utf-8`, `Cache-Control: no-cache, no-transform`, `Connection: keep-alive`, `X-Accel-Buffering: no`.
+
+        | 이벤트 | data | 설명 |
+        |---|---|---|
+        | status | step, label, progress, timestamp, (query) | step 은 extracting_source(30), synthesizing(85/80/75), thinking(25), tool_calling(50, query 포함) 넷뿐 |
+        | sources | sources: ChatSourceItem[], applied_filters, is_relaxed, primary_count, supplementary_count | supplementary_count 는 항상 0, type 은 모두 primary |
+        | token | token | 답변 조각 |
+        | done | done: true, session_id, model, model_tier, sources_count, primary_count, supplementary_count, latency_ms, usage | 종료 신호. usage 는 llm_processor.last_usage 그대로 |
+        | error | error_code: ERR_LLM_STREAM_FAILED, message, status_code: 502, step: synthesizing, retryable: true | 토큰 생성 단계 예외 (Anthropic 스트림 error 이벤트·stop_reason max_tokens 포함). 뒤에 done 없이 끝나고 턴을 저장하지 않는다 |
+
+        순서
+        - scoped: status(extracting_source,30) → status(synthesizing,85) → sources(단일 출처, full_content 포함, applied_filters null) → token* → done
+        - global, 검색함: status(thinking,25) → status(tool_calling,50) → status(synthesizing,80) → token* → sources(답변에 인용된 출처만, 토큰 뒤) → done
+        - global, 검색 안 함: status(thinking,25) → status(synthesizing,75) → token* → done (sources 없음)
+        - 계획·검색·스크래핑 단계 예외는 error 이벤트 없이 스트림이 끊긴다.
+        - done 을 보내기 직전에 persist_turn 으로 질문·답변 두 메시지를 chat_messages 에 저장한다 (user_message_id·assistant_message_id 가 있으면 그 id, 이미 있는 id 는 건너뜀, 실패는 로그만). done 이 마지막 이벤트다 (backend/app/services/chat_service.py:804-825).
+      operationId: chat_stream_api_chat_stream_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: 'event: <status|sources|token|done|error>\ndata: <JSON>\n\n 의 연속'
+              x-agentlens-event-schemas:
+                status:
+                  $ref: '#/components/schemas/ChatStatusPayload'
+                sources:
+                  $ref: '#/components/schemas/ChatSourcesPayload'
+                token:
+                  type: object
+                  properties:
+                    token:
+                      type: string
+                  x-agentlens-supplemented: true
+                  required:
+                  - token
+                done:
+                  $ref: '#/components/schemas/DonePayload'
+                error:
+                  $ref: '#/components/schemas/StreamErrorPayload'
+          x-agentlens-supplemented: true
+        '400':
+          description: 'ERR_INVALID_PAYLOAD: 본문이 JSON 이 아님·객체가 아님·model_tier 밖의 필드 검증 실패(filters, top_k, history, user_message_id·assistant_message_id 1~36자·서로 다름), details null / ERR_CHAT_PAYLOAD_EMPTY
+            / ERR_CHAT_PAYLOAD_TOO_LARGE / ERR_INVALID_SCOPE_PARAM / ERR_INVALID_MODEL_TIER: model_tier 가 haiku·sonnet·opus 가 아님 (backend/app/api/chat.py:333-345). 모든 400 은 스트림을 열기 전, scoped 기사 확인·LLM 가용성
+            확인보다 먼저'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 'ERR_HANDOVER_SOURCE_NOT_FOUND: scoped 인데 source_id 없음·기사 없음 (스트림 열기 전)'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 'ERR_LLM_PROVIDER_UNAVAILABLE: check_provider_available() 실패 (스트림 열기 전)'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: ERR_CLAUDE_API_KEY_MISSING (분기만 있음, check_provider_available 은 LLMProviderUnavailableException 만 던진다)
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: ERR_CLAUDE_QUOTA_EXCEEDED / ERR_LLM_QUOTA_EXCEEDED (분기만 있음)
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '529':
+          description: ERR_CLAUDE_OVERLOADED (분기만 있음)
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: ERR_LLM_UPSTREAM_FAILED (분기만 있음)
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: ValidationError 밖의 처리하지 않은 예외만 전역 처리 (요청 모델 검증 실패는 400)
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalErrorResponse'
+      x-agentlens-code: backend/app/api/chat.py:277, backend/app/services/chat_service.py:576
+      x-agentlens-frontend: 없음 (ChatWorkspace.tsx 가 상대 경로로 직접 fetch → Next rewrite 경유)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatStreamRequest'
+        x-agentlens-supplemented: true
+      x-agentlens-diff:
+      - description 보충
+      - 200 content 를 text/event-stream 으로 교체하고 이벤트별 data 스키마 추가
+      - requestBody 추가 (ChatStreamRequest, 라우터가 request.json() 으로 직접 읽어 자동 생성에 없음)
+      - '오류 응답 추가: 400, 401, 404, 429, 500, 502, 503, 529'
+  /api/chat/sessions:
+    get:
+      tags:
+      - Chat
+      summary: List Chat Sessions
+      description: |-
+        Retrieve chat sessions ordered by updated_at DESC.
+
+        ---
+        [보충]
+        updated_at 내림차순. 배열만 주고 전체 개수는 주지 않는다. last_message_preview 는 마지막 메시지 앞 100자.
+      operationId: list_chat_sessions_api_chat_sessions_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 30
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatSessionSummary'
+                title: Response List Chat Sessions Api Chat Sessions Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '500':
+          description: 'ERR_SERVER_INTERNAL: 예외 메시지를 message 에 붙인다'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-agentlens-code: backend/app/api/chat.py:444, backend/app/services/chat_session_service.py:58
+      x-agentlens-frontend: 없음 (useChatSessions.ts 가 직접 fetch)
+      x-agentlens-diff:
+      - description 보충
+      - '오류 응답 추가: 500'
+    post:
+      tags:
+      - Chat
+      summary: Create Or Upsert Chat Session
+      description: |-
+        Create a new chat session or upsert existing session by UUID.
+
+        ---
+        [보충]
+        id 가 있으면 업서트(갱신이어도 201). id 는 uuid.UUID() 로 파싱 가능해야 한다. messages 중 DB 에 이미 있는 id(다른 세션 것 포함)와 같은 요청 안 중복 id 는 건너뛰고 나머지만 INSERT 하며 model_tier·usage 는 저장하지 않는다 (backend/app/services/chat_session_service.py:327-338). 응답은 populate_existing 으로 다시 읽은 갱신 뒤 상태. 세션이 30개를 넘으면 updated_at 이 가장 오래된 세션부터 삭제(FIFO).
+      operationId: create_or_upsert_chat_session_api_chat_sessions_post
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionDetail'
+        '400':
+          description: 'ERR_SESSION_INVALID_UUID: 본문 JSON 오류·모델 검증 실패·UUID 형식 오류 모두'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 'ERR_SESSION_CREATE_FAILED: 그 밖의 예외(예외 메시지를 message 에 붙인다)'
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-agentlens-code: backend/app/api/chat.py:465, backend/app/services/chat_session_service.py:213
+      x-agentlens-frontend: 없음 (useChatSessions.ts:234 가 직접 fetch, ChatWorkspace.tsx saveTurn 에서 턴마다 한 번)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatSessionCreateRequest'
+        x-agentlens-supplemented: true
+      x-agentlens-diff:
+      - description 보충
+      - requestBody 추가 (ChatSessionCreateRequest, 라우터가 request.json() 으로 직접 읽어 자동 생성에 없음)
+      - '오류 응답 추가: 400, 500'
+  /api/chat/sessions/{session_id}:
+    get:
+      tags:
+      - Chat
+      summary: Get Chat Session Detail
+      description: |-
+        Retrieve chat session details and message history for multi-turn restoration.
+
+        ---
+        [보충]
+        메시지는 created_at 오름차순. sources_json·usage_json·active_filters_json 은 파싱하고 실패하면 null. session_id 형식 검증 없음.
+      operationId: get_chat_session_detail_api_chat_sessions__session_id__get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: ERR_SESSION_NOT_FOUND
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: ERR_SERVER_INTERNAL
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-agentlens-code: backend/app/api/chat.py:518, backend/app/services/chat_session_service.py:100
+      x-agentlens-frontend: 없음 (useChatSessions.ts 가 직접 fetch)
+      x-agentlens-diff:
+      - description 보충
+      - '오류 응답 추가: 404, 500'
+    delete:
+      tags:
+      - Chat
+      summary: Delete Chat Session
+      description: |-
+        Delete a chat session and cascade delete all associated messages.
+
+        ---
+        [보충]
+        ORM cascade='all, delete-orphan' 로 하위 메시지까지 삭제. 성공 message 고정: '대화 세션 및 하위 메시지가 원자적으로 영구 삭제되었습니다.', deleted_count 1.
+      operationId: delete_chat_session_api_chat_sessions__session_id__delete
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccessResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+        '404':
+          description: ERR_SESSION_NOT_FOUND
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: ERR_SESSION_DELETE_FAILED
+          x-agentlens-supplemented: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-agentlens-code: backend/app/api/chat.py:547, backend/app/services/chat_session_service.py:282
+      x-agentlens-frontend: 없음 (useChatSessions.ts 가 직접 fetch)
+      x-agentlens-diff:
+      - description 보충
+      - '오류 응답 추가: 404, 500'
+  /:
+    get:
+      summary: Root
+      operationId: root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RootResponse'
+          x-agentlens-supplemented: true
+      x-agentlens-code: backend/app/main.py:71
+      x-agentlens-frontend: 없음
+      tags:
+      - System
+      x-agentlens-diff:
+      - tags 추가 (자동 생성에는 태그 없음)
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+  /health:
+    get:
+      summary: Health
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+          x-agentlens-supplemented: true
+      x-agentlens-code: backend/app/main.py:75
+      x-agentlens-frontend: 없음 (docker-compose healthcheck 가 curl -f 로 부른다)
+      tags:
+      - System
+      x-agentlens-diff:
+      - tags 추가 (자동 생성에는 태그 없음)
+      - 성공 응답 스키마 보충 (자동 생성은 빈 스키마 {})
+components:
+  schemas:
+    AddGitHubRepoRequest:
+      properties:
+        repo:
+          type: string
+          title: Repo
+          description: 'GitHub 레포지토리 (예: owner/repo)'
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+          description: 기본 카테고리
+          default: agent_tech
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: 레포 설명
+          default: ''
+        stars_hint:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Stars Hint
+          description: 스타 수 힌트
+          default: 0
+      type: object
+      required:
+      - repo
+      title: AddGitHubRepoRequest
+    AddRssRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: 소스 표시명
+        url:
+          type: string
+          title: Url
+          description: RSS/Atom 피드 URL
+        site_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Site Url
+          description: 웹사이트 URL
+          default: ''
+        category_hint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category Hint
+          description: 기본 카테고리 (harness, mcp_plugins_skills, agent_tech, ai_news)
+          default: ai_news
+        country:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Country
+          description: 국가 (KR, GLOBAL)
+          default: GLOBAL
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: 소스 설명
+          default: ''
+      type: object
+      required:
+      - name
+      - url
+      title: AddRssRequest
+    AskQuestionRequest:
+      properties:
+        question:
+          type: string
+          title: Question
+      type: object
+      required:
+      - question
+      title: AskQuestionRequest
+    AskQuestionResponse:
+      properties:
+        news_id:
+          type: integer
+          title: News Id
+        question:
+          type: string
+          title: Question
+        answer:
+          type: string
+          title: Answer
+        model_used:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Used
+      type: object
+      required:
+      - news_id
+      - question
+      - answer
+      title: AskQuestionResponse
+    BriefingCategoryItem:
+      properties:
+        id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Id
+        title:
+          type: string
+          title: Title
+        url:
+          type: string
+          title: Url
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+          default: ''
+        why_it_matters:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Why It Matters
+          default: ''
+        summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary
+          default: ''
+        tags:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tags
+          default: []
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+          default: ''
+        category_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category Name
+          default: ''
+        hotness_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Hotness Score
+          default: 0.0
+      type: object
+      required:
+      - title
+      - url
+      title: BriefingCategoryItem
+    BriefingCategorySection:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        icon:
+          type: string
+          title: Icon
+        summary:
+          type: string
+          title: Summary
+        items:
+          items:
+            $ref: '#/components/schemas/BriefingCategoryItem'
+          type: array
+          title: Items
+          default: []
+      type: object
+      required:
+      - id
+      - name
+      - icon
+      - summary
+      title: BriefingCategorySection
+    BriefingSettingsUpdate:
+      properties:
+        notion_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Notion Api Key
+        notion_page_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Notion Page Id
+        notion_auto_export:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Notion Auto Export
+        smtp_host:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Smtp Host
+        smtp_port:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Smtp Port
+        smtp_user:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Smtp User
+        smtp_password:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Smtp Password
+        smtp_from:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Smtp From
+        smtp_to:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Smtp To
+        smtp_use_tls:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Smtp Use Tls
+        email_auto_send:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Email Auto Send
+        slack_webhook_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Slack Webhook Url
+        discord_webhook_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Discord Webhook Url
+      type: object
+      title: BriefingSettingsUpdate
+    ChatFocusFilter:
+      properties:
+        category:
+          type: string
+          enum:
+          - all
+          - harness
+          - mcp_plugins_skills
+          - agent_tech
+          - ai_news
+          title: Category
+          default: all
+        time_range:
+          type: string
+          enum:
+          - all
+          - 24h
+          - 7d
+          - 30d
+          title: Time Range
+          default: all
+        sort:
+          type: string
+          enum:
+          - hot
+          - latest
+          - quality
+          title: Sort
+          default: hot
+        high_signal_only:
+          type: boolean
+          title: High Signal Only
+          default: false
+      type: object
+      title: ChatFocusFilter
+    ChatMessageItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        session_id:
+          type: string
+          title: Session Id
+        role:
+          type: string
+          enum:
+          - user
+          - assistant
+          - system
+          title: Role
+        content:
+          type: string
+          title: Content
+        created_at:
+          type: string
+          title: Created At
+        sources:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ChatSourceItem'
+            type: array
+          - type: 'null'
+          title: Sources
+        status:
+          type: string
+          enum:
+          - pending
+          - streaming
+          - completed
+          - error
+          - aborted
+          title: Status
+          default: completed
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        model_tier:
+          anyOf:
+          - type: string
+            enum:
+            - haiku
+            - sonnet
+            - opus
+          - type: 'null'
+          title: Model Tier
+        latency_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Latency Ms
+        usage:
+          anyOf:
+          - $ref: '#/components/schemas/TokenUsageMeta'
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - session_id
+      - role
+      - content
+      - created_at
+      title: ChatMessageItem
+    ChatQueryResponse:
+      properties:
+        answer:
+          type: string
+          title: Answer
+        sources:
+          items:
+            $ref: '#/components/schemas/ChatSourceItem'
+          type: array
+          title: Sources
+        session_id:
+          type: string
+          title: Session Id
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+          description: 기본값은 default_factory get_default_chat_model() = settings.ANTHROPIC_DEFAULT_CHAT_MODEL (없으면 claude-sonnet-5-5). 값 검증 없음. 'gemini' 포함이면 Gemini, 'gpt'/'openai' 포함이면 OpenAI 로 보낸다.
+        model_tier:
+          anyOf:
+          - type: string
+            enum:
+            - haiku
+            - sonnet
+            - opus
+          - type: 'null'
+          title: Model Tier
+          default: sonnet
+        scope:
+          type: string
+          enum:
+          - scoped
+          - global
+          title: Scope
+        applied_filters:
+          anyOf:
+          - $ref: '#/components/schemas/ChatFocusFilter'
+          - type: 'null'
+        is_relaxed:
+          type: boolean
+          title: Is Relaxed
+          default: false
+        primary_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Primary Count
+        supplementary_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Supplementary Count
+        latency_ms:
+          type: integer
+          title: Latency Ms
+        usage:
+          anyOf:
+          - $ref: '#/components/schemas/TokenUsageMeta'
+          - type: 'null'
+      type: object
+      required:
+      - answer
+      - sources
+      - session_id
+      - scope
+      - latency_ms
+      title: ChatQueryResponse
+    ChatSearchChunk:
+      properties:
+        index:
+          type: integer
+          title: Index
+        id:
+          type: integer
+          title: Id
+        title:
+          type: string
+          title: Title
+        url:
+          type: string
+          title: Url
+        source:
+          type: string
+          title: Source
+        category:
+          type: string
+          title: Category
+        snippet:
+          type: string
+          title: Snippet
+        quality_score:
+          type: number
+          title: Quality Score
+        published_at:
+          type: string
+          title: Published At
+        bm25_score:
+          type: number
+          title: Bm25 Score
+        rag_score:
+          type: number
+          title: Rag Score
+      type: object
+      required:
+      - index
+      - id
+      - title
+      - url
+      - source
+      - category
+      - snippet
+      - quality_score
+      - published_at
+      - bm25_score
+      - rag_score
+      title: ChatSearchChunk
+    ChatSearchResponse:
+      properties:
+        query:
+          type: string
+          title: Query
+        total_matches:
+          type: integer
+          title: Total Matches
+        chunks:
+          items:
+            $ref: '#/components/schemas/ChatSearchChunk'
+          type: array
+          title: Chunks
+        latency_ms:
+          type: integer
+          title: Latency Ms
+      type: object
+      required:
+      - query
+      - total_matches
+      - chunks
+      - latency_ms
+      title: ChatSearchResponse
+    ChatSessionDetail:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        scope_mode:
+          type: string
+          enum:
+          - scoped
+          - global
+          title: Scope Mode
+        active_source_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Active Source Id
+        active_source:
+          anyOf:
+          - $ref: '#/components/schemas/ChatSourceDetailResponse'
+          - type: 'null'
+        active_filters:
+          anyOf:
+          - $ref: '#/components/schemas/ChatFocusFilter'
+          - type: 'null'
+        messages:
+          items:
+            $ref: '#/components/schemas/ChatMessageItem'
+          type: array
+          title: Messages
+      type: object
+      required:
+      - id
+      - title
+      - created_at
+      - updated_at
+      - scope_mode
+      title: ChatSessionDetail
+    ChatSessionSummary:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+        scope_mode:
+          type: string
+          enum:
+          - scoped
+          - global
+          title: Scope Mode
+        active_source_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Active Source Id
+        message_count:
+          type: integer
+          title: Message Count
+          default: 0
+        last_message_preview:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Message Preview
+        active_filters:
+          anyOf:
+          - $ref: '#/components/schemas/ChatFocusFilter'
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - title
+      - created_at
+      - updated_at
+      - scope_mode
+      title: ChatSessionSummary
+    ChatSourceDetailResponse:
+      properties:
+        id:
+          type: integer
+          title: Id
+        title:
+          type: string
+          title: Title
+        url:
+          type: string
+          title: Url
+        source:
+          type: string
+          title: Source
+        category:
+          type: string
+          title: Category
+        author:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Author
+        summary:
+          type: string
+          title: Summary
+          default: ''
+        tldr_bullets:
+          items:
+            type: string
+          type: array
+          title: Tldr Bullets
+        why_it_matters:
+          type: string
+          title: Why It Matters
+          default: ''
+        tech_stack:
+          items:
+            type: string
+          type: array
+          title: Tech Stack
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+        quality_score:
+          type: number
+          title: Quality Score
+        is_high_signal:
+          type: boolean
+          title: Is High Signal
+          default: false
+        hotness_score:
+          type: number
+          title: Hotness Score
+          default: 0.0
+        published_at:
+          type: string
+          title: Published At
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        full_content:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Full Content
+        scraped_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Scraped At
+      type: object
+      required:
+      - id
+      - title
+      - url
+      - source
+      - category
+      - quality_score
+      - published_at
+      title: ChatSourceDetailResponse
+    ChatSourceItem:
+      properties:
+        index:
+          anyOf:
+          - type: integer
+          - type: string
+          title: Index
+        type:
+          type: string
+          enum:
+          - primary
+          - supplementary
+          title: Type
+          default: primary
+        id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Id
+        title:
+          type: string
+          title: Title
+        url:
+          type: string
+          title: Url
+        source:
+          type: string
+          title: Source
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        quality_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Quality Score
+        score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Score
+        snippet:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Snippet
+        full_content:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Full Content
+        domain:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Domain
+        relevance_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Relevance Score
+        published_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Published At
+        publisher:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Publisher
+      type: object
+      required:
+      - index
+      - title
+      - url
+      - source
+      title: ChatSourceItem
+    DailyBriefingResponse:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+          default: 오늘의 AI 브리핑
+        date:
+          type: string
+          title: Date
+        headline:
+          type: string
+          title: Headline
+        overview:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Overview
+          default: ''
+        categories:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/BriefingCategorySection'
+            type: array
+          - type: 'null'
+          title: Categories
+          default: []
+        action_items:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Action Items
+          default: []
+        markdown_report:
+          type: string
+          title: Markdown Report
+        featured_items_count:
+          type: integer
+          title: Featured Items Count
+        generated_at:
+          type: string
+          title: Generated At
+      type: object
+      required:
+      - date
+      - headline
+      - markdown_report
+      - featured_items_count
+      - generated_at
+      title: DailyBriefingResponse
+    DiscoverRequest:
+      properties:
+        query:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Query
+          description: '탐색 키워드 (예: harness, mcp, reasoning, deepseek, langgraph)'
+          default: ''
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+          description: 필터링할 카테고리 (harness, mcp_plugins_skills, agent_tech, ai_news)
+          default: ''
+        limit:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Limit
+          description: 반환할 최대 추천 소스 수
+          default: 8
+      type: object
+      title: DiscoverRequest
+    EmailSendRequest:
+      properties:
+        to_email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: To Email
+        subject:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Subject
+      type: object
+      title: EmailSendRequest
+    EmailSendResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - success
+      - message
+      title: EmailSendResponse
+    GenericSuccessResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+          default: success
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        deleted_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Deleted Count
+      type: object
+      title: GenericSuccessResponse
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    InspectUrlRequest:
+      properties:
+        url:
+          type: string
+          title: Url
+          description: 조사할 웹사이트 또는 GitHub 저장소 URL
+      type: object
+      required:
+      - url
+      title: InspectUrlRequest
+    NewsItemResponse:
+      properties:
+        title:
+          type: string
+          title: Title
+        url:
+          type: string
+          title: Url
+        source:
+          type: string
+          title: Source
+        category:
+          type: string
+          title: Category
+        summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary
+          default: ''
+        author:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Author
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+        tldr_bullets:
+          items:
+            type: string
+          type: array
+          title: Tldr Bullets
+        why_it_matters:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Why It Matters
+          default: ''
+        tech_stack:
+          items:
+            type: string
+          type: array
+          title: Tech Stack
+        quality_score:
+          type: number
+          title: Quality Score
+          default: 6.0
+        is_high_signal:
+          type: boolean
+          title: Is High Signal
+          default: false
+        raw_score:
+          type: integer
+          title: Raw Score
+          default: 0
+        comments_count:
+          type: integer
+          title: Comments Count
+          default: 0
+        hotness_score:
+          type: number
+          title: Hotness Score
+          default: 0.0
+        published_at:
+          type: string
+          format: date-time
+          title: Published At
+        id:
+          type: integer
+          title: Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        dedup_hash:
+          type: string
+          title: Dedup Hash
+      type: object
+      required:
+      - title
+      - url
+      - source
+      - category
+      - published_at
+      - id
+      - created_at
+      - dedup_hash
+      title: NewsItemResponse
+    NewsListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/NewsItemResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        page:
+          type: integer
+          title: Page
+        size:
+          type: integer
+          title: Size
+        total_pages:
+          type: integer
+          title: Total Pages
+      type: object
+      required:
+      - items
+      - total
+      - page
+      - size
+      - total_pages
+      title: NewsListResponse
+    NotionExportRequest:
+      properties:
+        api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Api Key
+        page_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Page Id
+      type: object
+      title: NotionExportRequest
+    NotionExportResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        message:
+          type: string
+          title: Message
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+      type: object
+      required:
+      - success
+      - message
+      title: NotionExportResponse
+    RegisterCandidateRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: 소스명
+        feed_url:
+          type: string
+          title: Feed Url
+          description: RSS/Atom 피드 URL
+        site_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Site Url
+          description: 웹사이트 홈 URL
+          default: ''
+        category_hint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category Hint
+          description: 기본 카테고리
+          default: ai_news
+        country:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Country
+          description: 국가 (KR / GLOBAL)
+          default: GLOBAL
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: 소스 설명
+          default: ''
+      type: object
+      required:
+      - name
+      - feed_url
+      title: RegisterCandidateRequest
+    ScheduleStatusResponse:
+      properties:
+        current_time:
+          type: string
+          title: Current Time
+        schedule_hours:
+          items:
+            type: integer
+          type: array
+          title: Schedule Hours
+        timezone:
+          type: string
+          title: Timezone
+        next_run:
+          type: string
+          title: Next Run
+        minutes_until_next_run:
+          type: number
+          title: Minutes Until Next Run
+        is_running:
+          type: boolean
+          title: Is Running
+        last_crawl_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Crawl Time
+        last_crawl_status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Crawl Status
+          default: idle
+        recent_logs:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Recent Logs
+      type: object
+      required:
+      - current_time
+      - schedule_hours
+      - timezone
+      - next_run
+      - minutes_until_next_run
+      - is_running
+      title: ScheduleStatusResponse
+    StatsResponse:
+      properties:
+        total_news:
+          type: integer
+          title: Total News
+        category_counts:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Category Counts
+        source_counts:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Source Counts
+        last_updated:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Updated
+      type: object
+      required:
+      - total_news
+      - category_counts
+      - source_counts
+      title: StatsResponse
+    TestEmailRequest:
+      properties:
+        smtp_host:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Smtp Host
+        smtp_port:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Smtp Port
+          default: 587
+        smtp_user:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Smtp User
+        smtp_password:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Smtp Password
+        use_tls:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Use Tls
+          default: true
+        to_email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: To Email
+      type: object
+      title: TestEmailRequest
+    TestNotionRequest:
+      properties:
+        api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Api Key
+        page_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Page Id
+      type: object
+      title: TestNotionRequest
+    TokenUsageMeta:
+      properties:
+        input_tokens:
+          type: integer
+          title: Input Tokens
+          default: 0
+        output_tokens:
+          type: integer
+          title: Output Tokens
+          default: 0
+        cache_read_input_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Cache Read Input Tokens
+        cache_creation_input_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Cache Creation Input Tokens
+      type: object
+      title: TokenUsageMeta
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    WebhookBriefingRequest:
+      properties:
+        webhook_url:
+          type: string
+          title: Webhook Url
+        provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+          default: auto
+      type: object
+      required:
+      - webhook_url
+      title: WebhookBriefingRequest
+    WebhookTestRequest:
+      properties:
+        webhook_url:
+          type: string
+          title: Webhook Url
+        provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+          default: auto
+      type: object
+      required:
+      - webhook_url
+      title: WebhookTestRequest
+    ChatMessageHistory:
+      properties:
+        role:
+          enum:
+          - user
+          - assistant
+          - system
+          title: Role
+          type: string
+        content:
+          title: Content
+          type: string
+      required:
+      - role
+      - content
+      title: ChatMessageHistory
+      type: object
+      x-agentlens-supplemented: true
+    ChatStreamRequest:
+      properties:
+        question:
+          maxLength: 2000
+          minLength: 1
+          title: Question
+          type: string
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+          description: 기본값은 default_factory get_default_chat_model() = settings.ANTHROPIC_DEFAULT_CHAT_MODEL (없으면 claude-sonnet-5-5). 값 검증 없음. 'gemini' 포함이면 Gemini, 'gpt'/'openai' 포함이면 OpenAI 로 보낸다.
+        model_tier:
+          anyOf:
+          - enum:
+            - haiku
+            - sonnet
+            - opus
+            type: string
+          - type: 'null'
+          default: null
+          title: Model Tier
+        scope:
+          default: global
+          enum:
+          - scoped
+          - global
+          title: Scope
+          type: string
+        source_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Source Id
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Session Id
+        history:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ChatMessageHistory'
+            type: array
+          - type: 'null'
+          default: null
+          title: History
+        top_k:
+          default: 5
+          maximum: 10
+          minimum: 1
+          title: Top K
+          type: integer
+        filters:
+          anyOf:
+          - $ref: '#/components/schemas/ChatFocusFilter'
+          - type: 'null'
+          default: null
+        user_message_id:
+          anyOf:
+          - maxLength: 36
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          title: User Message Id
+        assistant_message_id:
+          anyOf:
+          - maxLength: 36
+            minLength: 1
+            type: string
+          - type: 'null'
+          default: null
+          title: Assistant Message Id
+      required:
+      - question
+      title: ChatStreamRequest
+      type: object
+      x-agentlens-supplemented: true
+      description: 'POST /api/chat/stream 본문. 라우터가 request.json() 으로 직접 읽은 뒤 ChatStreamRequest(**body) 로 만든다 (backend/app/api/chat.py:281, :335). 그래서 자동 생성 스키마에 requestBody 가 없다. 검증 실패는 400: model_tier
+        오류면 ERR_INVALID_MODEL_TIER, 그 밖(본문이 객체 아님, filters·top_k·history, 메시지 id 길이·같은 값)은 ERR_INVALID_PAYLOAD (chat.py:292-345). user_message_id·assistant_message_id 는 프론트가 만든 이 턴의 메시지 id 로, 서버가 그 id 로
+        턴을 저장한다 (schemas/chat.py:38-46).'
+    ChatQueryRequest:
+      properties:
+        question:
+          maxLength: 2000
+          minLength: 1
+          title: Question
+          type: string
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+          description: 기본값은 default_factory get_default_chat_model() = settings.ANTHROPIC_DEFAULT_CHAT_MODEL (없으면 claude-sonnet-5-5). 값 검증 없음. 'gemini' 포함이면 Gemini, 'gpt'/'openai' 포함이면 OpenAI 로 보낸다.
+        model_tier:
+          anyOf:
+          - enum:
+            - haiku
+            - sonnet
+            - opus
+            type: string
+          - type: 'null'
+          default: null
+          title: Model Tier
+        scope:
+          default: global
+          enum:
+          - scoped
+          - global
+          title: Scope
+          type: string
+        source_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Source Id
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Session Id
+        history:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ChatMessageHistory'
+            type: array
+          - type: 'null'
+          default: null
+          title: History
+        top_k:
+          default: 5
+          maximum: 10
+          minimum: 1
+          title: Top K
+          type: integer
+        filters:
+          anyOf:
+          - $ref: '#/components/schemas/ChatFocusFilter'
+          - type: 'null'
+          default: null
+      required:
+      - question
+      title: ChatQueryRequest
+      type: object
+      x-agentlens-supplemented: true
+      description: POST /api/chat/query 본문. request.json() 으로 읽고 ChatQueryRequest(**body) 로 만든다 (backend/app/api/chat.py:129, :174). 검증 실패는 500 ERR_SERVER_INTERNAL 로 나간다.
+    ChatSessionCreateRequest:
+      properties:
+        id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Id
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: 새 대화
+          title: Title
+        scope_mode:
+          anyOf:
+          - enum:
+            - scoped
+            - global
+            type: string
+          - type: 'null'
+          default: global
+          title: Scope Mode
+        active_source_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Active Source Id
+        active_filters:
+          anyOf:
+          - $ref: '#/components/schemas/ChatFocusFilter'
+          - type: 'null'
+          default: null
+        messages:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ChatMessageItem'
+            type: array
+          - type: 'null'
+          default: null
+          title: Messages
+      title: ChatSessionCreateRequest
+      type: object
+      x-agentlens-supplemented: true
+      description: POST /api/chat/sessions 본문. request.json() 으로 읽고 ChatSessionCreateRequest(**body) 로 만든다 (backend/app/api/chat.py:472, :484). JSON 오류·필드 오류·UUID 오류 모두 400 ERR_SESSION_INVALID_UUID.
+    ErrorResponse:
+      properties:
+        error_code:
+          title: Error Code
+          type: string
+        message:
+          title: Message
+          type: string
+        details:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          default: null
+          title: Details
+      required:
+      - error_code
+      - message
+      title: ErrorResponse
+      type: object
+      x-agentlens-supplemented: true
+      description: chat 라우터의 오류 본문. 라우터는 이 모델을 import 하지만 같은 모양 dict 를 JSONResponse 로 직접 만든다.
+    ChatStatusPayload:
+      properties:
+        step:
+          enum:
+          - thinking
+          - tool_calling
+          - observing
+          - extracting_source
+          - evaluating_sufficiency
+          - agentic_searching
+          - synthesizing
+          title: Step
+          type: string
+        label:
+          title: Label
+          type: string
+        timestamp:
+          title: Timestamp
+          type: string
+        progress:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Progress
+        query:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Query
+        queries:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          default: null
+          title: Queries
+        sources_found:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Sources Found
+      required:
+      - step
+      - label
+      - timestamp
+      title: ChatStatusPayload
+      type: object
+      x-agentlens-supplemented: true
+      description: 'SSE event: status 의 data 모양 참고용. stream_chat 은 이 모델을 쓰지 않고 dict 를 직접 json.dumps 한다 (backend/app/services/chat_service.py:612). backend 가 보내는 step 은 extracting_source·synthesizing·thinking·tool_calling
+        넷뿐이다.'
+    ChatSourcesPayload:
+      properties:
+        sources:
+          items:
+            $ref: '#/components/schemas/ChatSourceItem'
+          title: Sources
+          type: array
+        applied_filters:
+          anyOf:
+          - {}
+          - type: 'null'
+          default: null
+          title: Applied Filters
+        is_relaxed:
+          default: false
+          title: Is Relaxed
+          type: boolean
+        primary_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Primary Count
+        supplementary_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Supplementary Count
+      required:
+      - sources
+      title: ChatSourcesPayload
+      type: object
+      x-agentlens-supplemented: true
+      description: 'SSE event: sources 의 data 모양 참고용. 스트림은 dict 로 만든다 (chat_service.py:661, :778). supplementary_count 는 항상 0.'
+    StreamErrorPayload:
+      properties:
+        error_code:
+          title: Error Code
+          type: string
+        message:
+          title: Message
+          type: string
+        status_code:
+          default: 502
+          title: Status Code
+          type: integer
+        step:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Step
+        retryable:
+          default: true
+          title: Retryable
+          type: boolean
+      required:
+      - error_code
+      - message
+      title: StreamErrorPayload
+      type: object
+      x-agentlens-supplemented: true
+      description: 'SSE event: error 의 data 모양 참고용. 스트림은 dict 로 만든다 (chat_service.py:761). error_code 는 항상 ERR_LLM_STREAM_FAILED.'
+    DonePayload:
+      properties:
+        done:
+          default: true
+          title: Done
+          type: boolean
+        session_id:
+          title: Session Id
+          type: string
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+          description: 기본값은 default_factory get_default_chat_model() = settings.ANTHROPIC_DEFAULT_CHAT_MODEL (없으면 claude-sonnet-5-5). 값 검증 없음. 'gemini' 포함이면 Gemini, 'gpt'/'openai' 포함이면 OpenAI 로 보낸다.
+        model_tier:
+          anyOf:
+          - enum:
+            - haiku
+            - sonnet
+            - opus
+            type: string
+          - type: 'null'
+          default: sonnet
+          title: Model Tier
+        sources_count:
+          title: Sources Count
+          type: integer
+        primary_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Primary Count
+        supplementary_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Supplementary Count
+        latency_ms:
+          title: Latency Ms
+          type: integer
+        usage:
+          anyOf:
+          - $ref: '#/components/schemas/TokenUsageMeta'
+          - type: 'null'
+          default: null
+      required:
+      - session_id
+      - sources_count
+      - latency_ms
+      title: DonePayload
+      type: object
+      x-agentlens-supplemented: true
+      description: 'SSE event: done 의 data 모양 참고용. 스트림은 dict 로 만든다 (chat_service.py:793). usage 는 llm_processor.last_usage 딕셔너리 그대로.'
+    ManualCollectResponse:
+      properties:
+        message:
+          title: Message
+          type: string
+        total_collected:
+          title: Total Collected
+          type: integer
+        total_saved:
+          title: Total Saved
+          type: integer
+        source_results:
+          additionalProperties: true
+          title: Source Results
+          type: object
+      required:
+      - message
+      - total_collected
+      - total_saved
+      - source_results
+      title: ManualCollectResponse
+      type: object
+      x-agentlens-supplemented: true
+      description: 정의만 있고 어느 엔드포인트도 response_model 로 쓰지 않는다 (backend/app/schemas/news.py:148).
+    HTTPExceptionDetail:
+      type: object
+      description: HTTPException 기본 본문. news, briefing, webhook, sources, research 라우터가 쓴다.
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+      x-agentlens-supplemented: true
+    GlobalErrorResponse:
+      type: object
+      description: 처리하지 않은 예외의 전역 처리 본문 (backend/app/main.py:58). 예외 문자열을 error 에 그대로 싣는다.
+      properties:
+        detail:
+          type: string
+          const: Internal server error occurred. Please check server logs.
+        error:
+          type: string
+      required:
+      - detail
+      - error
+      x-agentlens-supplemented: true
+    RootResponse:
+      type: object
+      properties:
+        service:
+          type: string
+          const: AgentLens API
+        version:
+          type: string
+        docs:
+          type: string
+          const: /docs
+      x-agentlens-supplemented: true
+      required:
+      - service
+      - version
+      - docs
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          const: healthy
+        version:
+          type: string
+        running:
+          type: boolean
+          description: collector_manager.is_running (메모리 플래그). DB 연결은 확인하지 않는다.
+      x-agentlens-supplemented: true
+      required:
+      - status
+      - version
+      - running
+    DeleteAllNewsResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          const: success
+        deleted_count:
+          type: integer
+      x-agentlens-supplemented: true
+      required:
+      - status
+      - deleted_count
+    CrawlProgressResponse:
+      type: object
+      properties:
+        is_running:
+          type: boolean
+        current_source:
+          type: string
+        step_message:
+          type: string
+        items_collected:
+          type: integer
+        items_saved:
+          type: integer
+        items_filtered:
+          type: integer
+        total_sources:
+          type: integer
+        completed_sources:
+          type: integer
+        last_crawl_time:
+          type:
+          - string
+          - 'null'
+      x-agentlens-supplemented: true
+      description: collector_manager.get_progress() 그대로 (backend/app/collectors/manager.py:59).
+    TriggerCollectResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - started
+          - already_running
+        message:
+          type: string
+        total_collected:
+          type: integer
+        total_saved:
+          type: integer
+        source_results:
+          type: object
+      x-agentlens-supplemented: true
+      required:
+      - status
+      - message
+      - total_collected
+      - total_saved
+      - source_results
+      description: 두 경우 모두 HTTP 200. already_running 이면 total_collected·total_saved 는 지금 진행 중인 수집의 메모리 카운터.
+    ResetAndCollectResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - started
+          - already_running
+        message:
+          type: string
+        deleted_count:
+          type: integer
+      x-agentlens-supplemented: true
+      required:
+      - status
+      - message
+      - deleted_count
+      description: already_running 이면 아무것도 지우지 않고 deleted_count 0.
+    McpInfoResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        tools:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+            x-agentlens-supplemented: true
+        claude_desktop_config:
+          type: object
+          description: '{mcpServers: {agentlens: {command: sys.executable 절대 경로, args: [''-m'',''app.mcp.server''], cwd: backend 절대 경로}}}'
+      x-agentlens-supplemented: true
+      description: 도구 목록은 하드코딩. 서버 절대 경로를 노출한다.
+    SuccessMessageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+      x-agentlens-supplemented: true
+      required:
+      - success
+      - message
+    BriefingSettingsResponse:
+      type: object
+      properties:
+        title:
+          type: string
+        auto_dispatch_hour:
+          type: integer
+        notion:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            has_api_key:
+              type: boolean
+            masked_api_key:
+              type: string
+              description: 9자 이상이면 앞4 + '...' + 뒤4, 아니면 '***', 키 없으면 ''
+            page_id:
+              type: string
+            auto_export:
+              type: boolean
+          x-agentlens-supplemented: true
+        email:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            smtp_host:
+              type: string
+            smtp_port:
+              type: integer
+            smtp_user:
+              type: string
+            has_password:
+              type: boolean
+            smtp_from:
+              type: string
+            smtp_to:
+              type: string
+            use_tls:
+              type: boolean
+            auto_send:
+              type: boolean
+          x-agentlens-supplemented: true
+        webhooks:
+          type: object
+          properties:
+            slack_webhook_url:
+              type: string
+              description: 마스킹 없음
+            discord_webhook_url:
+              type: string
+              description: 마스킹 없음
+            auto_dispatch_daily_briefing:
+              type: boolean
+            auto_alert_high_signal:
+              type: boolean
+          x-agentlens-supplemented: true
+      x-agentlens-supplemented: true
+      description: config.json 원시 값 (settings.raw_json_config). SMTP 비밀번호는 내보내지 않는다.
+    TechRadarTag:
+      type: object
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+        category:
+          type: string
+        recent_count:
+          type: integer
+        velocity:
+          type: string
+          description: recent_count>=3 이면 +{recent_count*20}%, 1~2 면 +25%, 0 이고 count>=8 이면 HOT, 아니면 STEADY
+        sample_news_id:
+          type:
+          - integer
+          - 'null'
+      x-agentlens-supplemented: true
+    TechRadarResponse:
+      type: object
+      properties:
+        updated_at:
+          type: string
+        total_analyzed:
+          type: integer
+        surging_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechRadarTag'
+          description: recent_count>0 또는 count>=5 인 태그 상위 6개
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              count:
+                type: integer
+              percentage:
+                type: number
+            x-agentlens-supplemented: true
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechRadarTag'
+          description: 최대 25개
+      x-agentlens-supplemented: true
+      description: 최근 500건의 tech_stack 집계 (backend/app/services/trend_service.py:40).
+    StatusMessageResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          const: success
+        message:
+          type: string
+      x-agentlens-supplemented: true
+      required:
+      - status
+      - message
+    RssFeed:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+        site_url:
+          type: string
+        category_hint:
+          type: string
+        country:
+          type: string
+          description: KR 또는 GLOBAL (검증 없음)
+        enabled:
+          type: boolean
+        description:
+          type: string
+        added_at:
+          type: string
+      x-agentlens-supplemented: true
+    MonitoredRepo:
+      type: object
+      properties:
+        repo:
+          type: string
+        category:
+          type: string
+        enabled:
+          type: boolean
+        description:
+          type: string
+        stars_hint:
+          type: integer
+        added_at:
+          type: string
+      x-agentlens-supplemented: true
+    SourcesListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          const: success
+        sources_file:
+          type: string
+          description: 서버의 sources.json 절대 경로
+        updated_at:
+          type:
+          - string
+          - 'null'
+        stats:
+          type: object
+          properties:
+            total_rss:
+              type: integer
+            active_rss:
+              type: integer
+            total_github_repos:
+              type: integer
+            active_github_repos:
+              type: integer
+            github_search_enabled:
+              type: boolean
+            reddit_enabled:
+              type: boolean
+            hackernews_enabled:
+              type: boolean
+            arxiv_enabled:
+              type: boolean
+            huggingface_enabled:
+              type: boolean
+          x-agentlens-supplemented: true
+        data:
+          type: object
+          description: sources.json 전체 (version, updated_at, rss_feeds[], github_sources, reddit_sources, hackernews_sources, arxiv_sources, huggingface_sources). 구조는 01_SYSTEM_DESIGN.md '설정 파일 구조'.
+      x-agentlens-supplemented: true
+    AddRssResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          const: success
+        message:
+          type: string
+        source:
+          $ref: '#/components/schemas/RssFeed'
+      x-agentlens-supplemented: true
+    AddGitHubRepoResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          const: success
+        message:
+          type: string
+        repo:
+          $ref: '#/components/schemas/MonitoredRepo'
+      x-agentlens-supplemented: true
+    InspectUrlResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - found
+          - error
+          - not_found
+          - empty
+          description: 결과와 상관없이 HTTP 200
+        message:
+          type: string
+        input_url:
+          type: string
+        name:
+          type: string
+        feed_url:
+          type: string
+        site_url:
+          type: string
+        description:
+          type: string
+        category_hint:
+          type: string
+        relevance_score:
+          type: number
+        is_high_signal:
+          type: boolean
+        recent_posts:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              link:
+                type: string
+              published:
+                type: string
+              snippet:
+                type: string
+            x-agentlens-supplemented: true
+          description: 최대 4건
+        already_registered:
+          type: boolean
+        why_recommended:
+          type: string
+        type:
+          type: string
+          description: GitHub 저장소면 'atom'
+        source_kind:
+          type: string
+          description: GitHub 저장소면 'github_releases'
+      x-agentlens-supplemented: true
+      required:
+      - status
+      description: 'status 별 필드: found → name·feed_url·site_url·description·category_hint·relevance_score·is_high_signal·recent_posts·already_registered·why_recommended; error → message·input_url 또는 feed_url;
+        not_found → message·input_url; empty → message·feed_url.'
+    DiscoverResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        category:
+          type: string
+        total_found:
+          type: integer
+        candidates:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              site_url:
+                type: string
+              feed_url:
+                type: string
+              category_hint:
+                type: string
+              country:
+                type: string
+              description:
+                type: string
+              relevance_score:
+                type: number
+              tags:
+                type: array
+                items:
+                  type: string
+              already_registered:
+                type: boolean
+              why_recommended:
+                type: string
+            x-agentlens-supplemented: true
+          description: 미등록 후보 먼저, 그다음 relevance_score 내림차순
+      x-agentlens-supplemented: true
+    RegisterCandidateResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          const: success
+        message:
+          type: string
+        source:
+          $ref: '#/components/schemas/RssFeed'
+      x-agentlens-supplemented: true
+    DeepResearchStatusResponse:
+      type: object
+      properties:
+        is_running:
+          type: boolean
+        last_run_time:
+          type:
+          - string
+          - 'null'
+        auto_adopted_count:
+          type: integer
+        last_run_summary:
+          type: object
+          description: '{evaluated_total, auto_adopted, completed_at, results[]} 또는 {}'
+        cadence:
+          type: string
+          const: Every 12 hours (03:00, 15:00 UTC) + On-demand
+      x-agentlens-supplemented: true
+    ResearchAuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        source_name:
+          type: string
+        site_url:
+          type: string
+        feed_url:
+          type: string
+        category:
+          type: string
+        relevance_score:
+          type: number
+        verdict:
+          type: string
+          enum:
+          - AUTO_ADOPTED
+          - WATCHLIST
+          - REJECTED
+          - ALREADY_MONITORED
+        verdict_reason:
+          type: string
+        analyzed_articles_count:
+          type: integer
+        created_at:
+          type:
+          - string
+          - 'null'
+      x-agentlens-supplemented: true
+    ResearchAuditLogsResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          const: success
+        total:
+          type: integer
+          description: 이번에 돌려준 개수
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResearchAuditLog'
+      x-agentlens-supplemented: true
+      description: 'DB 오류는 로그만 남기고 logs: [] 로 돌려준다.'
+    RunDeepResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - started
+          - already_running
+        message:
+          type: string
+        max_candidates:
+          type: integer
+      x-agentlens-supplemented: true
+      required:
+      - status
+      - message
+      description: already_running 이면 max_candidates 가 없다.
+    NewsAskStreamEvent:
+      description: 'POST /api/news/{news_id}/ask/stream 의 data JSON. event: 줄 없이 ''data: <JSON>\n\n'' 만 보낸다. 종류는 JSON 의 event 필드.'
+      oneOf:
+      - type: object
+        properties:
+          event:
+            type: string
+            const: meta
+          model:
+            type: string
+            description: 캐시 적중이면 '<model> (캐시됨)'
+        x-agentlens-supplemented: true
+        required:
+        - event
+        - model
+      - type: object
+        properties:
+          event:
+            type: string
+            const: token
+          text:
+            type: string
+        x-agentlens-supplemented: true
+        required:
+        - event
+        - text
+      - type: object
+        properties:
+          event:
+            type: string
+            const: done
+          total_text:
+            type: string
+        x-agentlens-supplemented: true
+        required:
+        - event
+        - total_text
+      x-agentlens-supplemented: true

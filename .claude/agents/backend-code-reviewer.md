@@ -15,7 +15,7 @@ color: red
 4. 5-Pillar 로 본다.
    - 아키텍처: Router → Service → Model 계층 침범, 설계서와의 차이
    - 클린코드·SOLID: 단일 책임, 중복, 이름
-   - 보안·무결성: SQL injection, Pydantic 검증 누락, 트랜잭션 롤백, 비밀값·환경변수 노출, 인증 없는 위험 엔드포인트
+   - 보안·무결성: SQL injection, Pydantic 검증 누락, 트랜잭션 롤백, 데이터 손상 (인증 없음·CORS·SSRF·비밀값 평문 저장·설정 조회 비밀값 노출·설정 재적용 누락은 검사 범위 밖, `CLAUDE.md` 최우선 규칙 6)
    - 성능: N+1, 인덱스, async 안의 동기 블로킹 호출
    - 테스트: 경계·오류 케이스, Red→Green 순서, 테스트를 약하게 만든 흔적
 5. `make check` 결과를 확인한다 (직접 돌려도 된다).

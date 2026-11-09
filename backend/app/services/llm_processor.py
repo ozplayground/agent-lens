@@ -914,6 +914,9 @@ class LLMProcessor:
                     stream_succeeded = True
             except Exception as e:
                 logger.warning(f"Anthropic streaming failed in stream_question_answer: {e}")
+                if full_text:
+                    # 이미 토큰을 보냈으면 다른 엔진 답을 이어 붙이지 않고, done·캐시 없이 끝낸다
+                    return
 
         # Note: Google Gemini streaming is permanently decommissioned per POL-LLM-005, REQ-LLM-002, and ADR-012.
 
@@ -944,6 +947,8 @@ class LLMProcessor:
                         stream_succeeded = True
                 except Exception as e:
                     logger.warning(f"OpenAI SDK stream failed: {e}")
+                    if full_text:
+                        return
 
         # 3. Fallback Heuristic Engine with smooth chunk streaming
         if not stream_succeeded or not full_text.strip():

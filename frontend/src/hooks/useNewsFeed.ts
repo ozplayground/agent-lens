@@ -5,6 +5,9 @@ import { CategoryType, NewsItem, StatsResponse, DailyBriefing } from '@/types/ne
 import { TechRadarData } from '@/types/trends';
 import { fetchNewsFeed, fetchStats, fetchDailyBriefing, fetchTechRadar } from '@/lib/api';
 
+/** 검색어 입력이 멈춘 뒤 목록을 요청하기까지 기다리는 시간 (ms). 측정값이 아니다. */
+export const SEARCH_DEBOUNCE_MS = 300;
+
 interface UseNewsFeedProps {
   bookmarkedItems: NewsItem[];
 }
@@ -12,18 +15,53 @@ interface UseNewsFeedProps {
 export function useNewsFeed({ bookmarkedItems }: UseNewsFeedProps) {
   const [category, setCategory] = useState<CategoryType>('all');
   const [source, setSource] = useState<string>('all');
-  const [search, setSearch] = useState<string>('');
+  // `search` 는 입력창 값(바로 바뀜), `appliedSearch` 는 목록 요청에 쓰는 값(입력이 멈춘 뒤 바뀜).
+  const [search, setSearchValue] = useState<string>('');
+  const [appliedSearch, setAppliedSearch] = useState<string>('');
   const [sort, setSort] = useState<string>('hot');
   const [highSignalOnly, setHighSignalOnly] = useState<boolean>(false);
   const [page, setPage] = useState<number>(1);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
+  // 검색어 반영: 요청 키와 1페이지 되돌리기를 같은 렌더에서 바꿔 요청을 한 번만 보낸다 (FE-09).
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSearch = useRef<string | null>(null);
+  const commitSearch = useCallback((value: string) => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = null;
+    pendingSearch.current = null;
+    setSearchValue(value);
+    setAppliedSearch(value);
+    setPage(1);
+  }, []);
+  /** 입력창용. 화면 값은 바로 바꾸고, 목록 요청은 입력이 SEARCH_DEBOUNCE_MS 동안 멈춘 뒤 1페이지부터 한다. 빈 값은 바로 반영한다. */
+  const setSearch = useCallback(
+    (value: string) => {
+      setSearchValue(value);
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      searchTimer.current = null;
+      if (!value) {
+        commitSearch(value);
+        return;
+      }
+      pendingSearch.current = value;
+      searchTimer.current = setTimeout(() => commitSearch(value), SEARCH_DEBOUNCE_MS);
+    },
+    [commitSearch]
+  );
+  useEffect(
+    () => () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    []
+  );
 
   // 목록 키(필터·정렬·검색어·페이지)와 다시 읽기 번호를 나눈다 (spec 14.5, R22).
   // - `loading` 은 지금 목록 키의 응답이 아직 없을 때만 true. 같은 키를 다시 읽는 동안에는 이전 목록을 그린다.
   // - 같은 키 다시 읽기 실패는 목록을 지우지 않고 `reloadError` 신호로, 키가 바뀐 요청의 실패는 `error` 로.
   // effect 안에서는 비동기 콜백에서만 setState 한다 (react-hooks/set-state-in-effect).
   const [newsReload, setNewsReload] = useState<number>(0);
-  const listKey = JSON.stringify([category, source, search, sort, highSignalOnly, page]);
+  const listKey = JSON.stringify([category, source, appliedSearch, sort, highSignalOnly, page]);
   const [feed, setFeed] = useState<{
     key: string;
     items: NewsItem[];
@@ -64,8 +102,7 @@ export function useNewsFeed({ bookmarkedItems }: UseNewsFeedProps) {
 
   const handleSelectTag = (tag: string) => {
     setSelectedTag(tag || null);
-    setSearch(tag);
-    setPage(1);
+    commitSearch(tag);
   };
 
   useEffect(() => {
@@ -74,7 +111,7 @@ export function useNewsFeed({ bookmarkedItems }: UseNewsFeedProps) {
     fetchNewsFeed({
       category,
       source,
-      search,
+      search: appliedSearch,
       sort,
       high_signal_only: highSignalOnly,
       page,
@@ -95,7 +132,7 @@ export function useNewsFeed({ bookmarkedItems }: UseNewsFeedProps) {
       cancelled = true;
     };
     // listKey 는 아래 필터 값을 담는다. newsReload 가 바뀌면 같은 키를 다시 읽는다.
-  }, [listKey, newsReload, category, source, search, sort, highSignalOnly, page]);
+  }, [listKey, newsReload, category, source, appliedSearch, sort, highSignalOnly, page]);
 
   // 북마크 보기는 저장된 목록에서 바로 파생한다 (요청 없음).
   const bookmarkView = useMemo(() => {
@@ -144,16 +181,17 @@ export function useNewsFeed({ bookmarkedItems }: UseNewsFeedProps) {
     [listKey]
   );
 
+  // Enter 등으로 다시 읽을 때 기다리던 검색어가 있으면 먼저 반영한다 (요청은 한 번).
   const loadNews = useCallback(() => {
+    if (pendingSearch.current !== null) commitSearch(pendingSearch.current);
     setNewsReload((n) => n + 1);
-  }, []);
+  }, [commitSearch]);
 
   const resetFilters = () => {
     setCategory('all');
     setSource('all');
-    setSearch('');
+    commitSearch('');
     setHighSignalOnly(false);
-    setPage(1);
   };
 
   return {

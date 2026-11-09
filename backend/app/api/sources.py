@@ -74,7 +74,7 @@ async def add_github_repo(req: AddGitHubRepoRequest):
     )
     return {"status": "success", "message": f"'{req.repo}' 등록 완료", "repo": created}
 
-@router.patch("/{source_type}/{item_id}/toggle")
+@router.patch("/{source_type}/{item_id:path}/toggle")
 async def toggle_source(source_type: str, item_id: str):
     """특정 소스 또는 전체 소스 유형의 수집 활성화/비활성화를 토글합니다."""
     res = sources_service.toggle_source(source_type, item_id)
@@ -82,7 +82,7 @@ async def toggle_source(source_type: str, item_id: str):
         raise HTTPException(status_code=404, detail="Source not found or invalid type")
     return {"status": "success", "message": f"소스 상태가 변경되었습니다 ({source_type} / {item_id})"}
 
-@router.delete("/{source_type}/{item_id}")
+@router.delete("/{source_type}/{item_id:path}")
 async def delete_source(source_type: str, item_id: str):
     """등록된 소스를 sources.json에서 제거합니다."""
     res = sources_service.delete_source(source_type, item_id)

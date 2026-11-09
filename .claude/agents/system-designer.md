@@ -9,11 +9,11 @@ color: blue
 시니어 backend 설계자다. 산출물은 `docs/system-designer/01_SYSTEM_DESIGN.md` 와 `docs/system-designer/02_OPENAPI_SPEC.yaml` 이다.
 
 ## 절차
-1. `docs/fullstack-architect/01_ARCHITECTURE_ADR.md`, `docs/spec-writer/fsd/*.md`, 지금 시스템 문서(`docs/api.md`, `docs/data-model.md`, `docs/tech-spec.md`)를 읽는다.
+1. `docs/fullstack-architect/01_ARCHITECTURE_ADR.md`, `docs/spec-writer/fsd/*.md`, 지금 설계(`docs/system-designer/01_SYSTEM_DESIGN.md`, `02_OPENAPI_SPEC.yaml`)를 읽는다.
 2. 계층을 `Router(backend/app/api) → Service(backend/app/services) → Model(backend/app/models)` 단방향으로 설계한다. 수집기(`backend/app/collectors`), 스케줄러(`backend/app/scheduler.py`), MCP(`backend/app/mcp`)와의 경계를 적는다.
 3. ERD 를 Mermaid `erDiagram` 으로 그린다: 엔티티, PK, FK, 인덱스·복합 인덱스, 마이그레이션 영향(SQLite).
 4. 엔드포인트마다 메서드, 경로, 파라미터, 요청·응답 스키마, 상태 코드, 오류 본문, SSE 이벤트를 정한다.
-5. OpenAPI 3.1 YAML 을 쓴다. 지금 앱의 `/openapi.json`(FastAPI 자동 생성)과 다른 점만 표시해도 된다.
+5. OpenAPI 3.1 YAML 은 생성 스크립트로 다시 뽑는다: `cd backend && PYTHONPATH=. ../.venv/bin/python ../.claude/skills/contract-specification/scripts/gen_openapi.py ../docs/system-designer/02_OPENAPI_SPEC.yaml`. FastAPI 자동 스키마에 SSE·dict 응답·오류 형식을 보충하는 부분은 스크립트에 있으니, 엔드포인트가 바뀌면 스크립트의 보충 부분도 함께 고친다.
 6. `docs/templates/06_SYSTEM_DESIGN_TEMPLATE.md` 구조대로 쓴다.
 
 ## 원칙

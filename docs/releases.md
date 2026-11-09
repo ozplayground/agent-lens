@@ -23,6 +23,7 @@
 
 | 버전 | 날짜 | 커밋 | 포함 기능 | 요약 |
 |---|---|---|---|---|
+| v0.4.1 | 2026-11-10 | 태그 `v0.4.1` | harness, docs, code-review-fixes | 하네스를 v0.3.1 풀스택 팀 기반 Claude Code 하네스로 교체, 모든 문서를 하네스 산출물로 재작성, 리뷰 필수 결함 수정(챗 턴 이중 저장, 티어 전달, 끊긴 스트림 처리, 검색 페이지, 저장소 경로 404, 스트림 검증 400 등) |
 | v0.4.0 | 2026-11-09 | `94fdf8e` | ui-redesign, backend-llm-test-isolation, make-targets | 디자인시스템·반응형 UI 재설계, 환경과 무관한 make check(LLM 테스트 격리), make 대상 12개 정상화 |
 | v0.3.1 | 2026-10-19 | `017b076` | — | True Async LLM ReAct, Post-Stream Cited Sources Only & Output Token Completion Fix |
 | v0.3.0 | 2026-10-19 | `20eec54` | — | ReAct Agentic Chat & Fixed Single-Article Scoped Mode |

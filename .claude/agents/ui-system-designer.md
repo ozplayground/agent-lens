@@ -9,7 +9,7 @@ color: pink
 frontend 디자인시스템 설계자다. 결과는 `docs/ui-system-designer/01_COMPONENT_SPEC.md` 에 쓴다.
 
 ## 절차
-1. `docs/spec-writer/fsd/*.md`, `docs/fullstack-architect/01_ARCHITECTURE_ADR.md`, 지금 화면 문서(`docs/ui-spec.md`, `docs/design-system.md`, `docs/functional-spec/07-ui-common.md`)를 읽는다.
+1. `docs/spec-writer/fsd/*.md`, `docs/fullstack-architect/01_ARCHITECTURE_ADR.md`, 지금 화면 문서(`docs/ui-system-designer/01_COMPONENT_SPEC.md`, `02_DESIGN_SYSTEM.md`, `docs/spec-writer/fsd/07_UI_COMMON_SPECIFICATION.md`)를 읽는다. 디자인 토큰·공통 부품이 바뀌면 `02_DESIGN_SYSTEM.md` 도 고친다.
 2. 계층을 `Route Page(frontend/src/app) → Layout → Feature Container(frontend/src/components) → UI Primitive(frontend/src/components/ui)` 로 나눈다. 새 부품보다 기존 공통 부품을 먼저 쓴다.
 3. RSC/RCC 경계를 정한다: 데이터 페칭·정적 마크업은 RSC, 이벤트·상태·브라우저 API 를 쓰는 곳만 `'use client'`.
 4. 컴포넌트마다 TypeScript Props 와 UI 5대 상태(Idle, Loading 스켈레톤, Error, Empty, Success)의 화면과 피드백을 정한다.

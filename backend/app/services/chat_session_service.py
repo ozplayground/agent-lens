@@ -103,6 +103,8 @@ class ChatSessionService:
             select(ChatSessionModel)
             .options(selectinload(ChatSessionModel.messages))
             .where(ChatSessionModel.id == session_id)
+            # 같은 요청 안에서 먼저 읽어 둔 messages 컬렉션 대신 DB 의 지금 상태를 읽는다
+            .execution_options(populate_existing=True)
         )
         result = await self.session.execute(stmt)
         s = result.scalar_one_or_none()
@@ -322,8 +324,18 @@ class ChatSessionService:
             self.session.add(s)
             await self.session.flush()
 
+        # 이미 저장된 메시지 id 는 건너뛴다 (같은 메시지를 다시 동기화해도 중복·PK 충돌이 없다)
+        incoming_ids = [m["id"] for m in messages if m.get("id")]
+        existing_ids: set[str] = set()
+        if incoming_ids:
+            existing_ids = set((await self.session.execute(
+                select(ChatMessageModel.id).where(ChatMessageModel.id.in_(incoming_ids))
+            )).scalars())
+
         created_models: List[ChatMessageModel] = []
         for m in messages:
+            if m.get("id") in existing_ids:
+                continue
             role = m.get("role", "user")
             content = m.get("content", "")
             # Auto-title on user question if title is default
@@ -361,6 +373,7 @@ class ChatSessionService:
             )
             self.session.add(msg)
             created_models.append(msg)
+            existing_ids.add(msg.id)
 
         s.updated_at = now
         await self.session.commit()
@@ -381,13 +394,19 @@ class ChatSessionService:
         scope_mode: str = "global",
         source_id: Optional[int] = None,
         filters: Optional[ChatFocusFilter] = None,
-    ) -> Tuple[ChatMessageModel, ChatMessageModel]:
-        """Atomically persist a complete conversation turn (user + assistant) and auto-title session."""
+        user_message_id: Optional[str] = None,
+        assistant_message_id: Optional[str] = None,
+    ) -> Tuple[Optional[ChatMessageModel], Optional[ChatMessageModel]]:
+        """Atomically persist a complete conversation turn (user + assistant) and auto-title session.
+
+        id 를 주면 그 id 로 저장한다 (없으면 uuid4). 이미 있는 id 의 메시지는 건너뛰고 그 자리에 None 을 돌려준다.
+        """
         created = await self.append_messages_batch(
             session_id=session_id,
             messages=[
-                {"role": "user", "content": user_content, "status": "completed"},
+                {"id": user_message_id, "role": "user", "content": user_content, "status": "completed"},
                 {
+                    "id": assistant_message_id,
                     "role": "assistant",
                     "content": assistant_content,
                     "sources": sources,
@@ -402,7 +421,8 @@ class ChatSessionService:
             source_id=source_id,
             filters=filters,
         )
-        return created[0], created[1]
+        by_role = {m.role: m for m in created}
+        return by_role.get("user"), by_role.get("assistant")
 
     async def append_message_and_update_session(
         self,

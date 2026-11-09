@@ -40,6 +40,7 @@ export interface ChatWorkspaceProps {
 }
 
 const SOURCE_NOT_FOUND_MESSAGE = '요청하신 기사를 찾을 수 없어 전체 소식 모드로 시작합니다.';
+const TRUNCATED_STREAM_MESSAGE = '응답이 중간에 끊겼습니다. 다시 시도해 주세요.';
 
 function generateUUID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -288,7 +289,34 @@ export default function ChatWorkspace({
         model_used: TIER_TO_MODEL[selectedTier],
       };
 
-      setMessages((prev) => [...prev, userMessage, initialAssistantMessage]);
+      // 이번 턴 앞의 대화. 갱신 함수는 받은 prev 를 기록만 한다 (두 번 실행돼도 같은 값).
+      // 재시도는 실패한 쌍을 지운 직후 부르므로 콜백이 잡은 `messages` 보다 prev 가 정확하다.
+      let earlierMessages = messages;
+      setMessages((prev) => {
+        earlierMessages = prev;
+        return [...prev, userMessage, initialAssistantMessage];
+      });
+
+      // 보조 메시지는 지역 변수로 누적하고 화면에는 그 값을 그대로 반영한다.
+      let assistantFinal = initialAssistantMessage;
+      const updateAssistant = (patch: Partial<ChatMessage>) => {
+        assistantFinal = { ...assistantFinal, ...patch };
+        const next = assistantFinal;
+        setMessages((prev) => prev.map((msg) => (msg.id === assistantMsgId ? next : msg)));
+      };
+
+      // 세션 저장은 턴마다 한 번, 상태 갱신 함수 밖에서 한다 (완료 또는 중단일 때만).
+      const saveTurn = () => {
+        void createOrUpdateSession({
+          sessionId,
+          scopeMode: targetScope,
+          activeSourceId: targetSourceId,
+          activeSourceTitle: targetTitle,
+          focusFilters,
+          messages: [...earlierMessages, userMessage, assistantFinal],
+        });
+      };
+
       setInputPrompt('');
       setIsStreaming(true);
       setStreamingMessageId(assistantMsgId);
@@ -319,6 +347,10 @@ export default function ChatWorkspace({
             filters: toChatFocusFilter(focusFilters),
             model: TIER_TO_MODEL[selectedTier],
             model_tier: selectedTier,
+            // 서버도 이 턴을 같은 id 로 저장해 saveTurn 과 겹쳐도 한 벌만 남는다 (계약 8.1, BUG-02R).
+            // 호출마다 새 id 라 재시도는 새 id 로 저장된다.
+            user_message_id: userMsgId,
+            assistant_message_id: assistantMsgId,
           }),
           signal: controller.signal,
         });
@@ -335,6 +367,7 @@ export default function ChatWorkspace({
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
+        let receivedDone = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -373,66 +406,28 @@ export default function ChatWorkspace({
               const data = JSON.parse(dataStr);
 
               if (eventType === 'status' && data.step) {
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMsgId
-                      ? {
-                          ...msg,
-                          current_status: data,
-                          step_history: [...(msg.step_history || []), data],
-                        }
-                      : msg
-                  )
-                );
+                updateAssistant({
+                  current_status: data,
+                  step_history: [...(assistantFinal.step_history || []), data],
+                });
               } else if (eventType === 'sources' && data.sources) {
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMsgId
-                      ? {
-                          ...msg,
-                          sources: data.sources,
-                          applied_filters: data.applied_filters,
-                          is_relaxed: data.is_relaxed ?? false,
-                          primary_count: data.primary_count,
-                          supplementary_count: data.supplementary_count,
-                        }
-                      : msg
-                  )
-                );
+                updateAssistant({
+                  sources: data.sources,
+                  applied_filters: data.applied_filters,
+                  is_relaxed: data.is_relaxed ?? false,
+                  primary_count: data.primary_count,
+                  supplementary_count: data.supplementary_count,
+                });
               } else if (eventType === 'token' && typeof data.token === 'string') {
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMsgId
-                      ? { ...msg, content: msg.content + data.token }
-                      : msg
-                  )
-                );
+                updateAssistant({ content: assistantFinal.content + data.token });
               } else if (eventType === 'done') {
-                setMessages((prev) => {
-                  const updated = prev.map((msg) =>
-                    msg.id === assistantMsgId
-                      ? {
-                          ...msg,
-                          status: 'completed' as const,
-                          model_used: data.model || TIER_TO_MODEL[selectedTier] || 'claude-sonnet-5-5',
-                          model_tier: data.model_tier || selectedTier,
-                          latency_ms: data.latency_ms,
-                          usage: data.usage,
-                        }
-                      : msg
-                  );
-
-                  // Commit completed turn to dual-layer session store
-                  createOrUpdateSession({
-                    sessionId,
-                    scopeMode: targetScope,
-                    activeSourceId: targetSourceId,
-                    activeSourceTitle: targetTitle,
-                    focusFilters,
-                    messages: updated,
-                  });
-
-                  return updated;
+                receivedDone = true;
+                updateAssistant({
+                  status: 'completed',
+                  model_used: data.model || TIER_TO_MODEL[selectedTier] || 'claude-sonnet-5-5',
+                  model_tier: data.model_tier || selectedTier,
+                  latency_ms: data.latency_ms,
+                  usage: data.usage,
                 });
               } else if (eventType === 'error') {
                 throw new Error(data.message || '스트리밍 에러가 발생했습니다.');
@@ -446,58 +441,25 @@ export default function ChatWorkspace({
           if (done) break;
         }
 
-        // Finalize completed status
-        setMessages((prev) => {
-          const final = prev.map((msg) =>
-            msg.id === assistantMsgId && msg.status === 'streaming'
-              ? {
-                  ...msg,
-                  status: 'completed' as const,
-                  model_tier: msg.model_tier || selectedTier,
-                  model_used: msg.model_used || TIER_TO_MODEL[selectedTier],
-                }
-              : msg
-          );
-          createOrUpdateSession({
-            sessionId,
-            scopeMode: targetScope,
-            activeSourceId: targetSourceId,
-            activeSourceTitle: targetTitle,
-            focusFilters,
-            messages: final,
-          });
-          return final;
-        });
+        // 사용자가 중단한 뒤 본문이 오류 없이 끝나도 중단이다 (FE-34).
+        const stoppedByUser = controller.signal.aborted;
+        // `done` 없이 끝난 스트림은 잘린 답이다. 완료로 표시·저장하지 않고 오류로 보인다.
+        if (!receivedDone && !stoppedByUser) {
+          throw new Error(TRUNCATED_STREAM_MESSAGE);
+        }
+        if (stoppedByUser) {
+          updateAssistant({ status: 'aborted' });
+        }
+
+        saveTurn();
       } catch (err: unknown) {
         if (err instanceof Error && err.name === 'AbortError') {
-          setMessages((prev) => {
-            const abortedList = prev.map((msg) =>
-              msg.id === assistantMsgId ? { ...msg, status: 'aborted' as const } : msg
-            );
-            createOrUpdateSession({
-              sessionId,
-              scopeMode: targetScope,
-              activeSourceId: targetSourceId,
-              activeSourceTitle: targetTitle,
-              focusFilters,
-              messages: abortedList,
-            });
-            return abortedList;
-          });
+          updateAssistant({ status: 'aborted' });
+          saveTurn();
         } else {
           const errMsg =
             err instanceof Error ? err.message : '네트워크 지연으로 응답이 중단되었습니다.';
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMsgId
-                ? {
-                    ...msg,
-                    status: 'error',
-                    errorMessage: errMsg,
-                  }
-                : msg
-            )
-          );
+          updateAssistant({ status: 'error', errorMessage: errMsg });
         }
       } finally {
         setIsStreaming(false);
@@ -505,7 +467,7 @@ export default function ChatWorkspace({
         abortControllerRef.current = null;
       }
     },
-    [isStreaming, scopeMode, activeSource, sessionId, focusFilters, messages, createOrUpdateSession]
+    [isStreaming, scopeMode, activeSource, sessionId, focusFilters, messages, selectedTier, createOrUpdateSession]
   );
 
   // Handle URL search params (sourceId, q, session_id)

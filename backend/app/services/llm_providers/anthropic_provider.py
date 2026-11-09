@@ -26,6 +26,11 @@ class AnthropicOverloadedException(Exception):
     pass
 
 
+class AnthropicStreamError(Exception):
+    """Raised when an Anthropic SSE stream sends an `error` event or ends truncated (stop_reason max_tokens)."""
+    pass
+
+
 def get_configured_model(tier: str) -> str:
     """Dynamically retrieves configured model identifier for a given tier or default from settings/config."""
     if tier == "haiku":
@@ -275,6 +280,7 @@ class AnthropicLLMProvider(BaseLLMProvider):
             "cache_read_input_tokens": None,
             "cache_creation_input_tokens": None,
         }
+        stop_reason: Optional[str] = None
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
@@ -313,10 +319,19 @@ class AnthropicLLMProvider(BaseLLMProvider):
                             u = event_data.get("usage", {})
                             if "output_tokens" in u:
                                 accumulated_usage["output_tokens"] = u["output_tokens"]
+                            stop_reason = event_data.get("delta", {}).get("stop_reason") or stop_reason
+                        elif event_type == "error":
+                            err = event_data.get("error", {})
+                            message = err.get("message", "Anthropic stream error")
+                            if err.get("type") == "overloaded_error":
+                                raise AnthropicOverloadedException(f"Anthropic 스트림 과부하: {message}")
+                            raise AnthropicStreamError(f"Anthropic 스트림 오류 ({err.get('type')}): {message}")
                     except json.JSONDecodeError:
                         continue
 
         self.last_usage = self._extract_usage(accumulated_usage)
+        if stop_reason == "max_tokens":
+            raise AnthropicStreamError("Anthropic 답이 max_tokens 에서 잘렸습니다 (stop_reason=max_tokens).")
 
     async def generate_structured_summary(
         self,

@@ -19,4 +19,4 @@
 - **데이터 생명주기**: 생성·조회·수정·삭제 흐름을 논리적으로 분명히 정한다.
 - **상태 동기화**: 클라이언트·서버 사이 비동기 이벤트 전달(이 제품은 SSE 스트리밍, 수집 진행 폴링)과 상태가 어긋날 때의 사용자 안내를 정한다.
 - **인수 기준**: 엔지니어가 TDD 테스트 케이스를 바로 쓸 수 있게 모호하지 않은 기준을 준다.
-- **지금 시스템 먼저 읽기**: `docs/product.md`, `docs/functional-spec/*.md`, `docs/ui-spec.md` 를 읽고 지금 동작과 다른 점만 새로 정한다.
+- **지금 시스템 먼저 읽기**: `docs/spec-writer/01_PRD.md`, `docs/spec-writer/fsd/*.md`, `docs/ui-system-designer/01_COMPONENT_SPEC.md` 를 읽고 지금 동작과 다른 점만 새로 정한다.

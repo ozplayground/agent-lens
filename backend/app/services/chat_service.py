@@ -801,12 +801,13 @@ class ChatService:
             "latency_ms": latency_ms,
             "usage": usage_dict,
         }, ensure_ascii=False)
-        yield f"event: done\ndata: {done_payload}\n\n"
-
-        # Auto-persist turn (user question + assistant response) to DB
+        # Auto-persist turn (user question + assistant response) to DB.
+        # done 을 보내기 전에 저장해 프론트의 세션 POST·상세 재조회와 경합하지 않게 한다
         try:
             await self.session_service.persist_turn(
                 session_id=session_id,
+                user_message_id=req.user_message_id,
+                assistant_message_id=req.assistant_message_id,
                 user_content=req.question,
                 assistant_content=full_answer,
                 sources=sources,
@@ -820,3 +821,5 @@ class ChatService:
             )
         except Exception as pe:
             logger.error(f"Failed to auto-persist turn to DB for session {session_id}: {pe}")
+
+        yield f"event: done\ndata: {done_payload}\n\n"

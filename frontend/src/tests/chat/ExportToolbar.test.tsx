@@ -1,16 +1,14 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import ExportToolbar from '@/components/chat/ExportToolbar';
 
 describe('ExportToolbar Component (Cycle 4 - TDD)', () => {
   const defaultProps = {
-    messageId: 'msg-123',
     markdownContent: '## 1. 핵심 아키텍처\n내용입니다.\n## 2. 코드 예시\n```ts\nconst a = 1;\n```',
     sourceTitle: 'AgentLens MCP Architecture',
     isStreaming: false,
     onCopySuccess: vi.fn(),
-    onNotionSuccess: vi.fn(),
   };
 
   beforeEach(() => {
@@ -22,12 +20,16 @@ describe('ExportToolbar Component (Cycle 4 - TDD)', () => {
     });
   });
 
-  it('renders copy markdown, download .md, and notion sync buttons', () => {
+  it('renders copy markdown and download .md buttons only (FE-22: no fake Notion sync)', () => {
     render(<ExportToolbar {...defaultProps} />);
 
-    expect(screen.getByRole('button', { name: /마크다운 복사/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /\.md 다운로드/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Notion/i })).toBeInTheDocument();
+    const toolbar = screen.getByRole('group', { name: '리포트 익스포트 툴바' });
+    expect(within(toolbar).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+      '마크다운 복사',
+      '.md 다운로드',
+    ]);
+    expect(screen.queryByRole('button', { name: /Notion/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Notion 연동/)).not.toBeInTheDocument();
   });
 
   it('copies markdown content to clipboard and shows feedback', async () => {
@@ -60,21 +62,8 @@ describe('ExportToolbar Component (Cycle 4 - TDD)', () => {
 
     const copyBtn = screen.getByRole('button', { name: /마크다운 복사/i });
     const downloadBtn = screen.getByRole('button', { name: /\.md 다운로드/i });
-    const notionBtn = screen.getByRole('button', { name: /Notion/i });
 
     expect(copyBtn).toBeDisabled();
     expect(downloadBtn).toBeDisabled();
-    expect(notionBtn).toBeDisabled();
-  });
-
-  it('handles Notion sync and triggers callback', async () => {
-    render(<ExportToolbar {...defaultProps} />);
-
-    const notionBtn = screen.getByRole('button', { name: /Notion/i });
-    fireEvent.click(notionBtn);
-
-    await waitFor(() => {
-      expect(defaultProps.onNotionSuccess).toHaveBeenCalled();
-    });
   });
 });

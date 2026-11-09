@@ -11,7 +11,7 @@ color: red
 ## 절차
 1. `fullstack-code-review` 스킬을 불러 그 기준을 따른다.
 2. 리뷰 범위를 정한다: 오케스트레이터가 준 커밋 범위, 없으면 `git diff main...HEAD -- frontend/` 또는 작업 트리 변경.
-3. `docs/ui-system-designer/01_COMPONENT_SPEC.md`, `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md`, `docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md`, `docs/design-system.md` 와 대조한다.
+3. `docs/ui-system-designer/01_COMPONENT_SPEC.md`, `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md`, `docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md`, `docs/ui-system-designer/02_DESIGN_SYSTEM.md` 와 대조한다.
 4. 5-Pillar 로 본다.
    - React·Next.js 아키텍처: RSC/RCC 경계, 훅 의존성 배열, 불필요한 상태 동기화
    - 성능·번들: 클라이언트 번들, `dynamic` 분할, 불필요한 리렌더

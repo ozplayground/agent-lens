@@ -2,6 +2,7 @@ import json
 from typing import Optional, List
 from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -288,6 +289,16 @@ async def chat_stream(request: Request, db: AsyncSession = Depends(get_db)):
             }
         )
 
+    if not isinstance(body, dict):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error_code": "ERR_INVALID_PAYLOAD",
+                "message": "요청 본문은 JSON 객체여야 합니다.",
+                "details": None
+            }
+        )
+
     question = body.get("question", "")
     if not isinstance(question, str) or not question.strip():
         return JSONResponse(
@@ -318,6 +329,18 @@ async def chat_stream(request: Request, db: AsyncSession = Depends(get_db)):
                 "message": "유효하지 않은 검색 스코프 모드입니다.",
                 "details": None
             }
+        )
+
+    try:
+        req = ChatStreamRequest(**body)
+    except ValidationError as e:
+        if any(err["loc"][:1] == ("model_tier",) for err in e.errors()):
+            code, message = "ERR_INVALID_MODEL_TIER", f"유효하지 않은 모델 티어입니다: {body.get('model_tier')}"
+        else:
+            code, message = "ERR_INVALID_PAYLOAD", "요청 필드 형식이 올바르지 않습니다."
+        return JSONResponse(
+            status_code=400,
+            content={"error_code": code, "message": message, "details": None}
         )
 
     source_id = body.get("source_id")
@@ -403,7 +426,6 @@ async def chat_stream(request: Request, db: AsyncSession = Depends(get_db)):
         )
 
     service = ChatService(db)
-    req = ChatStreamRequest(**body)
 
     return StreamingResponse(
         service.stream_chat(req),

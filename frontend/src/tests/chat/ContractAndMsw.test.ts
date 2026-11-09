@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  CHAT_MESSAGE_ID_MAX_LENGTH,
   ChatFocusFilterSchema,
   ChatStreamRequestSchema,
   ChatQueryRequestSchema,
@@ -660,6 +661,190 @@ describe('Stage 2d & Stage 2a Contract & Mock Integration Verification (v2.6)', 
         'LangGraph의 체크포인터 설정 예제를 보여줘'
       );
       expect(updatedDetail.messages[updatedDetail.messages.length - 1].role).toBe('assistant');
+    });
+  });
+
+  describe('Chat Stream Client Message Ids Contract (BUG-02R)', () => {
+    const sessionId = '7b6a48f2-2973-45f6-8c46-9562725b821a';
+    const streamAndDrain = async (body: Record<string, unknown>) => {
+      const res = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const reader = res.body?.getReader();
+      if (reader) {
+        while (true) {
+          const { done } = await reader.read();
+          if (done) break;
+        }
+      }
+      return res;
+    };
+
+    it('accepts ChatStreamRequest without user_message_id / assistant_message_id', () => {
+      const parsed = ChatStreamRequestSchema.parse({ question: 'MCP 서버 동향 알려줘' });
+      expect(parsed.user_message_id).toBeUndefined();
+      expect(parsed.assistant_message_id).toBeUndefined();
+
+      const withNulls = ChatStreamRequestSchema.parse({
+        question: 'MCP 서버 동향 알려줘',
+        user_message_id: null,
+        assistant_message_id: null,
+      });
+      expect(withNulls.user_message_id).toBeNull();
+      expect(withNulls.assistant_message_id).toBeNull();
+    });
+
+    it('accepts ChatStreamRequest with client ids (16 chars) and UUID ids (36 chars)', () => {
+      const clientIds = ChatStreamRequestSchema.parse({
+        question: 'MCP 서버 동향 알려줘',
+        session_id: sessionId,
+        user_message_id: 'msg-user-abc1234',
+        assistant_message_id: 'msg-asst-abc1234',
+      });
+      expect(clientIds.user_message_id).toBe('msg-user-abc1234');
+      expect(clientIds.assistant_message_id).toBe('msg-asst-abc1234');
+
+      const uuidIds = ChatStreamRequestSchema.parse({
+        question: 'MCP 서버 동향 알려줘',
+        user_message_id: '0b8f4c1e-9a7d-4e2b-8c3f-1d2e3f4a5b6c',
+        assistant_message_id: '1c9a5d2f-0b8e-4f3c-9d4a-2e3f4a5b6c7d',
+      });
+      expect(uuidIds.user_message_id).toHaveLength(36);
+      expect(uuidIds.assistant_message_id).toHaveLength(36);
+
+      // 한쪽만 보내도 된다
+      expect(
+        ChatStreamRequestSchema.safeParse({ question: 'q', user_message_id: 'msg-user-abc1234' }).success
+      ).toBe(true);
+    });
+
+    it('rejects message ids that are empty, longer than 36 chars, non-string, or equal to each other', () => {
+      expect(CHAT_MESSAGE_ID_MAX_LENGTH).toBe(36);
+      const base = { question: 'MCP 서버 동향 알려줘' };
+      expect(ChatStreamRequestSchema.safeParse({ ...base, user_message_id: '' }).success).toBe(false);
+      expect(
+        ChatStreamRequestSchema.safeParse({ ...base, assistant_message_id: 'x'.repeat(37) }).success
+      ).toBe(false);
+      expect(ChatStreamRequestSchema.safeParse({ ...base, user_message_id: 123 }).success).toBe(false);
+      expect(
+        ChatStreamRequestSchema.safeParse({
+          ...base,
+          user_message_id: 'msg-same-0000000',
+          assistant_message_id: 'msg-same-0000000',
+        }).success
+      ).toBe(false);
+    });
+
+    it('MSW stores the turn under the request message ids and skips them on repeat (no duplicate)', async () => {
+      const before = await (await fetch(`/api/chat/sessions/${sessionId}`)).json();
+      const body = {
+        question: 'LangGraph의 체크포인터 설정 예제를 보여줘',
+        scope: 'scoped',
+        source_id: 102,
+        session_id: sessionId,
+        user_message_id: 'msg-user-bug02r1',
+        assistant_message_id: 'msg-asst-bug02r1',
+      };
+      expect((await streamAndDrain(body)).status).toBe(200);
+
+      const after = await (await fetch(`/api/chat/sessions/${sessionId}`)).json();
+      expect(after.messages.length).toBe(before.messages.length + 2);
+      const ids = after.messages.map((m: { id: string }) => m.id);
+      expect(ids.slice(-2)).toEqual(['msg-user-bug02r1', 'msg-asst-bug02r1']);
+      expect(ChatSessionDetailSchema.shape.messages.parse(after.messages.slice(-2))).toHaveLength(2);
+
+      // 같은 id 로 다시 저장하면 건너뛴다 (backend append_messages_batch 와 같음)
+      expect((await streamAndDrain(body)).status).toBe(200);
+      const again = await (await fetch(`/api/chat/sessions/${sessionId}`)).json();
+      expect(again.messages.length).toBe(after.messages.length);
+    });
+
+    it('MSW has the turn stored by the time the done event is read (backend saves before done)', async () => {
+      const before = await (await fetch(`/api/chat/sessions/${sessionId}`)).json();
+      const res = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: 'LangGraph의 체크포인터 설정 예제를 보여줘',
+          scope: 'scoped',
+          source_id: 102,
+          session_id: sessionId,
+          user_message_id: 'msg-user-order01',
+          assistant_message_id: 'msg-asst-order01',
+        }),
+      });
+      expect(res.status).toBe(200);
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let text = '';
+      while (!text.includes('event: done')) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value, { stream: true });
+      }
+      expect(text).toContain('event: done');
+
+      // done 을 받은 시점에 이미 저장돼 있어야 한다
+      const atDone = await (await fetch(`/api/chat/sessions/${sessionId}`)).json();
+      expect(atDone.messages.length).toBe(before.messages.length + 2);
+      expect(atDone.messages.map((m: { id: string }) => m.id).slice(-2)).toEqual([
+        'msg-user-order01',
+        'msg-asst-order01',
+      ]);
+      await reader.cancel();
+    });
+
+    it('MSW does not store the turn when the stream ends with an error event', async () => {
+      const before = await (await fetch(`/api/chat/sessions/${sessionId}`)).json();
+      const res = await streamAndDrain({
+        question: '[TRIGGER_STREAM_ERROR] 중간 실패',
+        session_id: sessionId,
+        user_message_id: 'msg-user-error01',
+        assistant_message_id: 'msg-asst-error01',
+      });
+      expect(res.status).toBe(200);
+      const after = await (await fetch(`/api/chat/sessions/${sessionId}`)).json();
+      expect(after.messages.length).toBe(before.messages.length);
+    });
+
+    it('MSW stores the turn under generated UUIDs when message ids are omitted', async () => {
+      const before = await (await fetch(`/api/chat/sessions/${sessionId}`)).json();
+      const res = await streamAndDrain({
+        question: 'LangGraph의 체크포인터 설정 예제를 보여줘',
+        scope: 'scoped',
+        source_id: 102,
+        session_id: sessionId,
+      });
+      expect(res.status).toBe(200);
+      const after = await (await fetch(`/api/chat/sessions/${sessionId}`)).json();
+      expect(after.messages.length).toBe(before.messages.length + 2);
+      for (const m of after.messages.slice(-2)) {
+        expect(m.id).toMatch(/^[0-9a-f-]{36}$/);
+      }
+    });
+
+    it('MSW returns 400 ERR_INVALID_PAYLOAD for invalid message ids', async () => {
+      const tooLong = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: 'q', user_message_id: 'x'.repeat(37) }),
+      });
+      expect(tooLong.status).toBe(400);
+      expect((await tooLong.json()).error_code).toBe('ERR_INVALID_PAYLOAD');
+
+      const same = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: 'q',
+          user_message_id: 'msg-same-0000000',
+          assistant_message_id: 'msg-same-0000000',
+        }),
+      });
+      expect(same.status).toBe(400);
+      expect((await same.json()).error_code).toBe('ERR_INVALID_PAYLOAD');
     });
   });
 

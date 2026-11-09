@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any, Literal, Union
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from app.config import settings
 
 def get_default_chat_model() -> str:
@@ -35,6 +35,15 @@ class ChatStreamRequest(BaseModel):
     history: Optional[List[ChatMessageHistory]] = None
     top_k: int = Field(5, ge=1, le=10)
     filters: Optional[ChatFocusFilter] = None
+    # 프론트가 만든 이 턴의 메시지 id. 서버가 이 id 로 저장해 프론트 세션 POST 와 한 벌만 남긴다 (계약 8.1절)
+    user_message_id: Optional[str] = Field(default=None, min_length=1, max_length=36)
+    assistant_message_id: Optional[str] = Field(default=None, min_length=1, max_length=36)
+
+    @model_validator(mode="after")
+    def _message_ids_must_differ(self):
+        if self.user_message_id and self.assistant_message_id and self.user_message_id == self.assistant_message_id:
+            raise ValueError("user_message_id 와 assistant_message_id 는 서로 달라야 합니다.")
+        return self
 
 class ChatQueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)

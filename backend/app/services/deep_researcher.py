@@ -386,20 +386,20 @@ class AutonomousDeepResearcher:
             return {"status": "already_running", "message": "Deep Research is currently executing."}
 
         self.is_running = True
+        try:
+            return await self._run_cycle(max_candidates)
+        finally:
+            # 사이클 도중 예외가 나도 다음 실행이 already_running 으로 막히지 않게 한다
+            self.is_running = False
+
+    async def _run_cycle(self, max_candidates: int) -> Dict[str, Any]:
         started_at = datetime.now(timezone.utc)
         logger.info("[Deep Researcher] Starting autonomous research cycle...")
 
         candidates_pool = []
 
-        # 1. Add seeds
-        for s in SEED_EXPLORATION_TARGETS:
-            candidates_pool.append({
-                "name": s["name"],
-                "target_url": s["url"],
-                "category_hint": s.get("category_hint", "ai_news")
-            })
-
-        # 2. Mine referenced domains from recently crawled articles
+        # 1. Mine referenced domains from recently crawled articles.
+        #    발굴 후보를 시드보다 앞에 둬야 max_candidates 컷에서 평가된다 (시드 수가 컷보다 많다).
         mined_urls = await self.mine_reference_domains_from_articles()
         for u in mined_urls:
             candidates_pool.append({
@@ -408,7 +408,14 @@ class AutonomousDeepResearcher:
                 "category_hint": ""
             })
 
-        # Shuffle or prioritize candidates
+        # 2. Add seeds (남는 칸을 채운다)
+        for s in SEED_EXPLORATION_TARGETS:
+            candidates_pool.append({
+                "name": s["name"],
+                "target_url": s["url"],
+                "category_hint": s.get("category_hint", "ai_news")
+            })
+
         eval_queue = candidates_pool[:max_candidates]
         evaluated_results = []
         newly_adopted = 0
@@ -483,7 +490,6 @@ class AutonomousDeepResearcher:
             "completed_at": self.last_run_time.isoformat(),
             "results": evaluated_results
         }
-        self.is_running = False
 
         logger.info(f"[Deep Researcher] Completed: {len(evaluated_results)} evaluated, {newly_adopted} auto-adopted.")
         return self.last_run_summary

@@ -12,7 +12,7 @@ description: backend·frontend 변경을 5-Pillar(아키텍처, 클린코드, �
 ## 5-Pillar
 1. **아키텍처 정합성**: 계층 분리(backend Router → Service → Model, frontend RSC/RCC), 설계 산출물(`docs/system-designer/`, `docs/ui-system-designer/`)과의 일치.
 2. **클린코드·SOLID**: 단일 책임, 중복, 이름, 과한 추상화(KISS/YAGNI 위반).
-3. **보안·데이터 무결성**: SQL injection, 입력 검증(Pydantic·zod), 비밀값·환경변수 노출, 인증 없는 위험 엔드포인트, 트랜잭션 롤백.
+3. **보안·데이터 무결성**: SQL injection, 입력 검증(Pydantic·zod), 트랜잭션 롤백, 데이터 손상. 인증 없음·CORS 전체 허용·SSRF·비밀값 평문 저장·설정 조회 비밀값 노출·설정 재적용 누락은 검사 범위 밖이다 (`CLAUDE.md` 최우선 규칙 6).
 4. **성능·리소스**: N+1, async 안의 동기 블로킹, 불필요한 리렌더·번들 증가.
 5. **테스트 품질**: Red→Green 순서, 경계·오류 케이스, 테스트를 약하게 만든 흔적, UI 5대 상태.
 

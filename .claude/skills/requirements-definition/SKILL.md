@@ -6,7 +6,7 @@ description: 문제 정의, 페르소나, 사용자 여정, MoSCoW 우선순위,
 # 요구사항 정의 (PRD)
 
 1. **문제 정의**: 대상 사용자가 겪는 핵심 문제와 제품 비전. 사용자 요청 원문을 인용한다.
-2. **지금 상태 확인**: `docs/product.md`, `docs/functional-spec/*.md`, `docs/known-issues.md` 에서 관련 동작과 알려진 문제를 찾는다.
+2. **지금 상태 확인**: 지금 PRD(`docs/spec-writer/01_PRD.md`), FSD(`docs/spec-writer/fsd/*.md`), 알려진 결함(`docs/qa-engineer/02_QA_TEST_REPORT.md`)에서 관련 동작과 알려진 문제를 찾는다.
 3. **페르소나와 사용자 여정**: Mermaid `journey` 로 처음부터 끝까지 여정을 그린다.
 4. **MoSCoW 우선순위**
    - Must: 출시에 꼭 필요한 최소 기능

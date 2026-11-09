@@ -257,8 +257,45 @@ export default function ChatMessageItem({
             </InlineAlert>
           )}
 
-          {/* Content Body */}
-          {isError ? (
+          {/* Content Body: 오류여도 받은 부분 답은 그대로 보이고, 오류 문구는 그 아래에 둔다 (FE-33) */}
+          {(!isError || hasContent) && (
+            <div
+              className={cn('markdown-content w-full max-w-full min-w-0 space-y-2 text-fg', MARKDOWN_WRAP_CLASSES)}
+            >
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                {message.content}
+              </ReactMarkdown>
+
+              {message.status === 'streaming' && isStreaming && (
+                <span
+                  aria-hidden="true"
+                  className="ml-1 inline-block h-4 w-2 align-middle bg-accent motion-safe:animate-pulse"
+                />
+              )}
+
+              {!isError && Boolean(message.content) && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
+                  {resolvedTier ? (
+                    <ModelTierBadge
+                      tier={resolvedTier}
+                      variant="footer"
+                      latencyMs={message.latency_ms ?? undefined}
+                    />
+                  ) : (
+                    <span />
+                  )}
+                  <ExportToolbar
+                    markdownContent={message.content}
+                    sourceTitle={message.sources && message.sources[0]?.title}
+                    isStreaming={isStreaming && message.status === 'streaming'}
+                    onCopySuccess={() => onCopy?.(message.content)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {isError && (
             <div className="space-y-3 py-1">
               <div className="flex items-start gap-2 text-danger">
                 <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
@@ -276,42 +313,6 @@ export default function ChatMessageItem({
                 >
                   다시 시도
                 </Button>
-              )}
-            </div>
-          ) : (
-            <div
-              className={cn('markdown-content w-full max-w-full min-w-0 space-y-2 text-fg', MARKDOWN_WRAP_CLASSES)}
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                {message.content}
-              </ReactMarkdown>
-
-              {message.status === 'streaming' && isStreaming && (
-                <span
-                  aria-hidden="true"
-                  className="ml-1 inline-block h-4 w-2 align-middle bg-accent motion-safe:animate-pulse"
-                />
-              )}
-
-              {Boolean(message.content) && (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
-                  {resolvedTier ? (
-                    <ModelTierBadge
-                      tier={resolvedTier}
-                      variant="footer"
-                      latencyMs={message.latency_ms ?? undefined}
-                    />
-                  ) : (
-                    <span />
-                  )}
-                  <ExportToolbar
-                    messageId={message.id}
-                    markdownContent={message.content}
-                    sourceTitle={message.sources && message.sources[0]?.title}
-                    isStreaming={isStreaming && message.status === 'streaming'}
-                    onCopySuccess={() => onCopy?.(message.content)}
-                  />
-                </div>
               )}
             </div>
           )}

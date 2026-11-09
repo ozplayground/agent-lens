@@ -7,6 +7,7 @@ import {
   generateArticleScopedAnswerTokens,
 } from '../fixtures/chat';
 import {
+  CHAT_MESSAGE_ID_MAX_LENGTH,
   ChatStreamRequest,
   ChatQueryRequest,
   ChatQueryResponse,
@@ -296,6 +297,26 @@ export const chatHandlers = [
       );
     }
 
+    // 메시지 id (선택): 문자열 1~36자, 둘 다 있으면 서로 달라야 한다. backend 는 검증 실패를 400 ERR_INVALID_PAYLOAD 로 돌려준다.
+    const { user_message_id, assistant_message_id } = payload;
+    const isInvalidMessageId = (v: unknown) =>
+      v !== undefined &&
+      v !== null &&
+      (typeof v !== 'string' || v.length < 1 || v.length > CHAT_MESSAGE_ID_MAX_LENGTH);
+    if (
+      isInvalidMessageId(user_message_id) ||
+      isInvalidMessageId(assistant_message_id) ||
+      (user_message_id && assistant_message_id && user_message_id === assistant_message_id)
+    ) {
+      return HttpResponse.json<ErrorResponse>(
+        {
+          error_code: 'ERR_INVALID_PAYLOAD',
+          message: `user_message_id·assistant_message_id 는 1~${CHAT_MESSAGE_ID_MAX_LENGTH}자 문자열이고 서로 달라야 합니다.`,
+        },
+        { status: 400 }
+      );
+    }
+
     // 2) 테스트 트리거 키워드 에러 시뮬레이션
     if (question.includes('[TRIGGER_400]')) {
       return HttpResponse.json<ErrorResponse>(
@@ -564,25 +585,13 @@ export const chatHandlers = [
           controller.enqueue(encoder.encode(tokenEvent));
         }
 
-        // [Stage 4: event: done] 스트리밍 완료 및 통계 전송
-        await delay(40);
-        const doneEvent = `event: done\ndata: ${JSON.stringify({
-          done: true,
-          session_id: sessionId,
-          model: selectedModel,
-          model_tier: selectedTier,
-          sources_count: allSources.length,
-          primary_count: primarySources.length,
-          supplementary_count: supplementarySources.length,
-          latency_ms: latencyMs,
-          usage: tokenUsage,
-        })}\n\n`;
-        controller.enqueue(encoder.encode(doneEvent));
-
-        // [Stage 5: Dual-Layer SQLite 영속화 시뮬레이션]
+        // [Stage 4: Dual-Layer SQLite 영속화 시뮬레이션]
+        // backend 처럼 event: done 을 보내기 전에 저장한다 (chat_service.stream_chat, 계약 8.1절).
+        // backend persist_turn 과 같게: 요청의 메시지 id 가 있으면 그 id 로, 없으면 UUID 로 저장하고,
+        // 이미 저장된 id(어느 세션이든)는 건너뛴다 (append_messages_batch 의 중복 id 건너뛰기).
         try {
           const userMsgItem: ChatMessageItem = {
-            id: crypto.randomUUID(),
+            id: user_message_id || crypto.randomUUID(),
             session_id: sessionId,
             role: 'user',
             content: question,
@@ -595,7 +604,7 @@ export const chatHandlers = [
             usage: null,
           };
           const assistantMsgItem: ChatMessageItem = {
-            id: crypto.randomUUID(),
+            id: assistant_message_id || crypto.randomUUID(),
             session_id: sessionId,
             role: 'assistant',
             content: answerBodyTokens.join(''),
@@ -608,9 +617,13 @@ export const chatHandlers = [
             usage: tokenUsage,
           };
 
+          const storedIds = new Set(
+            mockSessionStore.flatMap((s) => s.messages.map((m) => String(m.id)))
+          );
+          const newItems = [userMsgItem, assistantMsgItem].filter((m) => !storedIds.has(m.id));
           const targetSession = mockSessionStore.find((s) => s.id === sessionId);
           if (targetSession) {
-            targetSession.messages.push(userMsgItem, assistantMsgItem);
+            targetSession.messages.push(...newItems);
             targetSession.updated_at = new Date().toISOString();
             if (targetSession.title === '새 대화' || !targetSession.title) {
               targetSession.title = generateAutoTitle(question);
@@ -631,12 +644,27 @@ export const chatHandlers = [
               active_filters: effectiveFilters || null,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
-              messages: [userMsgItem, assistantMsgItem],
+              messages: newItems,
             });
           }
         } catch {
           // 모의 스트림 내부 영속화 실패는 무시
         }
+
+        // [Stage 5: event: done] 스트리밍 완료 및 통계 전송
+        await delay(40);
+        const doneEvent = `event: done\ndata: ${JSON.stringify({
+          done: true,
+          session_id: sessionId,
+          model: selectedModel,
+          model_tier: selectedTier,
+          sources_count: allSources.length,
+          primary_count: primarySources.length,
+          supplementary_count: supplementarySources.length,
+          latency_ms: latencyMs,
+          usage: tokenUsage,
+        })}\n\n`;
+        controller.enqueue(encoder.encode(doneEvent));
 
         controller.close();
       },

@@ -125,7 +125,8 @@ describe('ChatMessageItem Component', () => {
 
     expect(screen.getByRole('button', { name: '마크다운 복사' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '.md 다운로드' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Notion 동기화' })).toBeInTheDocument();
+    // FE-22: 서버 호출 없이 성공을 보이던 Notion 동기화는 그리지 않는다
+    expect(screen.queryByRole('button', { name: 'Notion 동기화' })).not.toBeInTheDocument();
   });
 
   it('renders error state with retry button and calls onRetry', () => {

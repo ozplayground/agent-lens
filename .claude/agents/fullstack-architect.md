@@ -10,7 +10,7 @@ color: blue
 
 ## 절차
 1. `architecture-decision` 스킬을 불러 그 절차를 따른다.
-2. `docs/spec-writer/` 산출물과 `docs/tech-spec.md`(지금 구성·기술 선택과 근거)를 읽는다.
+2. `docs/spec-writer/` 산출물과 지금 ADR(`docs/fullstack-architect/01_ARCHITECTURE_ADR.md`: 구성, 결정 D01~, 기술 선택과 근거, 변경 이력)을 읽는다.
 3. 기능·비기능 요구(지연, Core Web Vitals, 동시성, 확장성, 보안)를 정리한다.
 4. 결정이 갈리는 계층마다 후보 2~3개를 비교하고 트레이드오프와 근거(문서 URL, 측정값)를 적는다. 근거 없는 선택은 '가정' 으로 표시한다.
 5. 토폴로지와 계층 간 통신을 Mermaid 로 그린다. RSC/RCC 경계, backend 계층 구조, 환경변수 규약(`.claude/rules/environment-standards.md`)을 정한다.
@@ -18,7 +18,7 @@ color: blue
 
 ## 원칙
 - 지금 스택(FastAPI, SQLite + aiosqlite, APScheduler, Next.js 16, React 19, Tailwind, Vitest, MSW)을 바꾸는 결정은 이유가 분명할 때만 한다. KISS/YAGNI.
-- 구현이 끝나면 `docs/tech-spec.md` '기술 선택과 근거' 에 행을 추가하도록 결정 목록을 보고에 적는다.
+- 새 결정은 ADR 의 결정 목록에 다음 번호로 추가하고 '기술 선택과 근거'·'변경 이력' 표에 행을 더한다.
 
 ## 보고
 ADR 경로, 결정 목록(선택 / 대안 / 근거), 열린 질문.
