@@ -295,7 +295,7 @@ LLM 이 하나도 없을 때:
 | 작업 | 지우는 것 | 안전장치 | 근거 |
 |---|---|---|---|
 | `POST /api/schedule/reset-and-collect` | `news_items` 전체, `crawl_logs` 전체. 이어서 백그라운드 재수집 | 수집 중이면 거부 | `api/schedule.py:69-99` |
-| `make reset` | 위 엔드포인트를 `AGENTLENS_API_URL`(기본 `http://localhost:8000`) 에 호출 | 위와 같음. backend 가 없거나 응답이 `started` 가 아니면 실패로 끝난다. 원본 backend(기본 주소, 포트 8000)를 겨누면 `RELEASE_APPROVAL` 이 있는 세션에서만 실행된다. 다른 포트의 로컬 backend 를 `AGENTLENS_API_URL` 로 명시하면 바로 실행된다 (원본 데이터 게이트) | `Makefile:57-73` |
+| `make reset` | 위 엔드포인트를 `AGENTLENS_API_URL`(기본 `http://localhost:8000`) 에 호출 | 위와 같음. backend 가 없거나 응답이 `started` 가 아니면 실패로 끝난다. 수집 데이터를 모두 지우므로 대상 URL 을 확인하고 실행한다 | `Makefile:57-73` |
 | `DELETE /api/news/all` | `news_items` 전체 | 없음 (수집 중 검사 없음) | `api/news.py:96-102` |
 | `DELETE /api/chat/sessions/{id}` | 세션과 메시지 | — | `chat_session_service.py:280-297` |
 | `DELETE /api/sources/{type}/{id}` | `sources.json` 항목 | — | `api/sources.py:85`, `sources_service.py:245-262` |

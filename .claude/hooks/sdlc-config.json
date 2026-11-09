@@ -16,9 +16,26 @@
     "*make*reset*",
     "*curl*reset-and-collect*"
   ],
-  "protected_ports": [
-    8000
-  ],
+  "user_override_keywords": {
+    "deploy_patterns": [
+      "태그",
+      "tag"
+    ],
+    "destructive_patterns": [
+      "reset",
+      "리셋",
+      "초기화",
+      "재수집",
+      "데이터 삭제",
+      "데이터를 삭제",
+      "데이터 지",
+      "데이터를 지",
+      "db 삭제",
+      "db를 삭제",
+      "db 지",
+      "db를 지"
+    ]
+  },
   "check_command": "make check",
   "high_risk": [],
   "bench_runtimes": [

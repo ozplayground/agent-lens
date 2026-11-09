@@ -57,27 +57,64 @@ def auto_approve_enabled(cfg):
     return bool(cfg.get("auto_approve"))
 
 
-URL_RE = re.compile(r"https?://(\[[^\]]+\]|[^/:\s\"']+)(?::(\d+))?", re.I)
-LOOPBACK = {"localhost", "127.0.0.1", "[::1]"}
+def current_user_prompt(data):
+    """이번 턴에 사용자가 직접 보낸 메시지(마지막 프롬프트와 그 뒤 작업 중에 보낸 메시지)를 합쳐 돌려준다.
 
-
-def targets_only_copies(cmd, cfg):
-    """파괴적 명령이 원본이 아닌 로컬 사본 backend 만 겨누는지 본다.
-
-    대상 URL 이 명령에 하나 이상 적혀 있고 (make 는 AGENTLENS_API_URL=..., curl 은 URL),
-    모두 루프백 주소이며 포트가 명시돼 있고 protected_ports(원본 backend 포트)가 아니면 True.
-    URL 이 없으면 기본 주소(원본)로 가므로 False.
+    hook 입력의 transcript_path(JSONL)를 읽는다. 도구 결과, 메타 항목, 슬래시 명령 출력, 시스템 알림은 뺀다.
     """
-    protected = {str(p) for p in cfg.get("protected_ports", [])}
-    urls = URL_RE.findall(cmd)
-    if not urls:
+    path = data.get("transcript_path")
+    if not path or not os.path.exists(path):
+        return ""
+    try:
+        with open(path, encoding="utf-8") as f:
+            rows = f.readlines()[-500:]
+    except OSError:
+        return ""
+    texts = []
+    for line in reversed(rows):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if d.get("type") == "attachment":
+            a = d.get("attachment") or {}
+            p = a.get("prompt") if a.get("type") == "queued_command" else None
+            if isinstance(p, str) and not p.lstrip().startswith("<"):
+                texts.append(p)
+            continue
+        if d.get("type") != "user" or d.get("isMeta"):
+            continue
+        c = (d.get("message") or {}).get("content")
+        if isinstance(c, list):
+            if any(isinstance(x, dict) and x.get("type") == "tool_result" for x in c):
+                continue
+            c = " ".join(x.get("text", "") for x in c if isinstance(x, dict) and x.get("type") == "text")
+        if not isinstance(c, str) or c.lstrip().startswith("<"):
+            continue
+        texts.append(c)
+        break  # 마지막 프롬프트까지만 (그 앞 턴의 지시는 보지 않는다)
+    return "\n".join(texts)
+
+
+def is_make_dry_run(seg):
+    """make 를 -n/--dry-run/--just-print 로 부르는 한 명령인지 토큰으로 본다. 치환·주석이 있으면 아니다."""
+    if re.search(r"\$\(|`|#", seg):
         return False
-    if re.search(r"\bmake\b[^;&|\n]*\breset\b", cmd) and "AGENTLENS_API_URL=" not in cmd:
+    try:
+        toks = shlex.split(seg)
+    except ValueError:
         return False
-    for host, port in urls:
-        if host.lower() not in LOOPBACK or not port or port in protected:
-            return False
-    return True
+    while toks and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", toks[0]):
+        toks = toks[1:]  # 앞의 환경 변수 대입
+    if not toks or os.path.basename(toks[0]) not in ("make", "gmake"):
+        return False
+    return any(t in ("-n", "--dry-run", "--just-print", "--recon") or re.match(r"^-[A-Za-z]*n[A-Za-z]*$", t) and not t.startswith("--")
+               for t in toks[1:])
+
+
+def mentions(prompt, keywords):
+    low = (prompt or "").lower()
+    return any(k.lower() in low for k in keywords)
 
 
 def repo_root(cwd):
@@ -268,16 +305,24 @@ def pre_tool(data, cfg):
             if not all(re.search(r"\sapprove\s+--auto\b", seg) for seg in approve_segs):
                 deny("자동 승인은 `sdlc_hook.py approve --auto <파일>` 로만 실행한다 (승인자가 '자동 승인 (Claude)' 로 남는다).")
         if not os.environ.get("RELEASE_APPROVAL"):
+            # 게이트는 Claude 가 스스로 판단해 하는 위험 동작을 막는다. 사용자가 이번 턴에 지시했으면 통과한다.
+            override = cfg.get("user_override_keywords", {})
+            prompt = None  # 필요할 때 한 번만 읽는다
             for pat in cfg.get("deploy_patterns", []):
                 if fnmatch.fnmatch(cmd.strip(), pat):
-                    deny(f"프로덕션 게이트: `{pat}` 는 릴리스 승인 후에만 실행한다. 릴리스 관리자가 RELEASE_APPROVAL 을 설정한 세션에서 실행해야 한다.")
-            for seg, pat in ((s.strip(), p) for s in re.split(r"\n|&&|\|\||;|\|", cmd)
+                    prompt = current_user_prompt(data) if prompt is None else prompt
+                    if not mentions(prompt, override.get("deploy_patterns", [])):
+                        deny(f"프로덕션 게이트: `{pat}` 는 Claude 가 스스로 판단해 실행하지 않는다. 사용자가 지시하면(이번 메시지에 "
+                             f"{override.get('deploy_patterns', [])} 중 하나) 통과한다. 또는 RELEASE_APPROVAL 세션.")
+            for seg, pat in ((s.strip(), p) for s in re.split(r"\n|&&|\|\||;|\||&", cmd)
                              for p in cfg.get("destructive_patterns", [])):
-                if re.search(r"\bmake\b[^\n]*\s-(n|-dry-run|-just-print)\b", seg):
+                if is_make_dry_run(seg):
                     continue  # make -n 은 레시피를 출력만 하고 실행하지 않는다
-                if fnmatch.fnmatch(seg, pat) and not targets_only_copies(seg, cfg):
-                    deny(f"원본 데이터 게이트: `{pat}` 가 원본 backend(기본 주소 또는 포트 {cfg.get('protected_ports')})를 지운다. "
-                         "사본 DB 로 띄운 다른 포트의 로컬 backend 를 AGENTLENS_API_URL 이나 curl URL 로 명시하면 실행된다. 원본은 RELEASE_APPROVAL 세션에서만 실행한다.")
+                if fnmatch.fnmatch(seg, pat):
+                    prompt = current_user_prompt(data) if prompt is None else prompt
+                    if not mentions(prompt, override.get("destructive_patterns", [])):
+                        deny(f"데이터 삭제 게이트: `{pat}` 는 수집 데이터를 지운다. Claude 가 스스로 판단해 실행하지 않는다. "
+                             f"사용자가 지시하면(이번 메시지에 {override.get('destructive_patterns', [])} 중 하나) 통과한다. 또는 RELEASE_APPROVAL 세션.")
         return
 
     path = ti.get("file_path") or ti.get("notebook_path")

@@ -28,10 +28,10 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 - 문서 경로는 모두 저장소 루트 기준이다. 하위 폴더에서 시작한 세션도 루트의 `docs/`, `tasks/` 에 쓴다.
 - Research 는 선택 스테이지다. 사용자가 지시하거나, 열린 질문이 외부 사실(시장, 경쟁 제품, 기술 성능)로만 답할 수 있을 때 실행한다. 출처 없는 주장과 측정하지 않은 숫자는 쓰지 않는다. 측정 코드는 `bench/<주제>/` 에 둔다 (런타임: python3 `.venv`, node pnpm). 더 깊은 조사는 `/deep-research <질문>` (사용자가 실행)
 - 산출물의 `Status:` 를 승인 상태로 바꾸는 것은 승인자만 한다: `! python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve <파일>`
-- 자동 승인: `.claude/hooks/sdlc-config.local.json` 에 `{"auto_approve": true}` (git 에 올리지 않음) 나 환경 변수 `SDLC_AUTO_APPROVE=1` 이 있으면 켜진다 (`SDLC_AUTO_APPROVE=0` 이 우선해서 끈다). 켜져 있으면 세션 시작 메시지에 표시되고, 스킬이 '승인 명령을 알린다' 고 한 자리에서 Claude 가 산출물을 템플릿·이전 산출물과 대조해 자체 검토한 뒤 `python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve --auto <파일>` 로 승인하고 다음 스테이지로 넘어간다. 승인자는 `자동 승인 (Claude)` 로 남는다. Status 를 직접 고치는 것은 자동 승인이 켜져 있어도 막힌다. 원격 태그 push 와 원본 데이터 삭제 명령의 `RELEASE_APPROVAL` 게이트는 자동 승인과 상관없이 그대로다.
+- 자동 승인: `.claude/hooks/sdlc-config.local.json` 에 `{"auto_approve": true}` (git 에 올리지 않음) 나 환경 변수 `SDLC_AUTO_APPROVE=1` 이 있으면 켜진다 (`SDLC_AUTO_APPROVE=0` 이 우선해서 끈다). 켜져 있으면 세션 시작 메시지에 표시되고, 스킬이 '승인 명령을 알린다' 고 한 자리에서 Claude 가 산출물을 템플릿·이전 산출물과 대조해 자체 검토한 뒤 `python3 "$(git rev-parse --show-toplevel)/.claude/hooks/sdlc_hook.py" approve --auto <파일>` 로 승인하고 다음 스테이지로 넘어간다. 승인자는 `자동 승인 (Claude)` 로 남는다. Status 를 직접 고치는 것은 자동 승인이 켜져 있어도 막힌다. 원격 태그 push 와 수집 데이터 삭제 게이트는 자동 승인과 상관없이 그대로다.
 - 승인된 plan.md 의 '변경 파일' 에 없는 `backend/app/**`, `frontend/src/**` 경로는 편집이 막힌다 (`frontend/src/tests/**`, `backend/app/config/sources.json` 포함). 범위를 바꾸려면 plan.md 를 고치고 재승인받는다.
 - 테스트를 고쳐 통과시키지 않는다. 코드를 고친다.
-- Deploy 는 프로덕션 배포가 없다: release.md 승인, 버전 bump, 버전 태그, releases.md 기록만 한다. 원격 태그 push(`git push --tags`, `git push … v<숫자>`)는 `RELEASE_APPROVAL` 이 있는 세션에서만 실행된다. 수집 데이터 삭제(`make reset`, `curl … reset-and-collect`)는 원본 backend(기본 주소, 포트 8000)를 겨눌 때만 `RELEASE_APPROVAL` 이 필요하다. 사본 DB 로 띄운 다른 포트의 로컬 backend 를 URL 로 명시하면(`make reset AGENTLENS_API_URL=http://127.0.0.1:18000`) 바로 실행된다.
+- Deploy 는 프로덕션 배포가 없다: release.md 승인, 버전 bump, 버전 태그, releases.md 기록만 한다. 원격 태그 push(`git push --tags`, `git push … v<숫자>`)와 수집 데이터 삭제(`make reset`, `curl … reset-and-collect`)는 Claude 가 스스로 판단해 실행하면 hook 이 막는다. 사용자가 이번 메시지(작업 중 보낸 메시지 포함)에서 지시하면 원본·사본 가리지 않고 통과한다. 지시로 보는 낱말은 `.claude/hooks/sdlc-config.json` 의 `user_override_keywords` 다 (태그: '태그'·'tag', 삭제: 'reset'·'초기화'·'데이터 삭제' 등). `RELEASE_APPROVAL` 세션도 통과한다. `make -n` 은 실행하지 않으므로 막지 않는다.
 - 계약(`backend/app/schemas/` ↔ `frontend/src/types/` ↔ `frontend/src/mocks/`)은 손으로 맞춘다. 고칠 때 `.claude/rules/contracts.md` 를 따른다.
 
 ## 문서 지도
@@ -61,7 +61,7 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 | `docs/known-issues.md` | 코드 역분석 | `/implement-plan` (고친 문제 행 삭제), `/triage-signal` (새 문제 행 추가) | `/write-intent`, `/triage-signal` |
 
 ## 진행 기록과 이어서 하기
-- plan 의 작업 순서 단계마다 `tasks/<기능-id>/NN-<slug>.md` 에 상태(todo, doing, done, blocked), 한 일, 바꾼 파일, 결정, 막힌 점, 다음을 남긴다. `/implement-plan` 이 만들고 고친다.
+- plan 의 작업 순서 단계마다 `tasks/<기능-id>/NN-<slug>.md` 에 상태(todo, doing, done, blocked), 한 일, 바꾼 파일, 결정, 막힌 점, 다음을 남긴다. `/implement-plan` 이 만들고 고친다. `tasks/` 는 로컬 전용이다 (`.gitignore`, git 에 올리지 않는다).
 - 서브에이전트에 단계를 맡기면 받은 agent ID 를 task 파일 `Agent:` 에 적는다. 서브에이전트가 멈추면 새로 띄우지 않고 그 ID 로 SendMessage 를 보내 이어서 시킨다.
 - Claude Code 를 다시 시작했으면 `claude --resume <세션 이름>` 으로 같은 세션을 연 뒤 이어서 시킨다.
 

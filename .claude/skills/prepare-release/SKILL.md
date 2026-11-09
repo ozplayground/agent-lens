@@ -1,7 +1,6 @@
 ---
 name: prepare-release
 description: 릴리스를 준비한다. 기능별 release.md 와 릴리스 이력을 쓰고, 버전을 올리고 로컬 태그를 만든 뒤 원격 태그 push 직전까지만 진행한다. 프로덕션 배포는 없다.
-disable-model-invocation: true
 argument-hint: "[버전] [기능-id ...]"
 ---
 
