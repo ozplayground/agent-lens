@@ -14,8 +14,6 @@ from app.schemas.chat import (
     ChatModel,
     TokenUsageMeta,
     ChatStreamRequest,
-    ChatQueryRequest,
-    ChatQueryResponse,
     DonePayload,
     ChatMessageItem,
     ChatSourceItem,
@@ -187,62 +185,6 @@ async def test_anthropic_prompt_caching_ephemeral_structure():
 
 
 @pytest.mark.asyncio
-async def test_anthropic_generate_structured_summary_with_caching():
-    """Verify generate_structured_summary invokes Sonnet 5.5 and extracts JSON metadata."""
-    from app.services.llm_providers.anthropic_provider import AnthropicLLMProvider
-
-    provider = AnthropicLLMProvider(api_key="sk-ant-sonnet-key")
-
-    mock_resp_data = {
-        "id": "msg_sonnet_01",
-        "type": "message",
-        "role": "assistant",
-        "content": [{
-            "type": "text",
-            "text": json.dumps({
-                "is_relevant_to_ai_agent": True,
-                "category": "harness",
-                "relevance_score": 9.2,
-                "quality_score": 8.5,
-                "is_worthwhile": True,
-                "is_high_signal": True,
-                "rejection_reason": None,
-                "why_it_matters": "SWE-bench 2.0 벤치마크 규격을 통해 자율 코딩 에이전트의 회귀 테스트 신뢰도를 극대화합니다.",
-                "tldr_bullets": ["평가 하네스 표준화", "도커 샌드박스 지원", "회귀 검증 체계"],
-                "tech_stack": ["SWE-bench", "Docker", "Python"],
-            }),
-        }],
-        "model": "claude-sonnet-5-5",
-        "usage": {
-            "input_tokens": 2800,
-            "output_tokens": 180,
-            "cache_read_input_tokens": 2500,
-            "cache_creation_input_tokens": 0,
-        },
-    }
-
-    mock_response = Response(
-        status_code=200,
-        json=mock_resp_data,
-        request=Request("POST", "https://api.anthropic.com/v1/messages"),
-    )
-
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
-        result = await provider.generate_structured_summary(
-            title="SWE-bench 2.0 Released",
-            summary="Next-gen evaluation harness for coding agents",
-            source="github",
-            full_content="Full benchmark paper content here...",
-        )
-
-        assert result["is_relevant_to_ai_agent"] is True
-        assert result["category"] == "harness"
-        assert result["quality_score"] == 8.5
-        assert result["is_high_signal"] is True
-        assert result["usage"]["cache_read_input_tokens"] == 2500
-
-
-@pytest.mark.asyncio
 async def test_anthropic_error_mapping():
     """Verify HTTP 401, 429, 529 map to specialized Anthropic exceptions."""
     from app.services.llm_providers.anthropic_provider import (
@@ -297,7 +239,7 @@ async def test_llm_processor_anthropic_priority_and_routing():
     mock_provider.generate_text_with_usage = AsyncMock(side_effect=mock_gen)
 
     with patch.object(llm_processor, "anthropic_provider", mock_provider):
-        assert llm_processor.has_live_provider() is True
+        assert await llm_processor.has_live_provider() is True
         ans, model = await llm_processor.generate_live_answer("Test question", model="haiku")
         assert ans == "Anthropic Response"
         assert "haiku" in model
@@ -323,24 +265,6 @@ async def test_chat_stream_3tier_model_routing():
         assert "model_tier" in done_data
         assert done_data["model_tier"] == "haiku"
         assert "usage" in done_data
-
-
-@pytest.mark.asyncio
-async def test_chat_query_3tier_model_routing():
-    """Verify POST /api/chat/query returns model, model_tier, and usage meta."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        req_body = {
-            "question": "3-Tier query routing test",
-            "scope": "global",
-            "model": "claude-opus-5-5",
-            "model_tier": "opus",
-        }
-        res = await ac.post("/api/chat/query", json=req_body)
-        assert res.status_code == 200
-        data = res.json()
-        assert data["model_tier"] == "opus"
-        assert "opus" in data["model"]
-        assert "usage" in data
 
 
 @pytest.mark.asyncio
@@ -402,7 +326,7 @@ async def test_anti_gemini_has_live_provider_ignores_gemini_key():
          patch("app.services.llm_processor.load_json_config", return_value={"llm": {"gemini_api_key": "fake_key"}}):
         # Anthropic provider explicitly unavailable
         with patch.object(llm_processor.anthropic_provider, "is_available", return_value=False):
-            assert llm_processor.has_live_provider() is False
+            assert await llm_processor.has_live_provider() is False
 
 
 def test_anti_gemini_model_sanitization():
@@ -429,24 +353,18 @@ def test_anti_gemini_model_sanitization():
 def test_anthropic_config_and_schema_defaults():
     """Verify settings defaults and chat schema defaults use claude-sonnet-5-5."""
     from app.services.llm_providers.anthropic_provider import DEFAULT_MODEL
-    from app.schemas.chat import ChatStreamRequest, ChatQueryRequest, DonePayload, ChatQueryResponse
+    from app.schemas.chat import ChatStreamRequest, DonePayload
     from app.config import settings
 
     assert DEFAULT_MODEL == "claude-sonnet-5-5"
-    assert settings.ANTHROPIC_COLLECTION_MODEL == "claude-sonnet-5-5"
     assert settings.ANTHROPIC_DEFAULT_CHAT_MODEL == "claude-sonnet-5-5"
 
+    # BUG-14: 요청 model 은 기본값을 채우지 않는다 (명시 model > model_tier > 기본 모델 순으로 고른다)
     stream_req = ChatStreamRequest(question="test")
-    assert stream_req.model == "claude-sonnet-5-5"
-
-    query_req = ChatQueryRequest(question="test")
-    assert query_req.model == "claude-sonnet-5-5"
+    assert stream_req.model is None
 
     done = DonePayload(session_id="test", sources_count=0, latency_ms=10)
     assert done.model == "claude-sonnet-5-5"
-
-    query_res = ChatQueryResponse(answer="ok", sources=[], session_id="s1", scope="global", latency_ms=10)
-    assert query_res.model == "claude-sonnet-5-5"
 
 
 @pytest.mark.asyncio
@@ -458,7 +376,6 @@ async def test_anti_gemini_isolation_in_generate_live_answer():
          patch.object(settings, "OPENAI_API_KEY", ""), \
          patch.object(settings, "OLLAMA_BASE_URL", ""), \
          patch.object(settings, "GEMINI_API_KEY", "fake_gemini_key_12345"), \
-         patch.object(settings, "TESTING", False), \
          patch.object(llm_processor.anthropic_provider, "is_available", return_value=False), \
          patch.object(llm_processor, "_call_gemini", new_callable=AsyncMock) as mock_gemini:
         
@@ -477,7 +394,6 @@ async def test_anti_gemini_isolation_in_stream_tokens():
          patch.object(settings, "OPENAI_API_KEY", ""), \
          patch.object(settings, "OLLAMA_BASE_URL", ""), \
          patch.object(settings, "GEMINI_API_KEY", "fake_gemini_key_12345"), \
-         patch.object(settings, "TESTING", False), \
          patch.object(llm_processor.anthropic_provider, "is_available", return_value=False):
         
         with pytest.raises(LLMProviderUnavailableException):

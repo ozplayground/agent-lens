@@ -142,7 +142,10 @@ async def test_deep_research_evaluates_mined_candidates(monkeypatch):
 @pytest.mark.asyncio
 async def test_toggle_and_delete_github_repo_with_slash():
     repo = "tdd-owner/tdd-repo"
-    sources_service.add_github_repo(repo=repo)
+    # POST /api/sources/github·add_github_repo 는 v0.4.2 에서 지웠다 (CC-02). 사본 sources.json 에 직접 넣는다
+    data = sources_service.load_sources()
+    data["github_sources"].setdefault("monitored_repos", []).append({"repo": repo, "enabled": True})
+    sources_service.save_sources(data)
 
     def current():
         repos = sources_service.get_all_sources()["github_sources"]["monitored_repos"]
@@ -180,7 +183,7 @@ async def test_toggle_unknown_repo_still_404():
     async with _client() as ac:
         r = await ac.patch("/api/sources/github_repo/no-such-owner%2Fno-such-repo/toggle")
     assert r.status_code == 404
-    assert r.json() == {"detail": "Source not found or invalid type"}
+    assert r.json() == {"error_code": "ERR_NOT_FOUND", "message": "해당 소스를 찾을 수 없습니다.", "details": None}
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +294,8 @@ async def test_ask_stream_failure_before_tokens_still_falls_back(monkeypatch):
 
     assert events[-1]["event"] == "done"
     assert events[-1]["total_text"]
-    assert len(llm_processor._qa_cache) == 1
+    # N-08: 휴리스틱 폴백 답은 캐시하지 않는다 (v0.4.2 2차에서 바뀐 기대값)
+    assert len(llm_processor._qa_cache) == 0
 
 
 # ---------------------------------------------------------------------------

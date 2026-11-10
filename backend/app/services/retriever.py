@@ -7,6 +7,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, or_
 
+from app.time_utils import iso_utc
 from app.models.news import NewsItem
 from app.schemas.chat import ChatSearchChunk, ChatFocusFilter
 
@@ -54,70 +55,8 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
     High-performance, zero-config SQLite FTS5 retriever with BM25 + Quality + Recency hybrid ranking.
     Includes automated fallback to SQL LIKE if FTS5 encounters table or syntax issues.
     """
-    _fts_initialized: bool = False
-
     def __init__(self, session: AsyncSession):
         self.session = session
-
-    async def _ensure_fts_table(self):
-        """Ensure FTS5 virtual table and synchronization triggers exist and are fully populated."""
-        try:
-            res = await self.session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='news_fts';"))
-            table_exists = res.scalar() is not None
-
-            if not table_exists:
-                # Create FTS5 virtual table if it doesn't exist
-                await self.session.execute(text("""
-                    CREATE VIRTUAL TABLE IF NOT EXISTS news_fts USING fts5(
-                        title,
-                        summary,
-                        why_it_matters,
-                        tech_stack,
-                        tags,
-                        content='news_items',
-                        content_rowid='id'
-                    );
-                """))
-
-                # Create sync triggers for INSERT, DELETE, UPDATE
-                await self.session.execute(text("""
-                    CREATE TRIGGER IF NOT EXISTS news_items_ai AFTER INSERT ON news_items BEGIN
-                        INSERT INTO news_fts(rowid, title, summary, why_it_matters, tech_stack, tags)
-                        VALUES (new.id, new.title, new.summary, new.why_it_matters, new.tech_stack, new.tags);
-                    END;
-                """))
-                await self.session.execute(text("""
-                    CREATE TRIGGER IF NOT EXISTS news_items_ad AFTER DELETE ON news_items BEGIN
-                        INSERT INTO news_fts(news_fts, rowid, title, summary, why_it_matters, tech_stack, tags)
-                        VALUES ('delete', old.id, old.title, old.summary, old.why_it_matters, old.tech_stack, old.tags);
-                    END;
-                """))
-                await self.session.execute(text("""
-                    CREATE TRIGGER IF NOT EXISTS news_items_au AFTER UPDATE ON news_items BEGIN
-                        INSERT INTO news_fts(news_fts, rowid, title, summary, why_it_matters, tech_stack, tags)
-                        VALUES ('delete', old.id, old.title, old.summary, old.why_it_matters, old.tech_stack, old.tags);
-                        INSERT INTO news_fts(rowid, title, summary, why_it_matters, tech_stack, tags)
-                        VALUES (new.id, new.title, new.summary, new.why_it_matters, new.tech_stack, new.tags);
-                    END;
-                """))
-
-                # Rebuild index to guarantee consistency with existing news items
-                await self.session.execute(text("INSERT INTO news_fts(news_fts) VALUES('rebuild');"))
-                await self.session.commit()
-            else:
-                # Table exists: check if row counts match or if fts index is empty
-                fts_cnt_res = await self.session.execute(text("SELECT count(*) FROM news_fts;"))
-                fts_count = fts_cnt_res.scalar() or 0
-                items_cnt_res = await self.session.execute(text("SELECT count(*) FROM news_items;"))
-                items_count = items_cnt_res.scalar() or 0
-
-                if fts_count < items_count:
-                    await self.session.execute(text("INSERT INTO news_fts(news_fts) VALUES('rebuild');"))
-                    await self.session.commit()
-            SqliteFtsRetriever._fts_initialized = True
-        except Exception as e:
-            logger.warning(f"FTS5 table initialization notice: {e}")
-            await self.session.rollback()
 
     @staticmethod
     def extract_keywords(query: str) -> List[str]:
@@ -500,7 +439,7 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
             )
             rag_score = round(max(0.0, min(1.0, 0.60 * s_rel + 0.40 * base_rag)), 4)
 
-            pub_str = c["published_at"].isoformat() if hasattr(c["published_at"], "isoformat") else str(c["published_at"])
+            pub_str = iso_utc(c["published_at"]) or ""
 
             valid_chunks.append(
                 ChatSearchChunk(
@@ -538,7 +477,7 @@ class SqliteFtsRetriever(BaseKnowledgeRetriever):
         filters: Optional[ChatFocusFilter] = None,
     ) -> Tuple[List[ChatSearchChunk], bool, ChatFocusFilter]:
         """Perform dynamic hybrid retrieval with focus filters, adaptive tau, and 0-match auto-relaxation."""
-        await self._ensure_fts_table()
+        # FTS 색인·트리거는 ensure_db_schema 가 시작 때 만든다. 검색은 읽기만 한다 (CC-03, PERF-06, ARCH-03)
         now_utc = datetime.now(timezone.utc)
 
         # Merge category / filters

@@ -1,108 +1,64 @@
 import { z } from 'zod';
-import type { NewsItem } from './news';
+
+/** backend 응답 시각: UTC 오프셋이 붙은 ISO 8601 (`...+00:00` 또는 `Z`, v0.4.2 N-09) */
+export const IsoDateTimeSchema = z.iso.datetime({ offset: true });
+
+/** backend `uuid.UUID()` 가 받는 세션 id (하이픈 생략 허용) */
+export const SESSION_UUID_PATTERN = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 
 // ============================================================================
-// 1. 공통 응답 엔벨로프 및 에러 DTO (Response Envelope & Error Contracts)
+// 1. 공통 오류 응답 (모든 backend API 공통, 계약 v1.3 / v0.4.2)
+// backend 는 성공 응답을 감싸지 않는다 (엔벨로프 없음). 오류는 모든 API 가 이 모양이다.
 // ============================================================================
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: ApiErrorDetail;
-  timestamp: string;
-}
-
-export interface ApiErrorDetail {
-  error_code: string;
-  message: string;
-  details?: Record<string, unknown> | null;
-}
-
-export interface ErrorResponse {
-  error_code: string;
-  message: string;
-  details?: Record<string, unknown> | null;
-}
-
-export const ApiErrorDetailSchema = z.object({
-  error_code: z.string().min(1),
-  message: z.string().min(1),
-  details: z.record(z.string(), z.unknown()).nullable().optional(),
+/** 요청 검증 실패(400 ERR_INVALID_PAYLOAD)의 `details` 항목 */
+export const ValidationErrorItemSchema = z.object({
+  loc: z.array(z.union([z.string(), z.number()])),
+  msg: z.string(),
 });
+export type ValidationErrorItem = z.infer<typeof ValidationErrorItemSchema>;
 
+/** `{"error_code": "ERR_...", "message": "<한국어 문장>", "details": <객체|배열|null>}` */
 export const ErrorResponseSchema = z.object({
-  error_code: z.string().min(1),
+  error_code: z.string().regex(/^ERR_[A-Z0-9_]+$/),
   message: z.string().min(1),
-  details: z.record(z.string(), z.unknown()).nullable().optional(),
+  details: z.union([z.record(z.string(), z.unknown()), z.array(z.unknown())]).nullable(),
 });
+export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 
-export const createApiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
-  z.object({
-    success: z.boolean(),
-    data: dataSchema.optional(),
-    error: ApiErrorDetailSchema.optional(),
-    timestamp: z.string(),
-  });
-
-// ============================================================================
-// 2. 진짜 LLM 스트리밍 실패 에러 DTO 및 에러 코드 (Real LLM Error Contracts)
-// ============================================================================
-
-export const LlmErrorCodeSchema = z.enum([
-  'ERR_CLAUDE_API_KEY_MISSING',   // HTTP 503: Anthropic Claude API 키 미설정
-  'ERR_ANTHROPIC_KEY_MISSING',    // HTTP 503: Anthropic Claude API 키 미설정 별칭
-  'ERR_CLAUDE_QUOTA_EXCEEDED',    // HTTP 429: Anthropic Claude 호출 한도 초과
-  'ERR_ANTHROPIC_RATE_LIMIT',     // HTTP 429: Anthropic Claude 호출 한도 초과 별칭
-  'ERR_CLAUDE_OVERLOADED',        // HTTP 503 / 529: Anthropic 서버 과부하
-  'ERR_ANTHROPIC_OVERLOADED',     // HTTP 503 / 529: Anthropic 서버 과부하 별칭
-  'ERR_INVALID_MODEL_TIER',       // HTTP 400: 허용되지 않은 모델 티어 코드 요청
-  'ERR_SONNET_SCHEMA_VALIDATION', // HTTP 500: Claude Sonnet 5.5 Pydantic 스키마 검증 실패
-  'ERR_STREAM_ABORTED_BY_USER',   // HTTP 499: 모델 전환 또는 브라우저 이탈 스트림 중단
-  'ERR_ARTICLE_EXTRACTION_FAIL',  // HTTP 502: 원문 본문 추출 실패
-  'ERR_LLM_PROVIDER_UNAVAILABLE', // HTTP 503: 가용한 LLM 프로바이더 엔진 미설정 (API 키 누락)
-  'ERR_LLM_UPSTREAM_FAILED',      // HTTP 502: 외부 LLM 업스트림 통신 실패 / API 장애
-  'ERR_LLM_STREAM_FAILED',        // SSE event: error: LLM 스트리밍 진행 중 외부 연결 단절
-  'ERR_LLM_QUOTA_EXCEEDED',       // HTTP 429: 외부 LLM API 호출 한도 초과
-  'ERR_CHAT_STREAM_TIMEOUT',      // HTTP 504 / SSE error: 스트리밍 15초 초과 타임아웃
-  'ERR_HANDOVER_SOURCE_NOT_FOUND',// HTTP 404: Scoped 모드 대상 기사 미존재
-  'ERR_SESSION_NOT_FOUND',        // HTTP 404: 대상 대화 세션을 찾을 수 없음
-  'ERR_SESSION_INVALID_UUID',     // HTTP 400: 유효하지 않은 세션 UUID 규격
-  'ERR_SESSION_DELETE_FAILED',    // HTTP 500: 세션 삭제 트랜잭션 실패
-  'ERR_SESSION_CREATE_FAILED',    // HTTP 500: 세션 생성/업서트 실패
-  'ERR_SESSION_LIMIT_EXCEEDED',   // HTTP 400: 최대 세션 한도 초과
-  'ERR_INVALID_SCOPE_PARAM',      // HTTP 400: 유효하지 않은 scope 값
-  'ERR_INVALID_FILTER_PARAM',     // HTTP 400: 포커스 필터 규격 오류
-  'ERR_CHAT_PAYLOAD_EMPTY',       // HTTP 400: 질문 본문 비어있음
-  'ERR_CHAT_PAYLOAD_TOO_LARGE',   // HTTP 400: 질문 본문 2,000자 초과
-  'ERR_SEARCH_QUERY_TOO_SHORT',   // HTTP 400: 검색어 2자 미만
-  'ERR_SERVER_INTERNAL',          // HTTP 500: 백엔드 내부 예외
+/**
+ * backend 가 내는 오류 코드 카탈로그 (계약 문서 1.3절).
+ * 런타임 검증은 `ErrorResponseSchema` 의 문자열 규칙만 본다. 이 enum 은 MSW·계약 테스트용이다.
+ */
+export const ApiErrorCodeSchema = z.enum([
+  // 상태별 기본 코드 (라우터가 구체 코드를 주지 않을 때). 422 는 쓰지 않는다 (요청 검증은 모두 400)
+  'ERR_INVALID_PAYLOAD',          // 400: 요청 본문·쿼리·경로 검증 실패 (details: [{loc, msg}] 또는 null)
+  'ERR_NOT_FOUND',                // 404: 없음 (기사 없음 포함)
+  'ERR_METHOD_NOT_ALLOWED',       // 405
+  'ERR_CONFLICT',                 // 409
+  'ERR_SERVER_INTERNAL',          // 500: 처리하지 못한 예외
+  'ERR_UPSTREAM_FAILED',          // 502
+  'ERR_SERVICE_UNAVAILABLE',      // 503
+  // 라우터 구체 코드
+  'ERR_CHAT_PAYLOAD_EMPTY',       // 400: 질문이 비어 있음
+  'ERR_CHAT_PAYLOAD_TOO_LARGE',   // 400: 질문 2,000자 초과
+  'ERR_INVALID_SCOPE_PARAM',      // 400: scope 가 scoped·global 아님
+  'ERR_INVALID_MODEL_TIER',       // 400: model_tier 가 haiku·sonnet·opus 아님
+  'ERR_HANDOVER_SOURCE_NOT_FOUND',// 404: scoped 대상 기사가 없음
+  'ERR_CLAUDE_API_KEY_MISSING',   // 401: Anthropic 키 없음·무효
+  'ERR_CLAUDE_QUOTA_EXCEEDED',    // 429: Anthropic 호출 한도 초과
+  'ERR_CLAUDE_OVERLOADED',        // 529: Anthropic 과부하
+  'ERR_LLM_PROVIDER_UNAVAILABLE', // 503: 쓸 수 있는 LLM 프로바이더 없음
+  'ERR_LLM_UPSTREAM_FAILED',      // 502: LLM 업스트림 실패. SSE event: error 에서는 thinking 단계(질문 분석) 실패
+  'ERR_LLM_QUOTA_EXCEEDED',       // 429: LLM 호출 한도 초과
+  'ERR_LLM_STREAM_FAILED',        // SSE event: error 의 코드 (토큰 생성 중 실패). 기사 Ask AI 스트림의 error 이벤트도 이 코드
+  'ERR_SESSION_INVALID_UUID',     // 400: POST /api/chat/sessions 의 id 가 UUID 아님 (JSON·필드 오류는 ERR_INVALID_PAYLOAD)
+  'ERR_SESSION_NOT_FOUND',        // 404: 세션 없음
+  'ERR_SESSION_CREATE_FAILED',    // 500: 세션 생성·업서트 실패
+  'ERR_SESSION_DELETE_FAILED',    // 500: 세션 삭제 실패
+  'ERR_RETRIEVER_INDEX_ERROR',    // SSE event: error 의 코드 (global 검색 tool_calling 단계 실패, status_code 500)
 ]);
-
-export type LlmErrorCode = z.infer<typeof LlmErrorCodeSchema>;
-
-export const LlmErrorDetailSchema = z.object({
-  error_code: LlmErrorCodeSchema,
-  message: z.string().min(1),
-  status_code: z.number().int().optional(),
-  step: z.string().nullable().optional(),
-  provider: z.string().optional(),
-  retryable: z.boolean().default(true),
-  details: z.record(z.string(), z.unknown()).nullable().optional(),
-});
-
-export type LlmErrorDetail = z.infer<typeof LlmErrorDetailSchema>;
-
-export const LlmErrorResponseSchema = z.object({
-  error_code: LlmErrorCodeSchema,
-  message: z.string().min(1),
-  status_code: z.number().int().optional(),
-  step: z.string().nullable().optional(),
-  provider: z.string().optional(),
-  retryable: z.boolean().default(true),
-  details: z.record(z.string(), z.unknown()).nullable().optional(),
-});
-
-export type LlmErrorResponse = z.infer<typeof LlmErrorResponseSchema>;
+export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 
 // ============================================================================
 // 2.5. Anthropic Claude 3-Tier Multi-Model & Token Usage (v4.0 Contracts)
@@ -231,11 +187,13 @@ export function formatModelDisplayName(
 
 export const getModelLabel = formatModelDisplayName;
 
+// zod 규칙 (계약 v1.3): Pydantic 필수 → 필수, `Optional[X] = None` → `.nullable().optional()`,
+// 기본값 있는 필드 → `.default(...)`. Pydantic 에 없는 형식·범위 제약(URL, UUID, 길이, 범위)은 두지 않는다.
 export const TokenUsageMetaSchema = z.object({
-  input_tokens: z.number().int().nonnegative(),
-  output_tokens: z.number().int().nonnegative(),
-  cache_read_input_tokens: z.number().int().nonnegative().nullable().optional(),
-  cache_creation_input_tokens: z.number().int().nonnegative().nullable().optional(),
+  input_tokens: z.number().int().default(0),
+  output_tokens: z.number().int().default(0),
+  cache_read_input_tokens: z.number().int().nullable().optional(),
+  cache_creation_input_tokens: z.number().int().nullable().optional(),
 });
 export type TokenUsageMeta = z.infer<typeof TokenUsageMetaSchema>;
 
@@ -299,22 +257,20 @@ export const fromChatFocusFilter = (api?: ChatFocusFilter | null): FocusFilters 
 // 4. 에이전틱 리서치 워크플로우 진행 단계 스키마 (Workflow Steps & Status)
 // ============================================================================
 
+// backend 스트림이 실제로 보내는 4값 (v1.4). Pydantic Literal 의 observing·evaluating_sufficiency·agentic_searching 은 보내지 않는다
 export const ChatStatusStepSchema = z.enum([
-  'thinking',               // 🧠 에이전트 추론 및 계획 수립 (ReAct Thought)
-  'tool_calling',           // 🔍 자율 검색 도구 호출 중 (ReAct Action)
-  'observing',              // ✅ 검색 결과 관찰 및 컨텍스트 병합 (ReAct Observation)
-  'extracting_source',      // 🌐 원본 URL 실시간 전문 비동기 스크래핑 (Trafilatura/Readability)
-  'evaluating_sufficiency', // 🧠 본문 정보 충실도 자체 평가
-  'agentic_searching',      // 🔍 보충 기술 문서 자율 검색 중 (DuckDuckGo / Tavily)
-  'synthesizing',           // 📝 Senior Staff Architect 4단 엔지니어링 리포트 프롬프트 조립
+  'thinking',          // global: ReAct 계획
+  'tool_calling',      // global: search_news_corpus 검색
+  'extracting_source', // scoped: 기사 본문 로드
+  'synthesizing',      // 답변 생성
 ]);
 export type ChatStatusStep = z.infer<typeof ChatStatusStepSchema>;
 
 export const ChatStatusPayloadSchema = z.object({
   step: ChatStatusStepSchema,
-  label: z.string().min(1),
+  label: z.string(),
   timestamp: z.string(),
-  progress: z.number().int().min(0).max(100).optional(),
+  progress: z.number().int().nullable().optional(),
   query: z.string().nullable().optional(),
   queries: z.array(z.string()).nullable().optional(),
   sources_found: z.number().int().nullable().optional(),
@@ -330,21 +286,21 @@ export const ChatSourceTypeSchema = z.enum(['primary', 'supplementary']);
 export type ChatSourceType = z.infer<typeof ChatSourceTypeSchema>;
 
 export const ChatSourceItemSchema = z.object({
-  index: z.union([z.number(), z.string()]), // 1, 2 또는 'S1', 'S2'
+  index: z.union([z.number().int(), z.string()]), // backend 는 1, 2, ... 를 보낸다
   type: ChatSourceTypeSchema.default('primary'),
-  id: z.number().int().positive().nullable().optional(),
-  title: z.string().min(1).max(500),
-  url: z.string().url('유효한 HTTP(S) URL이어야 합니다.'),
-  source: z.string().min(1),
+  id: z.number().int().nullable().optional(),
+  title: z.string(),
+  url: z.string(),
+  source: z.string(),
   category: z.string().nullable().optional(),
-  quality_score: z.number().min(1.0).max(10.0).nullable().optional(),
+  quality_score: z.number().nullable().optional(),
   score: z.number().nullable().optional(),
   snippet: z.string().nullable().optional(),
   full_content: z.string().nullable().optional(),
   domain: z.string().nullable().optional(),
   relevance_score: z.number().nullable().optional(),
-  published_at: z.string().nullable().optional(),
-  publisher: z.string().optional(),
+  published_at: IsoDateTimeSchema.nullable().optional(),
+  publisher: z.string().nullable().optional(),
 });
 export type ChatSourceItem = z.infer<typeof ChatSourceItemSchema>;
 
@@ -372,7 +328,7 @@ export type SseSourcesPayload = ChatSourcesPayload;
 
 export const ChatMessageHistorySchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
-  content: z.string().min(1, '메시지 본문은 최소 1자 이상이어야 합니다.'),
+  content: z.string(),
 });
 export type ChatMessageHistory = z.infer<typeof ChatMessageHistorySchema>;
 
@@ -391,12 +347,14 @@ export const ChatStreamRequestSchema = z
       .string()
       .min(1, '질문을 입력해주세요.')
       .max(2000, '질문은 최대 2,000자까지 입력 가능합니다.'),
-    model: ChatModelSchema.optional().default('claude-sonnet-5-5'),
-    model_tier: ModelTierSchema.optional(),
+    /** 기본값 없음(None). backend 는 명시 model > model_tier > 기본 챗 모델 순으로 고른다. frontend 는 늘 보낸다. */
+    model: z.string().nullable().optional(),
+    model_tier: ModelTierSchema.nullable().optional(),
     scope: ScopeModeSchema.default('global'),
-    source_id: z.number().int().positive().nullable().optional(),
-    session_id: z.string().uuid().nullable().optional(),
-    history: z.array(ChatMessageHistorySchema).optional(),
+    source_id: z.number().int().nullable().optional(),
+    /** UUID 여야 한다(아니면 400 ERR_SESSION_INVALID_UUID). 없거나 null 이면 backend 가 새 UUID 를 만든다. */
+    session_id: z.string().regex(SESSION_UUID_PATTERN).nullable().optional(),
+    history: z.array(ChatMessageHistorySchema).nullable().optional(),
     top_k: z.number().int().min(1).max(10).default(5),
     filters: ChatFocusFilterSchema.nullable().optional(),
     /** 서버가 이 턴의 질문을 저장할 id. 없으면 서버가 UUID 를 만든다. */
@@ -416,100 +374,53 @@ export const ChatStreamRequestSchema = z
   );
 export type ChatStreamRequest = z.infer<typeof ChatStreamRequestSchema>;
 
-export const ChatQueryRequestSchema = z.object({
-  question: z
-    .string()
-    .min(1, '질문을 입력해주세요.')
-    .max(2000, '질문은 최대 2,000자까지 입력 가능합니다.'),
-  model: ChatModelSchema.optional().default('claude-sonnet-5-5'),
-  model_tier: ModelTierSchema.optional(),
-  scope: ScopeModeSchema.default('global'),
-  source_id: z.number().int().positive().nullable().optional(),
-  session_id: z.string().uuid().nullable().optional(),
-  history: z.array(ChatMessageHistorySchema).optional(),
-  top_k: z.number().int().min(1).max(10).default(5),
-  filters: ChatFocusFilterSchema.nullable().optional(),
-});
-export type ChatQueryRequest = z.infer<typeof ChatQueryRequestSchema>;
-
-export const ChatQueryResponseSchema = z.object({
-  answer: z.string().min(1),
-  sources: z.array(ChatSourceItemSchema),
-  session_id: z.string().uuid(),
-  model: z.string().min(1),
-  model_tier: ModelTierSchema.optional().default('sonnet'),
-  scope: ScopeModeSchema,
-  applied_filters: ChatFocusFilterSchema.nullable().optional(),
-  is_relaxed: z.boolean().default(false),
-  primary_count: z.number().int().nullable().optional(),
-  supplementary_count: z.number().int().nullable().optional(),
-  latency_ms: z.number().int().nonnegative(),
-  usage: TokenUsageMetaSchema.nullable().optional(),
-});
-export type ChatQueryResponse = z.infer<typeof ChatQueryResponseSchema>;
-
 // ============================================================================
 // 7. 컨텍스트 핸드오버 및 기사 상세 메타데이터 스키마
 // ============================================================================
 
 export const ChatSourceDetailResponseSchema = z.object({
-  id: z.number().int().positive(),
-  title: z.string().min(1).max(500),
-  url: z.string().url(),
-  source: z.string().min(1),
-  category: z.string().min(1),
+  id: z.number().int(),
+  title: z.string(),
+  url: z.string(),
+  source: z.string(),
+  category: z.string(),
   author: z.string().nullable().optional(),
   summary: z.string().default(''),
   tldr_bullets: z.array(z.string()).default([]),
   why_it_matters: z.string().default(''),
   tech_stack: z.array(z.string()).default([]),
   tags: z.array(z.string()).default([]),
-  quality_score: z.number().min(1.0).max(10.0),
+  quality_score: z.number(),
   is_high_signal: z.boolean().default(false),
   hotness_score: z.number().default(0.0),
-  published_at: z.string(),
-  created_at: z.string().optional(),
+  published_at: IsoDateTimeSchema,
+  created_at: IsoDateTimeSchema.nullable().optional(),
+  /** 스크래핑한 원문. 아직 없으면 null */
+  full_content: z.string().nullable().optional(),
+  scraped_at: IsoDateTimeSchema.nullable().optional(),
 });
 export type ChatSourceDetailResponse = z.infer<typeof ChatSourceDetailResponseSchema>;
 
 // ============================================================================
-// 8. 코퍼스 지식 검색 프리뷰 스키마 (Corpus Search Preview)
+// 8. 코퍼스 검색 청크 (backend retriever 의 `ChatSearchChunk`).
+//    v0.4.2 에서 GET /api/chat/search 를 지워 이 모양을 돌려주는 엔드포인트는 없다.
+//    MSW 가 global 질문의 후보 출처를 고르는 코퍼스 fixture(`mockSearchChunks`)의 타입으로만 쓴다.
 // ============================================================================
 
-export const ChatSearchQueryParamsSchema = z.object({
-  q: z.string().min(2, '검색어는 최소 2글자 이상이어야 합니다.'),
-  top_k: z.coerce.number().int().min(1).max(20).default(5),
-  min_quality: z.coerce.number().min(1.0).max(10.0).default(5.0),
-  category: ChatFocusCategorySchema.default('all'),
-  time_range: ChatFocusTimeRangeSchema.default('all'),
-  sort: ChatFocusSortSchema.default('hot'),
-  high_signal_only: z.coerce.boolean().default(false),
-  source: z.string().optional(),
-});
-export type ChatSearchQueryParams = z.infer<typeof ChatSearchQueryParamsSchema>;
-
 export const ChatSearchChunkSchema = z.object({
-  index: z.number().int().positive(),
-  id: z.number().int().positive(),
-  title: z.string().min(1).max(500),
-  url: z.string().url(),
-  source: z.string().min(1),
-  category: z.string().min(1),
+  index: z.number().int(),
+  id: z.number().int(),
+  title: z.string(),
+  url: z.string(),
+  source: z.string(),
+  category: z.string(),
   snippet: z.string(),
-  quality_score: z.number().min(1.0).max(10.0),
+  quality_score: z.number(),
   published_at: z.string(),
   bm25_score: z.number(),
-  rag_score: z.number().min(0.0).max(1.0),
+  rag_score: z.number(), // backend 가 0~1 로 자른다
 });
 export type ChatSearchChunk = z.infer<typeof ChatSearchChunkSchema>;
-
-export const ChatSearchResponseSchema = z.object({
-  query: z.string(),
-  total_matches: z.number().int().nonnegative(),
-  chunks: z.array(ChatSearchChunkSchema),
-  latency_ms: z.number().int().nonnegative(),
-});
-export type ChatSearchResponse = z.infer<typeof ChatSearchResponseSchema>;
 
 // ============================================================================
 // 9. Server-Sent Events (SSE) 멀티 이벤트 페이로드 스키마
@@ -523,14 +434,14 @@ export const TokenPayloadSchema = SseTokenPayloadSchema;
 export type TokenPayload = SseTokenPayload;
 
 export const ChatDonePayloadSchema = z.object({
-  done: z.literal(true),
-  session_id: z.string().uuid(),
-  model: z.string(),
-  model_tier: ModelTierSchema.optional().default('sonnet'),
-  sources_count: z.number().int().nonnegative(),
+  done: z.boolean().default(true),
+  session_id: z.string(),
+  model: z.string().nullable().optional(),
+  model_tier: ModelTierSchema.nullable().default('sonnet'),
+  sources_count: z.number().int(),
   primary_count: z.number().int().nullable().optional(),
   supplementary_count: z.number().int().nullable().optional(),
-  latency_ms: z.number().int().nonnegative(),
+  latency_ms: z.number().int(),
   usage: TokenUsageMetaSchema.nullable().optional(),
 });
 export type ChatDonePayload = z.infer<typeof ChatDonePayloadSchema>;
@@ -542,10 +453,9 @@ export type SseDonePayload = ChatDonePayload;
 export const ChatStreamErrorPayloadSchema = z.object({
   error_code: z.string(),
   message: z.string(),
-  status_code: z.number().int().optional(),
+  status_code: z.number().int().default(502),
   step: z.string().nullable().optional(),
-  provider: z.string().optional(),
-  retryable: z.boolean().optional(),
+  retryable: z.boolean().default(true),
 });
 export type ChatStreamErrorPayload = z.infer<typeof ChatStreamErrorPayloadSchema>;
 export const StreamErrorPayloadSchema = ChatStreamErrorPayloadSchema;
@@ -609,7 +519,8 @@ export const ChatStatusSchema = z.enum([
 export type ChatStatus = z.infer<typeof ChatStatusSchema>;
 
 export const ChatMessageSchema = z.object({
-  id: z.string().uuid(),
+  /** 클라이언트 메시지 id (`msg-user-`·`msg-asst-` + 7자) 또는 서버 UUID. backend 세션 POST 와 같은 1~36자 */
+  id: ChatClientMessageIdSchema,
   role: z.enum(['user', 'assistant', 'system']),
   content: z.string(),
   timestamp: z.string(),
@@ -639,26 +550,14 @@ export const SendMessageRequestSchema = z.object({
 });
 export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 
-export const ChatSessionSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().min(1).max(200),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  scopeMode: ScopeModeSchema,
-  activeSourceId: z.number().int().positive().nullable().optional(),
-  activeFilters: ChatFocusFilterSchema.nullable().optional(),
-  messages: z.array(ChatMessageSchema),
-});
-export type ChatSession = z.infer<typeof ChatSessionSchema>;
-
 // ============================================================================
 // 12. 대화 세션 영속화 및 멀티턴 복원 계약 (Session Persistence & Multi-turn Continuity)
 // ============================================================================
 
 export const GenericSuccessResponseSchema = z.object({
   status: z.string().default('success'),
-  message: z.string().optional(),
-  deleted_count: z.number().int().optional(),
+  message: z.string().nullable().optional(),
+  deleted_count: z.number().int().nullable().optional(),
 });
 export type GenericSuccessResponse = z.infer<typeof GenericSuccessResponseSchema>;
 
@@ -676,11 +575,11 @@ export type MessageItemStatus = z.infer<typeof MessageItemStatusSchema>;
 
 /** 개별 대화 턴 메시지 엔티티 스키마 (OpenAPI ChatMessageItem) */
 export const ChatMessageItemSchema = z.object({
-  id: z.union([z.string(), z.number()]).transform((val) => String(val)),
-  session_id: z.string().uuid(),
+  id: z.string(),
+  session_id: z.string(),
   role: MessageRoleSchema,
   content: z.string(),
-  created_at: z.string(),
+  created_at: IsoDateTimeSchema,
   sources: z.array(ChatSourceItemSchema).nullable().optional(),
   status: MessageItemStatusSchema.default('completed'),
   model: z.string().nullable().optional(),
@@ -692,13 +591,13 @@ export type ChatMessageItem = z.infer<typeof ChatMessageItemSchema>;
 
 /** 대화 세션 요약 메타데이터 스키마 (OpenAPI ChatSessionSummary) */
 export const ChatSessionSummarySchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().min(1).max(100),
-  created_at: z.string(),
-  updated_at: z.string(),
+  id: z.string(),
+  title: z.string(),
+  created_at: IsoDateTimeSchema,
+  updated_at: IsoDateTimeSchema,
   scope_mode: ScopeModeSchema,
   active_source_id: z.number().int().nullable().optional(),
-  message_count: z.number().int().nonnegative(),
+  message_count: z.number().int().default(0),
   last_message_preview: z.string().nullable().optional(),
   active_filters: ChatFocusFilterSchema.nullable().optional(),
 });
@@ -706,26 +605,27 @@ export type ChatSessionSummary = z.infer<typeof ChatSessionSummarySchema>;
 
 /** 대화 세션 전체 상세 정보 스키마 (OpenAPI ChatSessionDetail) */
 export const ChatSessionDetailSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().min(1).max(100),
-  created_at: z.string(),
-  updated_at: z.string(),
+  id: z.string(),
+  title: z.string(),
+  created_at: IsoDateTimeSchema,
+  updated_at: IsoDateTimeSchema,
   scope_mode: ScopeModeSchema,
   active_source_id: z.number().int().nullable().optional(),
   active_source: ChatSourceDetailResponseSchema.nullable().optional(),
   active_filters: ChatFocusFilterSchema.nullable().optional(),
-  messages: z.array(ChatMessageItemSchema),
+  messages: z.array(ChatMessageItemSchema).default([]),
 });
 export type ChatSessionDetail = z.infer<typeof ChatSessionDetailSchema>;
 
 /** 대화 세션 생성/업서트 요청 페이로드 스키마 (OpenAPI ChatSessionCreateRequest) */
 export const ChatSessionCreateRequestSchema = z.object({
-  id: z.string().uuid().nullable().optional(),
-  title: z.string().max(100).default('새 대화').optional(),
-  scope_mode: ScopeModeSchema.default('global').optional(),
+  /** 주어지면 backend 가 UUID 로 파싱한다 (실패면 400 ERR_SESSION_INVALID_UUID) */
+  id: z.string().nullable().optional(),
+  title: z.string().nullable().default('새 대화'),
+  scope_mode: ScopeModeSchema.nullable().default('global'),
   active_source_id: z.number().int().nullable().optional(),
   active_filters: ChatFocusFilterSchema.nullable().optional(),
-  messages: z.array(ChatMessageItemSchema).optional(),
+  messages: z.array(ChatMessageItemSchema).nullable().optional(),
 });
 export type ChatSessionCreateRequest = z.infer<typeof ChatSessionCreateRequestSchema>;
 
@@ -885,8 +785,6 @@ export interface ChatModelSelectorProps {
   onSelectTier: (tier: ModelTier) => void;
   /** 답변 스트리밍 진행 여부 (true 시 상호작용 비활성화 및 안내 툴팁) */
   isStreaming: boolean;
-  /** 컴포넌트 렌더링 형태 ('inline-chip': 입력창 좌하단 밀착 | 'header-compact': 헤더 상단 | 'header-chip': 헤더 우측 상단 칩) */
-  variant?: 'inline-chip' | 'header-compact' | 'header-chip';
   /** 키보드 포커스 트랩 및 드롭다운 강제 제어 옵션 */
   forceOpen?: boolean;
   /** 추가 Tailwind 클래스 */
@@ -896,13 +794,11 @@ export interface ChatModelSelectorProps {
 export interface ModelTierBadgeProps {
   /** 렌더링 대상 모델 티어 또는 과거 모델명 */
   tier: ModelTier | string;
-  /** 뱃지 렌더링 스타일 변형 */
-  variant?: 'chip' | 'footer' | 'pill' | 'pipeline';
   /** 실제 SSE 스트리밍 측정 소요 시간 (ms 단위) */
   latencyMs?: number | null;
-  /** 상대 토큰 비용($, $$, $$$) 표시 여부 */
+  /** 상대 비용($, $$, $$$) 표시 여부. Claude 티어만, 측정값이 아닌 상대 순서 (FE-25) */
   showCost?: boolean;
-  /** 티어 아이콘(⚡, 🎯, 🧠) 노출 여부 (기본값: true) */
+  /** 티어 아이콘 노출 여부 (기본값: true) */
   showIcon?: boolean;
   /** 권장 라벨('[추천]') 노출 여부 */
   showRecommended?: boolean;
@@ -935,38 +831,6 @@ export interface ModelChangeDividerProps {
 export type ChatTimelineItem =
   | { type: 'message'; data: ChatMessage }
   | { type: 'model_switch'; data: ModelSwitchEvent };
-
-/**
- * 듀얼 모델 셀렉터를 포함하는 상단 글로벌 챗 헤더 Props (REQ-UI-008, POL-UI-006)
- */
-export interface ChatHeaderProps {
-  /** 현재 활성 세션 ID */
-  activeSessionId?: string | null;
-  /** 스코프 모드 ('global' 전체 코퍼스 | 'scoped' 기사 집중) */
-  scopeMode: ScopeMode;
-  /** 스코프 모드 전환 핸들러 */
-  onScopeChange?: (nextScope: ScopeMode) => void;
-  onToggleScope?: (mode: ScopeMode) => void;
-  /** 핸드오버된 활성 기사 출처 메타 (Scoped 모드 한정) */
-  activeSource?: NewsItem | ChatSourceDetailResponse | null;
-  /** 기사 컨텍스트 해제 핸들러 */
-  onRemoveSource?: () => void;
-  onClearSource?: () => void;
-  /** 히스토리 사이드바/드로어 열림 토글 핸들러 */
-  onToggleHistory?: () => void;
-  onToggleHistoryDrawer?: () => void;
-  /** 히스토리 사이드바/드로어 현재 열림 상태 */
-  isHistoryOpen?: boolean;
-  /** + 새 대화 시작 핸들러 */
-  onNewChat: () => void;
-  /** 듀얼 모델 셀렉터 #1 바인딩: 현재 선택된 모델 티어 (REQ-UI-008, POL-UI-006) */
-  selectedTier?: ModelTier;
-  /** 듀얼 모델 셀렉터 #1 바인딩: 모델 선택 핸들러 */
-  onSelectTier?: (tier: ModelTier) => void;
-  /** 답변 스트리밍 진행 여부 (스트리밍 중 모델 변경 차단 Lock) */
-  isStreaming?: boolean;
-  showNewChatButton?: boolean;
-  className?: string;
-}
+// 챗 헤더 Props 는 `components/chat/ChatHeader.tsx` 의 `ChatHeaderProps` 하나만 둔다 (옛 중복 정의 삭제, FE-08).
 
 

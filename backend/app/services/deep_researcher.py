@@ -1,5 +1,6 @@
 import re
 import asyncio
+import itertools
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
@@ -9,10 +10,11 @@ import feedparser
 from bs4 import BeautifulSoup
 from sqlalchemy import select, desc
 
+from app.time_utils import iso_utc
 from app.database import AsyncSessionLocal
 from app.models.news import NewsItem, SourceResearchLog
-from app.services.sources_service import sources_service
-from app.collectors.categorizer import classify_and_tag
+from app.services.sources_service import SourcesWriteError, sources_service
+from app.services.categorizer import classify_and_tag
 from app.services.llm_processor import llm_processor
 
 logger = logging.getLogger("agentlens.deep_researcher")
@@ -130,7 +132,7 @@ class AutonomousDeepResearcher:
     Autonomous Deep Research & Source Decision Engine:
     - Periodically mines external links from ingested articles.
     - Probes candidate websites and automatically extracts feeds.
-    - Performs multi-dimensional LLM-grade evaluation on technical depth, signal-to-noise ratio, and freshness.
+    - Performs rule-based (keyword) scoring on technical depth, signal-to-noise ratio, and freshness. No LLM call.
     - Automatically adopts verified high-signal sources into sources.json.
     - Maintains an audit trail log in SQLite for human review.
     """
@@ -172,7 +174,7 @@ class AutonomousDeepResearcher:
                         "verdict": r.verdict,
                         "verdict_reason": r.verdict_reason,
                         "analyzed_articles_count": r.analyzed_articles_count,
-                        "created_at": r.created_at.isoformat() if r.created_at else None
+                        "created_at": iso_utc(r.created_at)
                     }
                     for r in rows
                 ]
@@ -224,7 +226,8 @@ class AutonomousDeepResearcher:
             try:
                 resp = await client.get(target_url)
             except Exception as e:
-                return {"status": "error", "message": f"연결 실패: {e}"}
+                logger.warning(f"[Deep Researcher] probe failed for {target_url}: {e!r}")
+                return {"status": "error", "message": "연결 실패"}
 
             if resp.status_code != 200:
                 return {"status": "error", "message": f"HTTP {resp.status_code} 오류"}
@@ -270,12 +273,13 @@ class AutonomousDeepResearcher:
             try:
                 resp = await client.get(feed_url)
             except Exception as e:
-                return {"status": "error", "message": f"피드 다운로드 실패: {e}"}
+                logger.warning(f"[Deep Researcher] feed download failed for {feed_url}: {e!r}")
+                return {"status": "error", "message": "피드 다운로드 실패"}
 
         if resp.status_code != 200:
             return {"status": "error", "message": f"피드 HTTP {resp.status_code} 오류"}
 
-        parsed = feedparser.parse(resp.text)
+        parsed = await asyncio.to_thread(feedparser.parse, resp.text)  # CPU 파싱은 루프 밖에서 (PERF-03)
         if not parsed.entries:
             return {"status": "empty", "message": "피드는 열리나 발행된 기사가 존재하지 않음"}
 
@@ -303,7 +307,7 @@ class AutonomousDeepResearcher:
 
     async def evaluate_and_decide(self, feed_info: Dict[str, Any], hint_cat: str = "") -> Dict[str, Any]:
         """
-        Stage 3 & 4: Multi-dimensional LLM-grade evaluation and autonomous decision (AUTO_ADOPTED / WATCHLIST / REJECTED).
+        Stage 3 & 4: Rule-based (keyword) scoring and autonomous decision (AUTO_ADOPTED / WATCHLIST / REJECTED). No LLM call.
         """
         name = feed_info.get("name", "Unknown")
         feed_url = feed_info.get("feed_url", "")
@@ -388,6 +392,16 @@ class AutonomousDeepResearcher:
         self.is_running = True
         try:
             return await self._run_cycle(max_candidates)
+        except Exception as e:
+            # 실패도 GET /api/research/status 의 last_run_summary 로 보이게 남긴다 (N-02)
+            self.last_run_time = datetime.now(timezone.utc)
+            self.last_run_summary = {
+                "status": "error",
+                "error": type(e).__name__,
+                "completed_at": self.last_run_time.isoformat(),
+            }
+            logger.exception("[Deep Researcher] research cycle failed")
+            raise
         finally:
             # 사이클 도중 예외가 나도 다음 실행이 already_running 으로 막히지 않게 한다
             self.is_running = False
@@ -396,29 +410,33 @@ class AutonomousDeepResearcher:
         started_at = datetime.now(timezone.utc)
         logger.info("[Deep Researcher] Starting autonomous research cycle...")
 
-        candidates_pool = []
+        # 이미 sources.json 에 있는 피드·사이트는 다시 탐침하지 않는다 (N-04)
+        monitored = set()
+        for feed in sources_service.get_all_sources().get("rss_feeds", []):
+            for key in ("url", "site_url"):
+                if feed.get(key):
+                    monitored.add(feed[key].rstrip("/"))
 
-        # 1. Mine referenced domains from recently crawled articles.
-        #    발굴 후보를 시드보다 앞에 둬야 max_candidates 컷에서 평가된다 (시드 수가 컷보다 많다).
-        mined_urls = await self.mine_reference_domains_from_articles()
-        for u in mined_urls:
-            candidates_pool.append({
-                "name": urlparse(u).netloc,
-                "target_url": u,
-                "category_hint": ""
-            })
+        # 1. 최근 기사에서 인용 도메인을 캔다
+        mined = [
+            {"name": urlparse(u).netloc, "target_url": u, "category_hint": ""}
+            for u in await self.mine_reference_domains_from_articles()
+        ]
+        # 2. 시드 탐색 대상
+        seeds = [
+            {"name": s["name"], "target_url": s["url"], "category_hint": s.get("category_hint", "ai_news")}
+            for s in SEED_EXPLORATION_TARGETS
+        ]
+        mined = [c for c in mined if c["target_url"].rstrip("/") not in monitored]
+        seeds = [c for c in seeds if c["target_url"].rstrip("/") not in monitored]
 
-        # 2. Add seeds (남는 칸을 채운다)
-        for s in SEED_EXPLORATION_TARGETS:
-            candidates_pool.append({
-                "name": s["name"],
-                "target_url": s["url"],
-                "category_hint": s.get("category_hint", "ai_news")
-            })
+        # 발굴과 시드를 번갈아 채워 어느 쪽도 컷(max_candidates)에서 굶지 않게 한다 (BUG-04, N-04)
+        candidates_pool = [c for pair in itertools.zip_longest(mined, seeds) for c in pair if c]
 
         eval_queue = candidates_pool[:max_candidates]
         evaluated_results = []
         newly_adopted = 0
+        adopt_failed = 0
 
         async with AsyncSessionLocal() as session:
             for item in eval_queue:
@@ -446,16 +464,23 @@ class AutonomousDeepResearcher:
 
                     # Auto-adopt if approved
                     if decision.get("should_add"):
-                        sources_service.add_rss_source(
-                            name=name,
-                            url=feed_url,
-                            site_url=probe_res.get("site_url", url),
-                            category_hint=cat,
-                            country="KR" if "kr" in url or "daangn" in url or "woowahan" in url else "GLOBAL",
-                            description=probe_res.get("description", "자율 딥 리서처에 의해 자동 발굴 및 채택된 소스")
-                        )
-                        newly_adopted += 1
-                        self.auto_adopted_count += 1
+                        try:
+                            sources_service.add_rss_source(
+                                name=name,
+                                url=feed_url,
+                                site_url=probe_res.get("site_url", url),
+                                category_hint=cat,
+                                country="KR" if "kr" in url or "daangn" in url or "woowahan" in url else "GLOBAL",
+                                description=probe_res.get("description", "자율 딥 리서처에 의해 자동 발굴 및 채택된 소스")
+                            )
+                            newly_adopted += 1
+                            self.auto_adopted_count += 1
+                        except SourcesWriteError:
+                            # 저장 실패는 이 후보의 감사 기록으로 남기고 다음 후보를 계속 본다
+                            logger.exception(f"[Deep Researcher] sources.json 저장 실패: {feed_url}")
+                            verdict = "WATCHLIST"
+                            reason = f"채택 기준을 넘었으나(점수 {score}점) sources.json 저장에 실패해 등록하지 못했습니다."
+                            adopt_failed += 1
 
                 # Stage 5: Save audit log to database
                 audit_log = SourceResearchLog(
@@ -487,6 +512,7 @@ class AutonomousDeepResearcher:
         self.last_run_summary = {
             "evaluated_total": len(evaluated_results),
             "auto_adopted": newly_adopted,
+            "adopt_failed": adopt_failed,
             "completed_at": self.last_run_time.isoformat(),
             "results": evaluated_results
         }

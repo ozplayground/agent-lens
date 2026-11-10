@@ -1,5 +1,5 @@
-import asyncio
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from app.config import settings
@@ -7,9 +7,16 @@ from app.collectors.manager import collector_manager
 
 scheduler = AsyncIOScheduler()
 SCHEDULED_HOURS = [int(h.strip()) for h in settings.CRAWL_SCHEDULE_HOURS.split(",")]
+# 딥 리서치 시각은 설정이 없어 UTC 고정이다
+DEEP_RESEARCH_HOURS_UTC = "3,15"
+
+
+def _hours() -> list:
+    return sorted(int(h.strip()) for h in settings.CRAWL_SCHEDULE_HOURS.split(",") if h.strip())
+
 
 async def scheduled_crawl_job():
-    print(f"[Scheduler] 0,6,12,18 crawl triggered at {datetime.now(timezone.utc).isoformat()}")
+    print(f"[Scheduler] crawl ({settings.CRAWL_SCHEDULE_HOURS} {settings.CRAWL_TIMEZONE}) triggered at {datetime.now(timezone.utc).isoformat()}")
     await collector_manager.collect_all()
 
 async def scheduled_deep_research_job():
@@ -24,44 +31,56 @@ async def scheduled_briefing_dispatch_job():
 
 def get_next_run_time() -> datetime:
     job = scheduler.get_job("daily_crawl")
-    if job and job.next_run_time:
-        return job.next_run_time
-    now = datetime.now(timezone.utc)
-    for h in sorted(SCHEDULED_HOURS):
+    next_run = getattr(job, "next_run_time", None) if job else None
+    if next_run:
+        return next_run
+    tz = ZoneInfo(settings.CRAWL_TIMEZONE)
+    now = datetime.now(tz)
+    hours = _hours()
+    for h in hours:
         candidate = now.replace(hour=h, minute=0, second=0, microsecond=0)
         if candidate > now:
             return candidate
     tomorrow = now + timedelta(days=1)
-    return tomorrow.replace(hour=SCHEDULED_HOURS[0], minute=0, second=0, microsecond=0)
+    return tomorrow.replace(hour=hours[0], minute=0, second=0, microsecond=0)
+
+def add_jobs(target: AsyncIOScheduler) -> None:
+    """설정의 수집 시각·시간대·브리핑 자동 발송 시각으로 job 을 건다 (CFG-01)."""
+    tz = settings.CRAWL_TIMEZONE
+    target.add_job(
+        scheduled_crawl_job,
+        trigger=CronTrigger(hour=settings.CRAWL_SCHEDULE_HOURS, minute="0", timezone=tz),
+        id="daily_crawl",
+        name=f"Crawl ({settings.CRAWL_SCHEDULE_HOURS} {tz})",
+        replace_existing=True
+    )
+    target.add_job(
+        scheduled_deep_research_job,
+        trigger=CronTrigger(hour=DEEP_RESEARCH_HOURS_UTC, minute="0", timezone="UTC"),
+        id="deep_research",
+        name="Autonomous Deep Research Cycle",
+        replace_existing=True
+    )
+    target.add_job(
+        scheduled_briefing_dispatch_job,
+        trigger=CronTrigger(hour=str(settings.BRIEFING_AUTO_DISPATCH_HOUR), minute="15", timezone=tz),
+        id="daily_briefing_dispatch",
+        name="Daily Briefing Auto Dispatch (Notion, Email, Webhook)",
+        replace_existing=True
+    )
 
 def start_scheduler():
+    if not settings.SCHEDULER_ENABLED:
+        print("[Scheduler] scheduler.enabled=false, 스케줄러를 띄우지 않는다")
+        return
     if not scheduler.running:
-        trigger = CronTrigger(hour="0,6,12,18", minute="0", timezone="UTC")
-        scheduler.add_job(
-            scheduled_crawl_job,
-            trigger=trigger,
-            id="daily_crawl",
-            name="Daily 0,6,12,18 Global Crawl",
-            replace_existing=True
-        )
-        research_trigger = CronTrigger(hour="3,15", minute="0", timezone="UTC")
-        scheduler.add_job(
-            scheduled_deep_research_job,
-            trigger=research_trigger,
-            id="deep_research",
-            name="Autonomous Deep Research Cycle",
-            replace_existing=True
-        )
-        briefing_trigger = CronTrigger(hour="0", minute="15", timezone="UTC")
-        scheduler.add_job(
-            scheduled_briefing_dispatch_job,
-            trigger=briefing_trigger,
-            id="daily_briefing_dispatch",
-            name="Daily Briefing Auto Dispatch (Notion, Email, Webhook)",
-            replace_existing=True
-        )
+        add_jobs(scheduler)
         scheduler.start()
-        print("[Scheduler] Started for Crawl (0,6,12,18 UTC), Briefing (0:15 UTC) and Deep Research (3,15 UTC)")
+        tz = settings.CRAWL_TIMEZONE
+        print(
+            f"[Scheduler] Started for Crawl ({settings.CRAWL_SCHEDULE_HOURS} {tz}), "
+            f"Briefing ({settings.BRIEFING_AUTO_DISPATCH_HOUR}:15 {tz}) and Deep Research ({DEEP_RESEARCH_HOURS_UTC} UTC)"
+        )
 
 def stop_scheduler():
     if scheduler.running:

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/mocks/server';
+import { apiError } from '@/mocks/api-error';
 import ChatWorkspace from '@/components/chat/ChatWorkspace';
 
 /**
@@ -16,6 +17,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 interface StreamRequestBody {
+  question?: string;
+  history?: { role: string; content: string }[];
   model_tier: string;
   model: string;
   user_message_id?: string;
@@ -181,7 +184,7 @@ describe('ChatWorkspace — 한 턴 전송과 저장', () => {
       http.post('*/api/chat/stream', async ({ request }) => {
         bodies.push((await request.json()) as StreamRequestBody);
         if (bodies.length === 1) {
-          return HttpResponse.json({ error_code: 'ERR_LLM_UPSTREAM_FAILED', message: '첫 요청 실패' }, { status: 502 });
+          return apiError(502, 'ERR_LLM_UPSTREAM_FAILED', '첫 요청 실패');
         }
         return sse('event: token\ndata: {"token":"재시도 답"}\n\nevent: done\ndata: {"model":"claude-sonnet-5-5"}\n\n');
       })
@@ -264,5 +267,88 @@ describe('ChatWorkspace — 한 턴 전송과 저장', () => {
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+  it('FE-04: 재시도는 실패한 질문을 history 에 넣지 않고, 앞의 완료된 턴만 보낸다', async () => {
+    const bodies: StreamRequestBody[] = [];
+    server.use(
+      http.post('*/api/chat/stream', async ({ request }) => {
+        bodies.push((await request.json()) as StreamRequestBody);
+        if (bodies.length === 2) {
+          return apiError(502, 'ERR_LLM_UPSTREAM_FAILED', '두 번째 실패');
+        }
+        return sse(`event: token\ndata: {"token":"답${bodies.length}"}\n\nevent: done\ndata: {}\n\n`);
+      })
+    );
+    render(<ChatWorkspace />);
+
+    ask('첫 질문');
+    await waitFor(() => expect(screen.getByText('답1')).toBeInTheDocument());
+    ask('재시도 질문');
+    await waitFor(() => expect(screen.getByText('두 번째 실패')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '답변 다시 시도' }));
+    await waitFor(() => expect(screen.getByText('답3')).toBeInTheDocument());
+
+    expect(bodies).toHaveLength(3);
+    expect(bodies[2].question).toBe('재시도 질문');
+    expect(bodies[2].history).toEqual([
+      { role: 'user', content: '첫 질문' },
+      { role: 'assistant', content: '답1' },
+    ]);
+  });
+
+  it('FE-04: 오류가 화면에 그려진 바로 그 순간(같은 커밋 직후) 다시 시도를 눌러도 재시도 요청이 나간다', async () => {
+    const bodies: StreamRequestBody[] = [];
+    server.use(
+      http.post('*/api/chat/stream', async ({ request }) => {
+        bodies.push((await request.json()) as StreamRequestBody);
+        if (bodies.length === 1) {
+          return apiError(502, 'ERR_LLM_UPSTREAM_FAILED', '즉시 재시도 실패');
+        }
+        return sse('event: token\ndata: {"token":"즉시 재시도 답"}\n\nevent: done\ndata: {}\n\n');
+      })
+    );
+    render(<ChatWorkspace />);
+
+    // 오류 문구가 DOM 에 들어온 직후(마이크로태스크, 지연 effect 보다 먼저) 다시 시도를 누른다.
+    // 빠른 사용자·느린 기기에서 생길 수 있는 순서를 결정적으로 만든다.
+    let clicked = false;
+    const observer = new MutationObserver(() => {
+      if (clicked) return;
+      const retry = screen.queryByRole('button', { name: '답변 다시 시도' });
+      if (retry) {
+        clicked = true;
+        retry.click();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+    ask('즉시 재시도 질문');
+
+    await waitFor(() => expect(screen.getByText('즉시 재시도 답')).toBeInTheDocument());
+    observer.disconnect();
+    expect(clicked).toBe(true);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1].question).toBe('즉시 재시도 질문');
+  });
+
+  it('FE-04: 실패한 턴을 재시도하지 않고 새로 물어도 실패한 질문은 history 에 없다', async () => {
+    const bodies: StreamRequestBody[] = [];
+    server.use(
+      http.post('*/api/chat/stream', async ({ request }) => {
+        bodies.push((await request.json()) as StreamRequestBody);
+        if (bodies.length === 1) {
+          return apiError(502, 'ERR_LLM_UPSTREAM_FAILED', '첫 실패');
+        }
+        return sse('event: token\ndata: {"token":"새 답"}\n\nevent: done\ndata: {}\n\n');
+      })
+    );
+    render(<ChatWorkspace />);
+
+    ask('실패할 질문');
+    await waitFor(() => expect(screen.getByText('첫 실패')).toBeInTheDocument());
+    ask('새 질문');
+    await waitFor(() => expect(screen.getByText('새 답')).toBeInTheDocument());
+
+    expect(bodies[1].history).toEqual([]);
   });
 });

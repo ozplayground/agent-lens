@@ -8,27 +8,19 @@ def test_config_json_found_and_loaded():
     assert path.exists()
 
     assert settings.PROJECT_NAME == "AgentLens"
-    assert settings.VERSION in ("0.4.1", "0.4.0", "0.3.1", "0.3.0", "0.2.2", "0.2.1", "0.2.0", "0.1.0", "1.0.0")
+    # 버전은 하나만 맞다: 저장소 루트 config.json 의 app.version (docs/releases.md '버전 문자열 위치')
+    import json
+    from pathlib import Path
+    root_config = Path(__file__).resolve().parents[2] / "config.json"
+    assert settings.VERSION == json.loads(root_config.read_text(encoding="utf-8"))["app"]["version"]
     assert len(settings.CRAWL_SCHEDULE_HOURS) > 0
     assert settings.QUALITY_CUTOFF_SCORE == 5.0
     assert settings.HIGH_SIGNAL_THRESHOLD == 7.0
 
 def test_get_custom_json_value():
-    crawler_agent = settings.get_custom_json_value("crawler", "user_agent")
-    assert "AgentLens" in crawler_agent
+    # v0.4.2: 읽는 코드가 없던 crawler 절은 config.json 에서 지웠다 (CFG-02). 남은 키로 확인한다
+    project_name = settings.get_custom_json_value("app", "project_name")
+    assert "AgentLens" in project_name
 
     non_existent = settings.get_custom_json_value("non_existent_section", "foo", default="bar")
     assert non_existent == "bar"
-
-@pytest.mark.asyncio
-async def test_llm_processor_fallback_and_answer():
-    ans = await llm_processor.answer_question(
-        item_title="SWE-bench Docker Sandbox Isolation Release",
-        item_summary="새로운 격리 샌드박스를 통해 에이전트 평가 안전성을 강화했습니다.",
-        category="harness",
-        tech_stack=["SWE-bench", "Docker Sandbox"],
-        question="우리 프로젝트에 어떻게 적용할 수 있어?"
-    )
-    assert ans is not None
-    assert isinstance(ans, str)
-    assert len(ans) > 20

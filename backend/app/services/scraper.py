@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import weakref
 from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Optional, Dict
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.news import NewsItem
 
 logger = logging.getLogger("agentlens.scraper")
@@ -23,6 +25,43 @@ class ScrapeEmptyContentException(Exception):
     pass
 
 
+def _extract_text(html: str, url: str) -> Optional[str]:
+    """HTML 에서 본문을 뽑는다. 500자 미만이면 None. 동기 함수라 asyncio.to_thread 로 부른다."""
+    # 1. Trafilatura primary extraction
+    content: Optional[str] = None
+    try:
+        import trafilatura
+        content = trafilatura.extract(
+            html,
+            url=url,
+            include_links=True,
+            include_formatting=True,
+            favor_precision=True,
+        )
+    except Exception as e:
+        logger.debug(f"Trafilatura extraction exception for {url}: {e}")
+
+    # 2. Readability-lxml + BeautifulSoup secondary fallback
+    if not content or len(content.strip()) < 500:
+        try:
+            from readability import Document
+            from bs4 import BeautifulSoup
+            doc = Document(html)
+            clean_html = doc.summary()
+            soup = BeautifulSoup(clean_html, "html.parser")
+            for s in soup(["script", "style", "nav", "footer", "iframe"]):
+                s.decompose()
+            fallback_text = soup.get_text("\n", strip=True)
+            if fallback_text and len(fallback_text.strip()) >= 500:
+                content = fallback_text.strip()
+        except Exception as e:
+            logger.debug(f"Readability fallback exception for {url}: {e}")
+
+    if not content or len(content.strip()) < 500:
+        return None
+    return content.strip()
+
+
 class ArticleScraperService:
     """
     On-Demand Deep Article Scraper Service:
@@ -30,11 +69,12 @@ class ArticleScraperService:
     - L2 SQLite DB Persistence (news_items.full_content & scraped_at)
     - Single-Flight Concurrency Control (asyncio.Lock per URL)
     - High-precision extraction: trafilatura -> readability-lxml fallback
-    - Strict 5.0s timeout & graceful degradation
+    - settings.SCRAPER_TIMEOUT_SECONDS timeout (기본 5초) & graceful degradation
     """
     _l1_cache: OrderedDict[str, str] = OrderedDict()
     _l1_capacity: int = 500
-    _url_locks: Dict[str, asyncio.Lock] = {}
+    # 쓰는 동안만 남는 URL 별 잠금 (끝나면 사라져 쌓이지 않는다, PERF-05)
+    _url_locks: "weakref.WeakValueDictionary[str, asyncio.Lock]" = weakref.WeakValueDictionary()
     _global_lock: asyncio.Lock = asyncio.Lock()
 
     def __init__(self, session: Optional[AsyncSession] = None):
@@ -43,9 +83,11 @@ class ArticleScraperService:
     @classmethod
     async def _get_url_lock(cls, url: str) -> asyncio.Lock:
         async with cls._global_lock:
-            if url not in cls._url_locks:
-                cls._url_locks[url] = asyncio.Lock()
-            return cls._url_locks[url]
+            lock = cls._url_locks.get(url)
+            if lock is None:
+                lock = asyncio.Lock()
+                cls._url_locks[url] = lock
+            return lock
 
     @classmethod
     def _put_l1(cls, url: str, content: str):
@@ -71,11 +113,11 @@ class ArticleScraperService:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True, headers=headers) as client:
+            async with httpx.AsyncClient(timeout=settings.SCRAPER_TIMEOUT_SECONDS, follow_redirects=True, headers=headers) as client:
                 response = await client.get(url)
         except httpx.TimeoutException as te:
             logger.warning(f"Scrape timeout for {url}: {te}")
-            raise ScrapeTimeoutException(f"Connection timed out after 5.0s for {url}") from te
+            raise ScrapeTimeoutException(f"Connection timed out after {settings.SCRAPER_TIMEOUT_SECONDS}s for {url}") from te
         except Exception as e:
             logger.warning(f"Scrape network error for {url}: {e}")
             raise ScrapeBlockedException(f"Network error fetching {url}: {e}") from e
@@ -88,37 +130,9 @@ class ArticleScraperService:
 
         html = response.text
 
-        # 1. Trafilatura primary extraction
-        content: Optional[str] = None
-        try:
-            import trafilatura
-            content = trafilatura.extract(
-                html,
-                url=url,
-                include_links=True,
-                include_formatting=True,
-                favor_precision=True,
-            )
-        except Exception as e:
-            logger.debug(f"Trafilatura extraction exception for {url}: {e}")
-
-        # 2. Readability-lxml + BeautifulSoup secondary fallback
-        if not content or len(content.strip()) < 500:
-            try:
-                from readability import Document
-                from bs4 import BeautifulSoup
-                doc = Document(html)
-                clean_html = doc.summary()
-                soup = BeautifulSoup(clean_html, "html.parser")
-                for s in soup(["script", "style", "nav", "footer", "iframe"]):
-                    s.decompose()
-                fallback_text = soup.get_text("\n", strip=True)
-                if fallback_text and len(fallback_text.strip()) >= 500:
-                    content = fallback_text.strip()
-            except Exception as e:
-                logger.debug(f"Readability fallback exception for {url}: {e}")
-
-        if not content or len(content.strip()) < 500:
+        # 본문 추출(trafilatura·readability·BeautifulSoup)은 CPU 작업이라 이벤트 루프 밖 스레드에서 한다 (PERF-03)
+        content = await asyncio.to_thread(_extract_text, html, url)
+        if not content:
             raise ScrapeEmptyContentException(f"Extracted content is under 500 characters for {url}")
 
         return content.strip()
@@ -154,15 +168,18 @@ class ArticleScraperService:
             content = await self.fetch_and_parse(url)
 
             # Update L2 SQLite DB Persistence
+            # 요청 세션을 중간에 커밋하지 않도록 본문 캐시는 자기 세션·트랜잭션으로 저장한다 (ARCH-03)
             if self.session:
                 from sqlalchemy import update
+                from app.database import AsyncSessionLocal
                 try:
-                    await self.session.execute(
-                        update(NewsItem)
-                        .where(NewsItem.id == article_id)
-                        .values(full_content=content, scraped_at=datetime.now(timezone.utc))
-                    )
-                    await self.session.commit()
+                    async with AsyncSessionLocal() as cache_session:
+                        await cache_session.execute(
+                            update(NewsItem)
+                            .where(NewsItem.id == article_id)
+                            .values(full_content=content, scraped_at=datetime.now(timezone.utc))
+                        )
+                        await cache_session.commit()
                 except Exception as e:
                     logger.debug(f"DB update exception in scraper: {e}")
 

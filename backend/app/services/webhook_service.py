@@ -24,35 +24,35 @@ class WebhookService:
                 if res.status_code in (200, 204):
                     return True, "전송 성공"
                 return False, f"서버 응답 오류 (HTTP {res.status_code}): {res.text[:100]}"
-        except httpx.RequestError as e:
-            logger.error(f"Webhook request failed: {e}")
-            return False, f"웹훅 요청 실패: {str(e)}"
-        except Exception as e:
-            logger.error(f"Unexpected webhook error: {e}")
-            return False, f"예기치 못한 오류: {str(e)}"
+        except httpx.RequestError:
+            logger.exception("Webhook request failed")
+            return False, "웹훅 서버에 연결하지 못했습니다. URL 과 네트워크 상태를 확인해주세요."
+        except Exception:
+            logger.exception("Unexpected webhook error")
+            return False, "웹훅 전송 중 오류가 발생했습니다."
 
     def build_test_payload(self, provider: str) -> Dict[str, Any]:
         now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         if provider == "slack":
             return {
-                "text": "🔔 AgentLens 웹훅 연동 테스트 성공!",
+                "text": "AgentLens 웹훅 연동 테스트 성공",
                 "blocks": [
                     {
                         "type": "header",
-                        "text": {"type": "plain_text", "text": "🔔 AgentLens 웹훅 알림 연동 완료"}
+                        "text": {"type": "plain_text", "text": "AgentLens 웹훅 알림 연동 완료"}
                     },
                     {
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"*AgentLens AI Intelligence Engine*과 성공적으로 연결되었습니다.\n앞으로 매일 아침 정기 브리핑 및 `⭐️ Must Read` 하네스 소식이 이 채널로 자동 전달됩니다.\n• 확인 시각: `{now_str}`"
+                            "text": f"*AgentLens AI Intelligence Engine*과 성공적으로 연결되었습니다.\n이 웹훅을 공유 & 알림 설정에 저장하고 일일 브리핑 자동 발송(`auto_dispatch_daily_briefing`)이 켜져 있으면 매일 일일 브리핑이 이 채널로 전달됩니다.\n• 확인 시각: `{now_str}`"
                         }
                     }
                 ]
             }
         elif provider == "discord":
             return {
-                "content": "🔔 **AgentLens 웹훅 연동 테스트 성공!**",
+                "content": "**AgentLens 웹훅 연동 테스트 성공**",
                 "embeds": [
                     {
                         "title": "AgentLens AI 알림 연동 완료",
@@ -69,7 +69,7 @@ class WebhookService:
             }
 
     def build_briefing_payload(self, briefing_data: Dict[str, Any], provider: str) -> Dict[str, Any]:
-        title = briefing_data.get("title", "🌅 오늘의 AI 에이전트 인텔리전스 브리핑")
+        title = briefing_data.get("title", "오늘의 AI 에이전트 인텔리전스 브리핑")
         summary = briefing_data.get("executive_summary", "")
         top_items = briefing_data.get("top_highlights", [])
 
@@ -83,7 +83,7 @@ class WebhookService:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*📌 오늘의 총평*\n{summary}"
+                        "text": f"*오늘의 총평*\n{summary}"
                     }
                 },
                 {"type": "divider"}
@@ -99,14 +99,14 @@ class WebhookService:
                     why = it.get("why_it_matters", "")
                     line = f"*{idx}. <{item_url}|{item_title}>* `[{category}]`"
                     if why:
-                        line += f"\n   ↳ 💡 _{why}_"
+                        line += f"\n   ↳ _{why}_"
                     highlight_lines.append(line)
 
                 blocks.append({
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "*🎯 핵심 하이라이트*\n\n" + "\n\n".join(highlight_lines)
+                        "text": "*핵심 하이라이트*\n\n" + "\n\n".join(highlight_lines)
                     }
                 })
 
@@ -126,7 +126,7 @@ class WebhookService:
             for it in top_items[:4]:
                 embed_fields.append({
                     "name": it.get("title", "News")[:100],
-                    "value": f"[기사 원문 바로가기]({it.get('url', '#')})\n💡 {it.get('why_it_matters', it.get('summary', ''))[:200]}",
+                    "value": f"[기사 원문 바로가기]({it.get('url', '#')})\n{it.get('why_it_matters', it.get('summary', ''))[:200]}",
                     "inline": False
                 })
 
@@ -134,7 +134,7 @@ class WebhookService:
                 "content": f"**{title}**",
                 "embeds": [
                     {
-                        "title": "📌 Executive Summary",
+                        "title": "Executive Summary",
                         "description": summary[:1500],
                         "color": 3900150,
                         "fields": embed_fields,

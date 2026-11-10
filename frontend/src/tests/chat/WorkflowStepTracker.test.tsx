@@ -1,46 +1,41 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import WorkflowStepTracker from '@/components/chat/WorkflowStepTracker';
 import { ChatStatusPayload } from '@/types/chat';
 
 describe('WorkflowStepTracker Component', () => {
+  // backend 스트림이 보내는 4단계·라벨 (v0.4.2: 이모지 없음, 계약 3.1절)
   const mockStatusExtracting: ChatStatusPayload = {
     step: 'extracting_source',
-    label: '🌐 원본 소스 본문 추출 중 (Trafilatura)...',
-    timestamp: '2026-09-16T18:00:00Z',
-    progress: 20,
+    label: '지정된 단일 뉴스 기사 컨텍스트 로드 중...',
+    timestamp: '2026-09-16T18:00:00+00:00',
+    progress: 30,
   };
 
-  const mockStatusEvaluating: ChatStatusPayload = {
-    step: 'evaluating_sufficiency',
-    label: '⚖️ 정보 충실도 분석 중...',
-    timestamp: '2026-09-16T18:00:01Z',
-    progress: 45,
+  const mockStatusThinking: ChatStatusPayload = {
+    step: 'thinking',
+    label: 'ReAct 추론: 질문 의도 및 도구 필요성 분석 중...',
+    timestamp: '2026-09-16T18:00:01+00:00',
+    progress: 25,
   };
 
   const mockStatusSearching: ChatStatusPayload = {
-    step: 'agentic_searching',
-    label: '🔍 보충 기술 문서 검색 중: "Model Context Protocol"',
-    timestamp: '2026-09-16T18:00:02Z',
-    progress: 65,
+    step: 'tool_calling',
+    label: "Action: search_news_corpus('Model Context Protocol') 실행 중...",
+    timestamp: '2026-09-16T18:00:02+00:00',
+    progress: 50,
     query: 'Model Context Protocol',
-    sources_found: 2,
   };
 
   const mockStatusSynthesizing: ChatStatusPayload = {
     step: 'synthesizing',
-    label: '📝 심층 분석 리포트 작성 중...',
-    timestamp: '2026-09-16T18:00:03Z',
-    progress: 85,
+    label: '검증된 컨텍스트를 바탕으로 답변 생성 중...',
+    timestamp: '2026-09-16T18:00:03+00:00',
+    progress: 80,
   };
 
-  const mockHistory: ChatStatusPayload[] = [
-    mockStatusExtracting,
-    mockStatusEvaluating,
-    mockStatusSearching,
-    mockStatusSynthesizing,
-  ];
+  const mockHistory: ChatStatusPayload[] = [mockStatusThinking, mockStatusSearching, mockStatusSynthesizing];
 
   it('renders real-time step animation, label, and progress during streaming', () => {
     render(
@@ -52,32 +47,32 @@ describe('WorkflowStepTracker Component', () => {
       />
     );
 
-    expect(screen.getByText(/원본 소스 본문 추출 중/i)).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '20');
+    expect(screen.getByText(/지정된 단일 뉴스 기사 컨텍스트 로드 중/i)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '30');
   });
 
-  it('renders evaluating_sufficiency, agentic_searching and synthesizing step states accurately', () => {
+  it('renders thinking, tool_calling and synthesizing step states accurately (backend global order)', () => {
     const { rerender } = render(
       <WorkflowStepTracker
-        currentStatus={mockStatusEvaluating}
-        stepHistory={[mockStatusExtracting, mockStatusEvaluating]}
+        currentStatus={mockStatusThinking}
+        stepHistory={[mockStatusThinking]}
         isStreaming={true}
         isDone={false}
       />
     );
-    expect(screen.getByText(/정보 충실도 분석 중/i)).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '45');
+    expect(screen.getByText(/질문 의도 및 도구 필요성 분석 중/i)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '25');
 
     rerender(
       <WorkflowStepTracker
         currentStatus={mockStatusSearching}
-        stepHistory={[mockStatusExtracting, mockStatusEvaluating, mockStatusSearching]}
+        stepHistory={[mockStatusThinking, mockStatusSearching]}
         isStreaming={true}
         isDone={false}
       />
     );
-    expect(screen.getByText(/보충 기술 문서 검색 중/i)).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '65');
+    expect(screen.getByText(/search_news_corpus/i)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
 
     rerender(
       <WorkflowStepTracker
@@ -87,8 +82,8 @@ describe('WorkflowStepTracker Component', () => {
         isDone={false}
       />
     );
-    expect(screen.getByText(/심층 분석 리포트 작성 중/i)).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '85');
+    expect(screen.getByText(/검증된 컨텍스트를 바탕으로 답변 생성 중/i)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '80');
   });
 
   it('automatically collapses into a 28px slim accordion when isDone is true', () => {
@@ -147,62 +142,41 @@ describe('WorkflowStepTracker Component', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders dedicated lucide-react icons and labels for ReAct steps (thinking, tool_calling, observing)', () => {
-    const thinkingStep: ChatStatusPayload = {
-      step: 'thinking',
-      label: '🧠 질문 의도 분석 및 도구 실행 계획 수립 중...',
-      timestamp: '2026-10-19T10:00:00Z',
-      progress: 25,
-    };
-    const toolCallingStep: ChatStatusPayload = {
-      step: 'tool_calling',
-      label: '🔍 뉴스 코퍼스 검색 도구 호출 중: search_news_corpus("Claude 5.5 Sonnet")',
-      timestamp: '2026-10-19T10:00:01Z',
-      progress: 55,
-      query: 'Claude 5.5 Sonnet',
-    };
-    const observingStep: ChatStatusPayload = {
-      step: 'observing',
-      label: '✅ 검색 결과 1건 관찰 및 답변 생성 준비 완료',
-      timestamp: '2026-10-19T10:00:02Z',
-      progress: 80,
-      sources_found: 1,
-    };
-
+  it('renders dedicated lucide-react icons and labels for ReAct steps (thinking, tool_calling, synthesizing)', () => {
     const { container, rerender } = render(
       <WorkflowStepTracker
-        currentStatus={thinkingStep}
-        stepHistory={[thinkingStep]}
+        currentStatus={mockStatusThinking}
+        stepHistory={[mockStatusThinking]}
         isStreaming={true}
         isDone={false}
       />
     );
-    expect(screen.getByText(/질문 의도 분석 및 도구 실행 계획 수립 중/i)).toBeInTheDocument();
+    expect(screen.getByText(/질문 의도 및 도구 필요성 분석 중/i)).toBeInTheDocument();
     const thinkingHeaderRow = container.querySelector('.flex.items-center.gap-2.font-medium');
     expect(thinkingHeaderRow?.querySelector('svg')).not.toBeNull();
 
     rerender(
       <WorkflowStepTracker
-        currentStatus={toolCallingStep}
-        stepHistory={[thinkingStep, toolCallingStep]}
+        currentStatus={mockStatusSearching}
+        stepHistory={[mockStatusThinking, mockStatusSearching]}
         isStreaming={true}
         isDone={false}
       />
     );
-    expect(screen.getByText(/뉴스 코퍼스 검색 도구 호출 중/i)).toBeInTheDocument();
+    expect(screen.getByText(/search_news_corpus/i)).toBeInTheDocument();
     const toolCallingHeaderRow = container.querySelector('.flex.items-center.gap-2.font-medium');
     expect(toolCallingHeaderRow?.querySelector('svg')).not.toBeNull();
 
     rerender(
       <WorkflowStepTracker
-        currentStatus={observingStep}
-        stepHistory={[thinkingStep, toolCallingStep, observingStep]}
+        currentStatus={mockStatusSynthesizing}
+        stepHistory={mockHistory}
         isStreaming={true}
         isDone={false}
       />
     );
-    expect(screen.getByText(/검색 결과 1건 관찰 및 답변 생성 준비 완료/i)).toBeInTheDocument();
-    const observingHeaderRow = container.querySelector('.flex.items-center.gap-2.font-medium');
-    expect(observingHeaderRow?.querySelector('svg')).not.toBeNull();
+    expect(screen.getByText(/검증된 컨텍스트를 바탕으로 답변 생성 중/i)).toBeInTheDocument();
+    const synthesizingHeaderRow = container.querySelector('.flex.items-center.gap-2.font-medium');
+    expect(synthesizingHeaderRow?.querySelector('svg')).not.toBeNull();
   });
 });

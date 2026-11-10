@@ -742,12 +742,40 @@ function sideMarks(group: HTMLElement, attribute: 'data-overflow-hint' | 'data-o
   };
 }
 
+/**
+ * 사용자가 줄을 밀어 넘침 상태를 바꾼다. 입력 신호(pointerdown) 뒤의 스크롤이라 ScrollRow 는 사용자 스크롤로 본다.
+ * 입력 신호가 없으면 ScrollRow 는 넘침 상태가 바뀔 때 선택 칩을 다시 보이게 `scrollLeft` 를 옮기는데(보정 5 ①),
+ * jsdom 은 그 이동에 `scroll` 을 보내지 않아 상태가 첫 측정 프레임이 언제 오느냐에 따라 뒤늦게 바뀌었다 (간헐 실패).
+ */
+/** 측정 프레임(`requestAnimationFrame`)을 직접 돌린다. 프레임이 언제 오느냐에 따라 결과가 달라지지 않게 한다. */
+const pendingFrames: FrameRequestCallback[] = [];
+function flushFrames() {
+  act(() => {
+    for (const callback of pendingFrames.splice(0)) callback(0);
+  });
+}
+
 async function scrollTo(group: HTMLElement, state: 'start' | 'end' | 'both') {
-  setScrollLeft(group, state === 'end' ? 0 : state === 'both' ? 300 : 600);
+  const left = state === 'end' ? 0 : state === 'both' ? 300 : 600;
+  fireEvent.pointerDown(group);
+  setScrollLeft(group, left);
   await waitFor(() => expect(group).toHaveAttribute('data-overflow', state));
+  // 사용자가 둔 위치가 그대로이고, 남은 측정 프레임(처음 그릴 때 예약한 것 등)을 돌려도 상태가 같다.
+  flushFrames();
+  expect(group.scrollLeft).toBe(left);
+  expect(group).toHaveAttribute('data-overflow', state);
 }
 
 describe('ScrollRow — overflow hints on each overflowing side below 768px (보정 3)', () => {
+  const realRequestAnimationFrame = window.requestAnimationFrame;
+  beforeEach(() => {
+    pendingFrames.length = 0;
+    window.requestAnimationFrame = (callback: FrameRequestCallback) => pendingFrames.push(callback);
+  });
+  afterEach(() => {
+    window.requestAnimationFrame = realRequestAnimationFrame;
+  });
+
   it('① shows a start hint before and an end hint after the group for each overflowing side', async () => {
     mockMatchMedia(360);
     layout.scrollWidth = 900;

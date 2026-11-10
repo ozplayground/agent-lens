@@ -2,13 +2,16 @@ import re
 import json
 import uuid
 from typing import List, Optional, Tuple, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+from app.time_utils import iso_utc
+from app.config import settings
 from app.models.chat_session import ChatSessionModel, ChatMessageModel
 from app.models.news import NewsItem
+from app.services.news_service import parse_tldr, split_csv
 from app.schemas.chat import (
     ChatSessionSummary,
     ChatSessionDetail,
@@ -30,9 +33,30 @@ class InvalidSessionUUIDException(Exception):
     def __init__(self, message: str = "유효하지 않은 세션 UUID 형식이거나 파라미터 규격 오류입니다."):
         super().__init__(message)
 
+class MessageIdConflictException(Exception):
+    """받은 메시지 id 가 다른 세션에 이미 있다 (id 는 전역 PK 라 이 세션에 저장할 수 없다, N-06)."""
+
+    def __init__(self, message_ids: List[str]):
+        self.message_ids = message_ids
+        super().__init__(f"다른 대화에서 이미 쓰는 메시지 id 입니다: {', '.join(message_ids)}")
+
 class SessionDeleteFailedException(Exception):
     def __init__(self, message: str = "CASCADE 삭제 트랜잭션 처리에 실패했습니다."):
         super().__init__(message)
+
+
+def _parse_client_time(value: Any) -> Optional[datetime]:
+    """클라이언트가 보낸 ISO 시각을 UTC 로. 없거나 해석할 수 없으면 None (서버 시각을 쓴다)."""
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            dt = datetime.fromisoformat(value.strip())
+        except ValueError:
+            return None
+    else:
+        return None
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
 
 def generate_auto_title(question: str) -> str:
@@ -79,8 +103,8 @@ class ChatSessionService:
             msgs = s.messages or []
             last_preview = msgs[-1].content[:100] if msgs else None
 
-            created_str = s.created_at.isoformat() if hasattr(s.created_at, "isoformat") else str(s.created_at)
-            updated_str = s.updated_at.isoformat() if hasattr(s.updated_at, "isoformat") else str(s.updated_at)
+            created_str = iso_utc(s.created_at)
+            updated_str = iso_utc(s.updated_at)
 
             summaries.append(
                 ChatSessionSummary(
@@ -132,7 +156,7 @@ class ChatSessionService:
                 except Exception:
                     usage_meta = None
 
-            m_created = m.created_at.isoformat() if hasattr(m.created_at, "isoformat") else str(m.created_at)
+            m_created = iso_utc(m.created_at)
             chat_messages.append(
                 ChatMessageItem(
                     id=m.id,
@@ -154,18 +178,12 @@ class ChatSessionService:
         if s.active_source_id:
             item = await self.session.get(NewsItem, s.active_source_id)
             if item:
-                tldr = []
-                try:
-                    tldr = json.loads(item.tldr_bullets) if item.tldr_bullets else []
-                    if not isinstance(tldr, list):
-                        tldr = [str(tldr)]
-                except Exception:
-                    tldr = []
-                tech = [t.strip() for t in item.tech_stack.split(",") if t.strip()] if item.tech_stack else []
-                tags = [t.strip() for t in item.tags.split(",") if t.strip()] if item.tags else []
-                pub_str = item.published_at.isoformat() if hasattr(item.published_at, "isoformat") else str(item.published_at)
-                c_str = item.created_at.isoformat() if hasattr(item.created_at, "isoformat") else str(item.created_at)
-                sc_str = item.scraped_at.isoformat() if item.scraped_at and hasattr(item.scraped_at, "isoformat") else None
+                tldr = parse_tldr(item.tldr_bullets)
+                tech = split_csv(item.tech_stack)
+                tags = split_csv(item.tags)
+                pub_str = iso_utc(item.published_at) or ""
+                c_str = iso_utc(item.created_at)
+                sc_str = iso_utc(item.scraped_at)
 
                 active_source = ChatSourceDetailResponse(
                     id=item.id,
@@ -195,8 +213,8 @@ class ChatSessionService:
             except Exception:
                 active_filters = None
 
-        created_str = s.created_at.isoformat() if hasattr(s.created_at, "isoformat") else str(s.created_at)
-        updated_str = s.updated_at.isoformat() if hasattr(s.updated_at, "isoformat") else str(s.updated_at)
+        created_str = iso_utc(s.created_at)
+        updated_str = iso_utc(s.updated_at)
 
         return ChatSessionDetail(
             id=s.id,
@@ -220,6 +238,8 @@ class ChatSessionService:
 
         session_id = req.id or str(uuid.uuid4())
         filters_json = req.active_filters.model_dump_json() if req.active_filters else None
+        # 다른 세션의 메시지 id 가 섞였으면 아무것도 바꾸기 전에 거절한다 (N-06)
+        await self._existing_message_ids(session_id, [m.id for m in (req.messages or [])])
 
         stmt = (
             select(ChatSessionModel)
@@ -251,9 +271,9 @@ class ChatSessionService:
                 updated_at=now,
             )
             self.session.add(new_session)
+        await self.session.flush()
 
-        await self.session.commit()
-
+        # 세션 행·메시지·FIFO 정리를 한 트랜잭션으로 묶고 끝에서 한 번 커밋한다 (ARCH-03)
         if req.messages:
             msg_dicts = [
                 {
@@ -263,7 +283,10 @@ class ChatSessionService:
                     "sources": m.sources,
                     "status": m.status,
                     "model": m.model,
+                    "model_tier": m.model_tier,
+                    "usage": m.usage,
                     "latency_ms": m.latency_ms,
+                    "created_at": m.created_at,
                 }
                 for m in req.messages
             ]
@@ -273,10 +296,12 @@ class ChatSessionService:
                 scope_mode=req.scope_mode or "global",
                 source_id=req.active_source_id,
                 filters=req.active_filters,
+                commit=False,
             )
 
-        # Enforce FIFO retention limit (max 30)
-        await self.enforce_fifo_retention(max_limit=30)
+        # Enforce FIFO retention limit (settings.CHAT_SESSION_MAX_LIMIT, 기본 30)
+        await self.enforce_fifo_retention(max_limit=settings.CHAT_SESSION_MAX_LIMIT, commit=False)
+        await self.session.commit()
         return await self.get_session_detail(session_id)
 
     async def delete_session(self, session_id: str) -> GenericSuccessResponse:
@@ -305,9 +330,18 @@ class ChatSessionService:
         scope_mode: str = "global",
         source_id: Optional[int] = None,
         filters: Optional[ChatFocusFilter] = None,
+        commit: bool = True,
     ) -> List[ChatMessageModel]:
-        """Atomically append a batch of messages to a session, auto-title if needed, update updated_at."""
+        """Atomically append a batch of messages to a session, auto-title if needed, update updated_at.
+
+        commit=False 면 커밋·FIFO 정리를 부르는 쪽(업서트)에 맡긴다.
+
+        이미 이 세션에 있는 id 는 건너뛰고, 다른 세션의 id 면 MessageIdConflictException (N-06).
+        created_at 은 받은 값(ISO)을 쓰고, 없으면 서버 시각에 순서대로 1µs 씩 더해 한 배치 안의 순서를 지킨다 (N-07).
+        """
         now = datetime.now(timezone.utc)
+        incoming_ids = [m["id"] for m in messages if m.get("id")]
+        existing_ids = await self._existing_message_ids(session_id, incoming_ids)
 
         s = await self.session.get(ChatSessionModel, session_id)
         if not s:
@@ -324,16 +358,8 @@ class ChatSessionService:
             self.session.add(s)
             await self.session.flush()
 
-        # 이미 저장된 메시지 id 는 건너뛴다 (같은 메시지를 다시 동기화해도 중복·PK 충돌이 없다)
-        incoming_ids = [m["id"] for m in messages if m.get("id")]
-        existing_ids: set[str] = set()
-        if incoming_ids:
-            existing_ids = set((await self.session.execute(
-                select(ChatMessageModel.id).where(ChatMessageModel.id.in_(incoming_ids))
-            )).scalars())
-
         created_models: List[ChatMessageModel] = []
-        for m in messages:
+        for offset, m in enumerate(messages):
             if m.get("id") in existing_ids:
                 continue
             role = m.get("role", "user")
@@ -369,17 +395,32 @@ class ChatSessionService:
                 model_tier=m.get("model_tier"),
                 usage_json=usage_json,
                 latency_ms=m.get("latency_ms"),
-                created_at=now,
+                created_at=_parse_client_time(m.get("created_at")) or now + timedelta(microseconds=offset),
             )
             self.session.add(msg)
             created_models.append(msg)
             existing_ids.add(msg.id)
 
         s.updated_at = now
+        if not commit:
+            await self.session.flush()
+            return created_models
         await self.session.commit()
 
-        await self.enforce_fifo_retention(max_limit=30)
+        await self.enforce_fifo_retention(max_limit=settings.CHAT_SESSION_MAX_LIMIT)
         return created_models
+
+    async def _existing_message_ids(self, session_id: str, message_ids: List[str]) -> set:
+        """이 세션에 이미 있는 id 집합. 다른 세션에 있는 id 가 있으면 MessageIdConflictException."""
+        if not message_ids:
+            return set()
+        rows = (await self.session.execute(
+            select(ChatMessageModel.id, ChatMessageModel.session_id).where(ChatMessageModel.id.in_(message_ids))
+        )).all()
+        foreign = sorted(mid for mid, owner in rows if owner != session_id)
+        if foreign:
+            raise MessageIdConflictException(foreign)
+        return {mid for mid, _ in rows}
 
     async def persist_turn(
         self,
@@ -454,7 +495,7 @@ class ChatSessionService:
         )
         return created[0]
 
-    async def enforce_fifo_retention(self, max_limit: int = 30) -> int:
+    async def enforce_fifo_retention(self, max_limit: int = 30, commit: bool = True) -> int:
         """Keep at most max_limit sessions; evict oldest by updated_at."""
         total_stmt = select(func.count(ChatSessionModel.id))
         total_count = (await self.session.execute(total_stmt)).scalar_one()
@@ -475,6 +516,9 @@ class ChatSessionService:
                 sess_to_del = await self.session.get(ChatSessionModel, oid)
                 if sess_to_del:
                     await self.session.delete(sess_to_del)
-            await self.session.commit()
+            if commit:
+                await self.session.commit()
+            else:
+                await self.session.flush()
             return len(oldest_ids)
         return 0

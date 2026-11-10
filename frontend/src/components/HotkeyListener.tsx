@@ -2,23 +2,6 @@
 
 import { useEffect } from 'react';
 
-export interface HotkeyMapping {
-  /** 대상 키 (소문자 표기: 'j', 'k', '/', 'b', 'c', 't', 'escape') */
-  key: string;
-  /** 조합키 요구사항 */
-  modifiers?: {
-    metaOrCtrl?: boolean;
-    shift?: boolean;
-    alt?: boolean;
-  };
-  /** 입력 필드 내부에서도 실행을 허용할지 여부 (기본값: false, Cmd+K/Escape는 true) */
-  allowInInputs?: boolean;
-  /** 단축키 발동 시 실행할 콜백 */
-  handler: (e: KeyboardEvent) => void;
-  /** 단축키 설명 */
-  description: string;
-}
-
 export interface HotkeyListenerProps {
   /** 메인 피드 포커스 카드 이동 콜백 (j: +1, k: -1) */
   onNavigateFeed?: (delta: 1 | -1) => void;
@@ -32,15 +15,9 @@ export interface HotkeyListenerProps {
   onFocusSearch?: () => void;
   /** 테마 순환 토글 (t) */
   onToggleTheme?: () => void;
-  /** 열린 모달/팔레트 닫기 (Escape). 홈 화면은 넘기지 않는다 — Escape 는 오버레이 스택이 처리한다. */
-  onCloseOverlays?: () => void;
-  /** 전역 커맨드 팔레트 토글 (Cmd+K / Ctrl+K). 홈 화면은 넘기지 않는다 — ⌘K 는 `Header` 가 처리한다. */
-  onToggleCommandPalette?: () => void;
-  /** 추가 커스텀 핫키 매핑 */
-  customHotkeys?: HotkeyMapping[];
   /** 단축키 활성화 여부 (기본값: true) */
   enabled?: boolean;
-  /** true 면 단일 키 단축키(j/k, /, b, c, t, Enter/Space, 커스텀)를 무시한다. 오버레이가 열려 있을 때 넘긴다. */
+  /** true 면 단일 키 단축키(j/k, /, b, c, t, Enter/Space)를 무시한다. 오버레이가 열려 있을 때 넘긴다. */
   blockSingleKeys?: boolean;
 }
 
@@ -78,9 +55,6 @@ export default function HotkeyListener({
   onToggleBookmark,
   onFocusSearch,
   onToggleTheme,
-  onCloseOverlays,
-  onToggleCommandPalette,
-  customHotkeys = [],
   enabled = true,
   blockSingleKeys = false,
 }: HotkeyListenerProps) {
@@ -93,25 +67,14 @@ export default function HotkeyListener({
         return;
       }
 
-      // 2. Cmd+K / Ctrl+K 커맨드 팔레트 토글 (입력창 내부에서도 허용, 넘겨받았을 때만)
-      if (onToggleCommandPalette && (e.metaKey || e.ctrlKey) && ((e.key ?? '').toLowerCase() === 'k' || e.code === 'KeyK')) {
-        e.preventDefault();
-        onToggleCommandPalette();
-        return;
-      }
+      // ⌘K 는 `Header`, Escape 는 오버레이 스택이 처리한다. 여기서는 단일 키만 다룬다.
 
-      // 3. Escape 키 모달/오버레이 닫기 (입력창 내부에서도 허용)
-      if (e.key === 'Escape') {
-        onCloseOverlays?.();
-        return;
-      }
-
-      // 4. 오버레이가 열려 있으면 단일 키 단축키를 막는다
+      // 2. 오버레이가 열려 있으면 단일 키 단축키를 막는다
       if (blockSingleKeys) {
         return;
       }
 
-      // 5. Input Isolation Rule: 사용자가 텍스트 입력 중일 때는 단일 키 핫키 무시
+      // 3. Input Isolation Rule: 사용자가 텍스트 입력 중일 때는 단일 키 핫키 무시
       if (isEditableTarget(e.target)) {
         return;
       }
@@ -123,15 +86,7 @@ export default function HotkeyListener({
 
       const key = resolveSingleKey(e);
 
-      // 6. 커스텀 핫키 처리
-      for (const mapping of customHotkeys) {
-        if (mapping.key.toLowerCase() === key) {
-          mapping.handler(e);
-          return;
-        }
-      }
-
-      // 7. 표준 단일 키 핫키 매핑
+      // 4. 단일 키 핫키 매핑
       switch (key) {
         case 'j':
           e.preventDefault();
@@ -182,9 +137,6 @@ export default function HotkeyListener({
     onToggleBookmark,
     onFocusSearch,
     onToggleTheme,
-    onCloseOverlays,
-    onToggleCommandPalette,
-    customHotkeys,
   ]);
 
   return null;

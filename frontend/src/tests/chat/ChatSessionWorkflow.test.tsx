@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ChatWorkspace from '@/components/chat/ChatWorkspace';
 import { resetMockSessionStore } from '@/mocks/handlers/chat';
 
@@ -132,8 +132,8 @@ describe('ChatSessionWorkflow Integration (FUNC-CHAT-012 TDD)', () => {
       expect(screen.getByText(/LangGraph v0.2의 핵심 아키텍처/i)).toBeInTheDocument();
     });
 
-    // Find delete button within this card
-    const deleteBtn = within(sessionCard).getByRole('button', { name: /삭제/i });
+    // 삭제 버튼은 카드 버튼의 형제다 (FE-12: 버튼 안 버튼 금지)
+    const deleteBtn = screen.getByRole('button', { name: /대화 'LangGraph v0.2 아키텍처 분석.*' 삭제/ });
     fireEvent.click(deleteBtn);
 
     // Confirm deletion in popover

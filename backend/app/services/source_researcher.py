@@ -9,166 +9,18 @@ import feedparser
 from bs4 import BeautifulSoup
 
 from app.services.sources_service import sources_service
-from app.collectors.categorizer import classify_and_tag
+from app.services.categorizer import classify_and_tag
 from app.services.llm_processor import llm_processor
 
 logger = logging.getLogger("agentlens.researcher")
 
-# Curated Ecosystem Knowledge Base for Discovery
-CURATED_ECOSYSTEM_CATALOG = [
-    {
-        "id": "lilian_weng",
-        "name": "Lilian Weng (OpenAI) Tech Blog",
-        "site_url": "https://lilianweng.github.io",
-        "feed_url": "https://lilianweng.github.io/index.xml",
-        "category_hint": "agent_tech",
-        "country": "GLOBAL",
-        "description": "자율 에이전트 아키텍처, LLM 메모리, 툴 유즈, 추론 정렬 심층 기술 분석",
-        "tags": ["agent", "reasoning", "memory", "alignment"],
-        "base_score": 9.6
-    },
-    {
-        "id": "eugene_yan",
-        "name": "Eugene Yan (Applied AI & Eval)",
-        "site_url": "https://eugeneyan.com",
-        "feed_url": "https://eugeneyan.com/rss/",
-        "category_hint": "harness",
-        "country": "GLOBAL",
-        "description": "실전 AI 평가(Eval), 시스템 벤치마킹, 에이전트 패턴 및 프롬프트 엔지니어링",
-        "tags": ["harness", "eval", "benchmark", "patterns"],
-        "base_score": 9.4
-    },
-    {
-        "id": "chip_huyen",
-        "name": "Chip Huyen (AI Engineering)",
-        "site_url": "https://huyenchip.com",
-        "feed_url": "https://huyenchip.com/feed.xml",
-        "category_hint": "agent_tech",
-        "country": "GLOBAL",
-        "description": "프로덕션 AI 엔지니어링, 에이전트 런타임 및 모델 서빙 아키텍처",
-        "tags": ["engineering", "production", "agent", "architecture"],
-        "base_score": 9.3
-    },
-    {
-        "id": "sebastian_raschka",
-        "name": "Ahead of AI (Sebastian Raschka)",
-        "site_url": "https://magazine.sebastianraschka.com",
-        "feed_url": "https://magazine.sebastianraschka.com/feed",
-        "category_hint": "ai_news",
-        "country": "GLOBAL",
-        "description": "최신 오픈소스 LLM, 사전학습/미세조정, 에이전트 추론 능력 분석",
-        "tags": ["llm", "reasoning", "fine-tuning", "research"],
-        "base_score": 9.2
-    },
-    {
-        "id": "deepmind_blog",
-        "name": "Google DeepMind Research Blog",
-        "site_url": "https://deepmind.google/blog",
-        "feed_url": "https://deepmind.google/blog/rss.xml",
-        "category_hint": "ai_news",
-        "country": "GLOBAL",
-        "description": "구글 딥마인드 프론티어 AI 연구 및 자율 에이전트 알고리즘 공식 블로그",
-        "tags": ["deepmind", "gemini", "reasoning", "frontier"],
-        "base_score": 9.5
-    },
-    {
-        "id": "microsoft_research",
-        "name": "Microsoft Research AI",
-        "site_url": "https://www.microsoft.com/en-us/research",
-        "feed_url": "https://www.microsoft.com/en-us/research/feed/",
-        "category_hint": "agent_tech",
-        "country": "GLOBAL",
-        "description": "AutoGen 및 마이크로소프트 자율 에이전트 연구진 기술 리포트",
-        "tags": ["microsoft", "autogen", "multi-agent", "research"],
-        "base_score": 9.1
-    },
-    {
-        "id": "openhands_releases",
-        "name": "OpenHands (All-Hands AI) Releases",
-        "site_url": "https://github.com/All-Hands-AI/OpenHands",
-        "feed_url": "https://github.com/All-Hands-AI/OpenHands/releases.atom",
-        "category_hint": "harness",
-        "country": "GLOBAL",
-        "description": "오픈소스 자율 소프트웨어 개발 에이전트 및 벤치마크 하네스 릴리즈",
-        "tags": ["harness", "swe-bench", "coding-agent", "docker"],
-        "base_score": 9.4
-    },
-    {
-        "id": "aider_releases",
-        "name": "Aider AI Pair Programmer Releases",
-        "site_url": "https://github.com/paul-gauthier/aider",
-        "feed_url": "https://github.com/paul-gauthier/aider/releases.atom",
-        "category_hint": "harness",
-        "country": "GLOBAL",
-        "description": "터미널 기반 AI 페어 프로그래밍 에이전트 및 벤치마크 리더보드",
-        "tags": ["coding-agent", "benchmark", "git", "cli"],
-        "base_score": 9.2
-    },
-    {
-        "id": "cline_releases",
-        "name": "Cline (Autonomous Coding Agent) Releases",
-        "site_url": "https://github.com/cline/cline",
-        "feed_url": "https://github.com/cline/cline/releases.atom",
-        "category_hint": "mcp_plugins_skills",
-        "country": "GLOBAL",
-        "description": "VS Code 자율 코딩 에이전트 및 MCP 도구 연동 공식 릴리즈",
-        "tags": ["mcp", "agent", "coding", "tools"],
-        "base_score": 9.3
-    },
-    {
-        "id": "fastmcp_releases",
-        "name": "FastMCP Framework Releases",
-        "site_url": "https://github.com/jlowin/fastmcp",
-        "feed_url": "https://github.com/jlowin/fastmcp/releases.atom",
-        "category_hint": "mcp_plugins_skills",
-        "country": "GLOBAL",
-        "description": "Python 기반 고성능 Model Context Protocol(MCP) 서버 구축 라이브러리",
-        "tags": ["mcp", "fastmcp", "python", "tools"],
-        "base_score": 9.3
-    },
-    {
-        "id": "daangn_tech",
-        "name": "당근마켓 테크 블로그",
-        "site_url": "https://medium.com/daangn",
-        "feed_url": "https://medium.com/feed/daangn",
-        "category_hint": "agent_tech",
-        "country": "KR",
-        "description": "국내 하이퍼로컬 AI 검색 및 서비스 엔지니어링 기술 칼럼",
-        "tags": ["search", "engineering", "ml"],
-        "base_score": 8.7
-    },
-    {
-        "id": "woowahan_tech",
-        "name": "우아한형제들 기술블로그",
-        "site_url": "https://techblog.woowahan.com",
-        "feed_url": "https://techblog.woowahan.com/feed/",
-        "category_hint": "agent_tech",
-        "country": "KR",
-        "description": "배달의민족 대규모 트래픽 및 AI/ML 플랫폼 엔지니어링 블로그",
-        "tags": ["platform", "engineering", "backend"],
-        "base_score": 8.8
-    },
-    {
-        "id": "line_engineering",
-        "name": "LINE Engineering Korea",
-        "site_url": "https://engineering.linecorp.com/ko",
-        "feed_url": "https://engineering.linecorp.com/ko/feed/",
-        "category_hint": "agent_tech",
-        "country": "KR",
-        "description": "글로벌 메신저 및 AI 연구개발 엔지니어링 블로그",
-        "tags": ["global", "architecture", "ai"],
-        "base_score": 8.7
-    }
-]
-
 class SourceResearcher:
     """
-    Autonomous Source Discovery & Validation Engine:
+    URL 조사 (POST /api/research/inspect-url):
     - Auto-probes websites for RSS/Atom/JSON feeds.
     - Inspects GitHub repositories for release feeds.
-    - Conducts topic & ecosystem-based discovery of candidate sources.
     - Evaluates signal relevance to AgentLens curation themes.
-    - Integrates with sources_service for one-click target registration.
+    (v0.4.2: 화면이 부르지 않던 카탈로그 추천·후보 등록은 지웠다, CC-02)
     """
 
     def __init__(self):
@@ -206,9 +58,11 @@ class SourceResearcher:
             try:
                 resp = await client.get(raw_url)
             except Exception as e:
+                # 예외 원문(내부 주소·경로 등)은 로그에만 남기고 응답은 고정 문장 (SEC-03 과 같은 규칙)
+                logger.warning(f"inspect-url connection failed for {raw_url}: {e!r}")
                 return {
                     "status": "error",
-                    "message": f"URL 접속 실패: {e}",
+                    "message": "URL 에 접속하지 못했습니다. 주소와 네트워크를 확인해주세요.",
                     "input_url": raw_url
                 }
 
@@ -273,12 +127,13 @@ class SourceResearcher:
             try:
                 resp = await client.get(feed_url)
             except Exception as e:
-                return {"status": "error", "message": f"피드 다운로드 실패: {e}", "feed_url": feed_url}
+                logger.warning(f"feed download failed for {feed_url}: {e!r}")
+                return {"status": "error", "message": "피드를 내려받지 못했습니다.", "feed_url": feed_url}
 
         if resp.status_code != 200:
             return {"status": "error", "message": f"피드 응답 오류 ({resp.status_code})", "feed_url": feed_url}
 
-        parsed = feedparser.parse(resp.text)
+        parsed = await asyncio.to_thread(feedparser.parse, resp.text)  # CPU 파싱은 루프 밖에서 (PERF-03)
         if not parsed.entries:
             return {
                 "status": "empty",
@@ -326,86 +181,6 @@ class SourceResearcher:
             "recent_posts": recent_posts,
             "already_registered": already_registered,
             "why_recommended": f"최신 {cat.upper()} 관련 {len(recent_posts)}건의 활성 글 발행 확인 (신호 강도 {eval_res['quality_score']}점)"
-        }
-
-    async def discover_sources(self, query: str = "", category: str = "", limit: int = 8) -> Dict[str, Any]:
-        """
-        Searches the curated ecosystem knowledge base and performs live feed probing
-        to discover top-tier candidate sources matching the user's research focus.
-        """
-        all_sources = sources_service.get_all_sources()
-        registered_urls = set(f.get("url").rstrip("/") for f in all_sources.get("rss_feeds", []))
-
-        candidates = []
-        q_lower = query.lower().strip() if query else ""
-
-        for item in CURATED_ECOSYSTEM_CATALOG:
-            # Filter by query if provided
-            if q_lower:
-                match = (
-                    q_lower in item["name"].lower() or
-                    q_lower in item["description"].lower() or
-                    q_lower in item["category_hint"].lower() or
-                    any(q_lower in tag for tag in item.get("tags", []))
-                )
-                if not match:
-                    continue
-
-            # Filter by category if specified
-            if category and item["category_hint"] != category:
-                continue
-
-            is_already = item["feed_url"].rstrip("/") in registered_urls
-
-            candidates.append({
-                "id": item["id"],
-                "name": item["name"],
-                "site_url": item["site_url"],
-                "feed_url": item["feed_url"],
-                "category_hint": item["category_hint"],
-                "country": item["country"],
-                "description": item["description"],
-                "relevance_score": item["base_score"],
-                "tags": item.get("tags", []),
-                "already_registered": is_already,
-                "why_recommended": f"{item['category_hint'].upper()} 생태계 핵심 레퍼런스 소스 (기본 신호 점수 {item['base_score']}점)"
-            })
-
-        # Sort candidates: non-registered first, then by score descending
-        candidates.sort(key=lambda x: (not x["already_registered"], x["relevance_score"]), reverse=True)
-        selected = candidates[:limit]
-
-        return {
-            "query": query,
-            "category": category,
-            "total_found": len(candidates),
-            "candidates": selected
-        }
-
-    def register_candidate(self, candidate: Dict[str, Any]) -> Dict[str, Any]:
-        """Registers a discovered candidate into sources.json."""
-        name = candidate.get("name", "")
-        feed_url = candidate.get("feed_url", "")
-        site_url = candidate.get("site_url", "")
-        cat = candidate.get("category_hint", "ai_news")
-        country = candidate.get("country", "GLOBAL")
-        desc = candidate.get("description", "")
-
-        if not name or not feed_url:
-            return {"status": "error", "message": "name과 feed_url은 필수입니다."}
-
-        added = sources_service.add_rss_source(
-            name=name,
-            url=feed_url,
-            site_url=site_url,
-            category_hint=cat,
-            country=country,
-            description=desc
-        )
-        return {
-            "status": "success",
-            "message": f"'{name}' 소스가 성공적으로 스크래핑 대상에 등록되었습니다.",
-            "source": added
         }
 
 source_researcher = SourceResearcher()

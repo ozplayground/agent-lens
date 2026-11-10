@@ -222,3 +222,20 @@ describe('FocusBottomSheet Component', () => {
     expect(screen.queryByRole('button', { name: /하네스·평가|MCP·도구|에이전트 기술|AI 뉴스/ })).toBeNull();
   });
 });
+
+describe('FocusBottomSheet — 고신호 라벨 (spec-writer 지적, D-25 원칙)', () => {
+  it('고신호 판정 기준 숫자를 라벨에 박지 않는다 (판정은 backend is_high_signal)', () => {
+    render(
+      <FocusBottomSheet
+        isOpen
+        onClose={vi.fn()}
+        filters={DEFAULT_FOCUS_FILTERS}
+        onApplyFilters={vi.fn()}
+        onResetFilters={vi.fn()}
+        targetCount={5}
+      />
+    );
+    expect(screen.getByText('Must-Read 고신호만')).toBeInTheDocument();
+    expect(screen.queryByText(/품질 \d/)).not.toBeInTheDocument();
+  });
+});

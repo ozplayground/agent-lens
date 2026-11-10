@@ -7,7 +7,6 @@ import {
   ChevronUp,
   Loader2,
   Globe,
-  Scale,
   Search,
   FileText,
   AlertCircle,
@@ -30,10 +29,7 @@ export interface WorkflowStepTrackerProps {
 const STEP_ICONS: Record<ChatStatusStep, React.ReactNode> = {
   thinking: <Sparkles aria-hidden="true" className="size-3.5 shrink-0 text-accent motion-safe:animate-pulse" />,
   tool_calling: <Search aria-hidden="true" className="size-3.5 shrink-0 text-success motion-safe:animate-pulse" />,
-  observing: <CheckCircle2 aria-hidden="true" className="size-3.5 shrink-0 text-accent motion-safe:animate-pulse" />,
   extracting_source: <Globe aria-hidden="true" className="size-3.5 shrink-0 text-accent motion-safe:animate-pulse" />,
-  evaluating_sufficiency: <Scale aria-hidden="true" className="size-3.5 shrink-0 text-warning motion-safe:animate-pulse" />,
-  agentic_searching: <Search aria-hidden="true" className="size-3.5 shrink-0 text-success motion-safe:animate-pulse" />,
   synthesizing: <FileText aria-hidden="true" className="size-3.5 shrink-0 text-accent motion-safe:animate-pulse" />,
 };
 

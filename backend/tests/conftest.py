@@ -1,10 +1,18 @@
 import os
+import tempfile
 from pathlib import Path
 import pytest
 
-# Ensure tests use an isolated test database so agentlens.db is never wiped
-TEST_DB_FILE = Path(__file__).resolve().parent / "test_agentlens.db"
+# Ensure tests use an isolated test database so agentlens.db is never wiped.
+# 실행마다 새 임시 폴더를 써서 앞 실행의 행이 섞이지 않고, 동시에 돌린 pytest 끼리도 부딪히지 않는다.
+TEST_DB_FILE = Path(tempfile.mkdtemp(prefix="agentlens-test-")) / "test_agentlens.db"
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{TEST_DB_FILE}"
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """실행이 끝나면 이 실행의 테스트 DB 임시 폴더를 지운다 (TEST-08: 지우지 않아 쌓였다)."""
+    import shutil
+    shutil.rmtree(TEST_DB_FILE.parent, ignore_errors=True)
 
 from app.database import engine, Base, AsyncSessionLocal, ensure_db_schema
 from app.models import NewsItem
@@ -195,6 +203,9 @@ def llm_isolation(monkeypatch, settings_file_copies, fake_llm):
 
     # 1·2. 원천 비우기와 기본 상태
     clear_llm_sources(monkeypatch)
+    # 앞 테스트의 평가·질문·Ollama 판정 캐시가 이어지지 않게 한다
+    from app.services.llm_processor import llm_processor
+    llm_processor.clear_caches()
     monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "sk-ant-test-fake")
 
     # 3. config.json → 세션 사본 (settings.raw_json_config 도 사본 내용)
@@ -208,9 +219,78 @@ def llm_isolation(monkeypatch, settings_file_copies, fake_llm):
     monkeypatch.setattr(sources_service, "_file_path", sources_path)
     monkeypatch.setattr(sources_service, "_mirror_path", sources_path)
 
-    # 6. 흉내 LLM (fake_llm fixture 가 설치) 과 가드
+    # 6. 흉내 LLM (fake_llm fixture 가 설치) 과 가드. 외부 네트워크 가드도 같은 전송 계층에 있다 (TEST-03)
     yield fake_llm
     fake_llm.assert_no_unmocked()
+    fake_llm.assert_no_blocked_external()
+
+
+# ---------------------------------------------------------------------------
+# SMTP 흉내와 남은 백그라운드 태스크 정리 (TEST-03)
+# ---------------------------------------------------------------------------
+class FakeSMTP:
+    """`smtplib.SMTP`·`SMTP_SSL` 자리에 들어가는 흉내. 연결·발송을 기록만 한다.
+
+    `fail_with` 에 예외를 넣으면 연결할 때 그 예외를 낸다.
+    """
+
+    def __init__(self):
+        self.connections = []
+        self.sent = []
+        self.logins = []
+        self.fail_with = None
+
+    def factory(self):
+        recorder = self
+
+        class _Server:
+            def __init__(self, host="", port=0, *args, **kwargs):
+                if recorder.fail_with is not None:
+                    raise recorder.fail_with
+                recorder.connections.append((host, port))
+
+            def starttls(self, *args, **kwargs):
+                return (220, b"ok")
+
+            def login(self, user, password):
+                recorder.logins.append(user)
+                return (235, b"ok")
+
+            def sendmail(self, from_addr, to_addrs, msg, *args, **kwargs):
+                recorder.sent.append({"from": from_addr, "to": list(to_addrs), "msg": msg})
+                return {}
+
+            def quit(self):
+                return (221, b"bye")
+
+        return _Server
+
+
+@pytest.fixture(autouse=True)
+def fake_smtp(monkeypatch):
+    """모든 테스트에서 SMTP 연결을 흉내로 바꾼다. 실제 메일 서버로 나가지 않는다."""
+    import smtplib
+
+    fake = FakeSMTP()
+    server_cls = fake.factory()
+    monkeypatch.setattr(smtplib, "SMTP", server_cls)
+    monkeypatch.setattr(smtplib, "SMTP_SSL", server_cls)
+    return fake
+
+
+@pytest.fixture(autouse=True)
+async def cancel_leftover_tasks():
+    """테스트가 띄우고 기다리지 않은 asyncio 태스크를 테스트 끝에 취소한다 (예: run-deep 의 create_task)."""
+    import asyncio
+
+    before = set(asyncio.all_tasks())
+    yield
+    current = asyncio.current_task()
+    leftovers = [t for t in asyncio.all_tasks() if t not in before and t is not current and not t.done()]
+    for t in leftovers:
+        t.cancel()
+    if leftovers:
+        await asyncio.gather(*leftovers, return_exceptions=True)
 
 
 @pytest.fixture

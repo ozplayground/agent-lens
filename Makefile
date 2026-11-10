@@ -26,11 +26,11 @@ setup:
 		exit 1; \
 	fi
 	@if command -v uv >/dev/null 2>&1; then \
-		echo "==> backend 의존성 설치 (uv)"; \
-		uv pip install --python .venv/bin/python -r backend/requirements.txt; \
+		echo "==> backend 의존성 설치 (uv, requirements-dev.txt = 운영 requirements.txt + 테스트 도구)"; \
+		uv pip install --python .venv/bin/python -r backend/requirements-dev.txt; \
 	else \
-		echo "==> backend 의존성 설치 (pip)"; \
-		.venv/bin/python -m ensurepip --upgrade && .venv/bin/python -m pip install -r backend/requirements.txt; \
+		echo "==> backend 의존성 설치 (pip, requirements-dev.txt = 운영 requirements.txt + 테스트 도구)"; \
+		.venv/bin/python -m ensurepip --upgrade && .venv/bin/python -m pip install -r backend/requirements-dev.txt; \
 	fi
 	@if ! command -v pnpm >/dev/null 2>&1; then \
 		echo "make setup: pnpm 이 필요하다 (corepack enable 로 켠다)" >&2; \
@@ -79,9 +79,8 @@ docker-build:
 docker-up:
 	@echo "==> Docker Compose 로 서비스를 띄우고 healthy 가 될 때까지 기다린다 (최대 $(DOCKER_WAIT_TIMEOUT)초)"
 	docker compose up -d --wait --wait-timeout $(DOCKER_WAIT_TIMEOUT)
-	@echo "==> backend:  http://localhost:8000"
-	@echo "==> frontend: http://localhost:3001"
-	@echo "==> .env 의 BACKEND_PORT·FRONTEND_PORT 로 포트를 바꿨으면 그 포트로 접속한다"
+	@echo "==> backend:  http://localhost:$$(docker compose port backend 8000 | sed 's/.*://')"
+	@echo "==> frontend: http://localhost:$$(docker compose port frontend 3001 | sed 's/.*://')"
 
 docker-down:
 	@echo "==> Stopping Docker Compose services..."

@@ -33,9 +33,11 @@ export interface CollectorSnapshot {
   isCollecting: boolean;
   /** 수집 진행 줄 문구. 없으면 null. */
   message: string | null;
+  /** 마지막 스케줄 상태 요청이 실패했으면 true (성공하면 false). 이전 상태는 지우지 않는다 (FE-39). */
+  statusError: boolean;
 }
 
-const INITIAL_SNAPSHOT: CollectorSnapshot = { status: null, isCollecting: false, message: null };
+const INITIAL_SNAPSHOT: CollectorSnapshot = { status: null, isCollecting: false, message: null, statusError: false };
 
 let snapshot: CollectorSnapshot = INITIAL_SNAPSHOT;
 const listeners = new Set<() => void>();
@@ -111,11 +113,16 @@ function loadStatus() {
       // 오래된 응답: 더 나중 요청의 응답이 이미 반영됐거나, 진행 폴링이 끝나기 전에 보낸 요청이면 버린다.
       if (seq < appliedStatusSeq || seq <= progressEndSeq) return;
       appliedStatusSeq = seq;
-      setSnapshot({ status });
+      setSnapshot({ status, statusError: false });
       // 수집 중인데 진행 폴링이 없으면 (화면을 떠났다 돌아온 경우) 이어 붙인다.
       if (status.is_running && progressTimer === null) startProgressPolling(COLLECTING_MESSAGE);
     })
-    .catch(() => {});
+    .catch(() => {
+      if (gen !== generation || listeners.size === 0) return;
+      // 더 나중 요청이 이미 성공했으면 실패를 표시하지 않는다.
+      if (seq < appliedStatusSeq) return;
+      setSnapshot({ statusError: true });
+    });
 }
 
 async function pollProgressOnce(run: number) {
@@ -222,16 +229,20 @@ export async function collectNow(): Promise<void> {
   }
 }
 
+/** 앞선 초기화 요청이 아직 끝나지 않았을 때 확인 창에 보일 문구. */
+const RESET_IN_FLIGHT_MESSAGE = '이미 초기화 요청을 처리하고 있습니다.';
+
 /**
- * 전체 삭제 후 재수집. 실패하거나 이미 수집 중(`already_running`)이면 오류를 던진다 (확인 창이 문구를 보여준다).
- * 이미 요청 중이면 아무것도 하지 않고 끝난다.
+ * 전체 삭제 후 재수집. 실패하거나, 이미 수집 중(`already_running`)이거나, 앞선 초기화 요청이 아직 끝나지 않았으면
+ * 오류를 던진다 (확인 창이 문구를 보여준다). 조용히 끝나면 확인 창이 성공으로 닫히므로 그렇게 하지 않는다 (FE-20).
  */
 export async function resetAndCollect(): Promise<void> {
-  if (resetInFlight) return;
+  if (resetInFlight) throw new Error(RESET_IN_FLIGHT_MESSAGE);
   resetInFlight = true;
   const gen = generation;
   try {
     const res = await resetAndRecollect();
+    // 구독자가 모두 떠나 저장소가 멈췄으면(확인 창도 닫혀 있다) 반영할 화면이 없다. 서버는 요청을 이미 받았다.
     if (gen !== generation) return;
     if (res.status === ALREADY_RUNNING) {
       throw new Error(res.message || '현재 수집이 진행 중이므로 초기화할 수 없습니다.');
@@ -261,6 +272,8 @@ export interface UseCollectorResult extends CollectorSnapshot {
   timeLeft: string | null;
   collect: () => Promise<void>;
   reset: () => Promise<void>;
+  /** 스케줄 상태를 지금 다시 읽는다 (실패 뒤 다시 시도). */
+  reloadStatus: () => void;
 }
 
 export function useCollector({ onRefresh }: UseCollectorOptions = {}): UseCollectorResult {
@@ -287,6 +300,7 @@ export function useCollector({ onRefresh }: UseCollectorOptions = {}): UseCollec
     timeLeft: state.status ? formatTimeLeft(state.status.minutes_until_next_run) : null,
     collect,
     reset,
+    reloadStatus: loadStatus,
   };
 }
 

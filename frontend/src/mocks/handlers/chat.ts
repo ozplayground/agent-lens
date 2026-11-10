@@ -1,37 +1,28 @@
 import { http, HttpResponse, delay } from 'msw';
+import { mockArticles, mockSearchChunks, initialMockSessions, generateArticleScopedAnswerTokens } from '../fixtures/chat';
+import { apiError } from '../api-error';
 import {
-  mockArticles,
-  mockSearchChunks,
-  mockSupplementarySources,
-  initialMockSessions,
-  generateArticleScopedAnswerTokens,
-} from '../fixtures/chat';
-import {
-  CHAT_MESSAGE_ID_MAX_LENGTH,
-  ChatStreamRequest,
-  ChatQueryRequest,
-  ChatQueryResponse,
-  ChatSearchResponse,
+  ChatStreamRequestSchema,
+  ChatSessionCreateRequestSchema,
   ChatFocusFilter,
   ChatSearchChunk,
   ChatSourceItem,
-  ErrorResponse,
-  LlmErrorResponse,
   ChatSessionSummary,
   ChatSessionDetail,
-  ChatSessionCreateRequest,
   ChatMessageItem,
   GenericSuccessResponse,
   generateAutoTitle,
   ModelTier,
   ChatModel,
+  ScopeMode,
   TokenUsageMeta,
   TIER_TO_MODEL,
-  MODEL_TO_TIER,
   DEFAULT_CHAT_MODEL,
   DEFAULT_MODEL_TIER,
   sanitizeModelTier,
 } from '@/types/chat';
+
+// MSW 는 backend 동작을 흉내 낸다 (계약 3.1·4.7절). 응답 모양·이벤트 순서·오류 코드는 backend 와 같게 둔다.
 
 const MODEL_TIERS: readonly ModelTier[] = ['haiku', 'sonnet', 'opus'];
 
@@ -41,18 +32,19 @@ function isModelTier(value: string): value is ModelTier {
 }
 
 /**
- * 헬퍼: 요청된 모델 및 티어 파라미터를 기반으로 대상 모델, 티어, 지연시간, 토큰 사용량 메타데이터 산출
+ * 요청된 모델·티어로 응답 모델, 티어, 지연, 토큰 사용량(목 고정값)을 정한다.
+ * 우선순위는 backend 와 같다: 명시 `model` > `model_tier` > 기본 모델. 알 수 없는 모델은 sonnet 티어.
  */
-export function resolveModelAndUsage(requestedModel?: ChatModel, requestedTier?: ModelTier) {
+export function resolveModelAndUsage(requestedModel?: ChatModel | null, requestedTier?: ModelTier | null) {
   let tier: ModelTier = DEFAULT_MODEL_TIER;
   let model: ChatModel = DEFAULT_CHAT_MODEL;
 
-  if (requestedTier && isModelTier(requestedTier)) {
-    tier = requestedTier;
-    model = TIER_TO_MODEL[tier];
-  } else if (requestedModel) {
+  if (requestedModel) {
     const sanitized = sanitizeModelTier(requestedModel);
     tier = isModelTier(sanitized) ? sanitized : 'sonnet';
+    model = TIER_TO_MODEL[tier];
+  } else if (requestedTier && isModelTier(requestedTier)) {
+    tier = requestedTier;
     model = TIER_TO_MODEL[tier];
   }
 
@@ -67,9 +59,7 @@ export function resolveModelAndUsage(requestedModel?: ChatModel, requestedTier?:
   return { tier, model, latencyMs, usage };
 }
 
-/**
- * 인메모리 대화 세션 상태 저장소 (Dual-Layer SQLite 백엔드 모의)
- */
+/** 인메모리 대화 세션 저장소 (backend SQLite 흉내) */
 let mockSessionStore: ChatSessionDetail[] = JSON.parse(JSON.stringify(initialMockSessions));
 
 export function resetMockSessionStore(): void {
@@ -80,53 +70,66 @@ export function getMockSessionStore(): ChatSessionDetail[] {
   return mockSessionStore;
 }
 
+/** backend `ChatSourceItem.model_dump()` 처럼 모든 키를 채운 출처 (없는 값은 null) */
+function toSourceItem(partial: Pick<ChatSourceItem, 'index' | 'title' | 'url' | 'source'> & Partial<ChatSourceItem>): ChatSourceItem {
+  return {
+    type: 'primary',
+    id: null,
+    category: null,
+    quality_score: null,
+    score: null,
+    snippet: null,
+    full_content: null,
+    domain: null,
+    relevance_score: null,
+    published_at: null,
+    publisher: null,
+    ...partial,
+  };
+}
 
-/**
- * 헬퍼: 사용자 question 텍스트의 키워드 및 의미론적 매핑을 기반으로 모의 청크 검색 및 필터링
- */
-export function filterChunksByQuestion(
-  chunks: ChatSearchChunk[],
-  question?: string | null
-): ChatSearchChunk[] {
+/** 검색 청크를 global 모드 후보 출처로 바꾼다 (backend `_resolve_sources`) */
+function chunkToSource(chunk: ChatSearchChunk, index: number): ChatSourceItem {
+  return toSourceItem({
+    index,
+    id: chunk.id,
+    title: chunk.title,
+    url: chunk.url,
+    source: chunk.source,
+    category: chunk.category,
+    quality_score: chunk.quality_score,
+    snippet: chunk.snippet,
+    published_at: chunk.published_at,
+  });
+}
+
+/** 답변에 인용된 `[n]` 출처만 남긴다. 인용이 없으면 첫 후보 하나 (backend `_filter_cited_sources` 를 줄인 것) */
+function filterCitedSources(answer: string, candidates: ChatSourceItem[]): ChatSourceItem[] {
+  if (candidates.length === 0) return [];
+  const cited = new Set(Array.from(answer.matchAll(/\[(\d+)\]/g), (m) => Number(m[1])));
+  const hits = candidates.filter((s) => typeof s.index === 'number' && cited.has(s.index));
+  return hits.length > 0 ? hits : candidates.slice(0, 1);
+}
+
+/** 질문 키워드로 목 청크를 고른다 */
+export function filterChunksByQuestion(chunks: ChatSearchChunk[], question?: string | null): ChatSearchChunk[] {
   if (!question || !question.trim()) {
     return [...chunks];
   }
 
   const q = question.toLowerCase();
 
-  // 특정 핵심 프레임워크 및 한글 키워드 매핑 룰
   const topicMappings: { keywords: string[]; matches: (c: ChatSearchChunk) => boolean }[] = [
     {
       keywords: ['fastmcp', 'mcp', '엠씨피', 'model context protocol', 'stdio', '데코레이터'],
-      matches: (c) =>
-        c.id === 101 || c.category === 'mcp_plugins_skills' || c.title.toLowerCase().includes('mcp'),
+      matches: (c) => c.id === 101 || c.category === 'mcp_plugins_skills' || c.title.toLowerCase().includes('mcp'),
     },
     {
-      keywords: [
-        'langgraph',
-        '랭그래프',
-        'langchain',
-        '시간 여행',
-        'time-travel',
-        '체크포인트',
-        'checkpoint',
-        'state machine',
-        '상태 머신',
-      ],
+      keywords: ['langgraph', '랭그래프', 'langchain', '시간 여행', 'time-travel', '체크포인트', 'checkpoint', 'state machine', '상태 머신'],
       matches: (c) => c.id === 102 || c.title.toLowerCase().includes('langgraph'),
     },
     {
-      keywords: [
-        'swe-bench',
-        'swebench',
-        '하네스',
-        'harness',
-        '멀티모달',
-        'multimodal',
-        'gui',
-        '벤치마크',
-        'benchmark',
-      ],
+      keywords: ['swe-bench', 'swebench', '하네스', 'harness', '멀티모달', 'multimodal', 'gui', '벤치마크', 'benchmark'],
       matches: (c) => c.id === 103 || c.category === 'harness' || c.title.toLowerCase().includes('swe-bench'),
     },
     {
@@ -139,7 +142,7 @@ export function filterChunksByQuestion(
     },
   ];
 
-  // 1. 특정 토픽 키워드가 감지된 경우, 해당 토픽과 정확히 일치하는 청크만 우선 필터링
+  // 1. 토픽 키워드가 있으면 그 토픽 청크만
   const activeTopicMatches: ChatSearchChunk[] = [];
   for (const mapping of topicMappings) {
     if (mapping.keywords.some((kw) => q.includes(kw))) {
@@ -156,23 +159,18 @@ export function filterChunksByQuestion(
     return activeTopicMatches;
   }
 
-  // 2. 일반 자연어 키워드 토큰 매칭
+  // 2. 일반 키워드 토큰 일치
   const scored = chunks.map((chunk) => {
     let score = 0;
     const titleLower = chunk.title.toLowerCase();
     const snippetLower = chunk.snippet.toLowerCase();
     const categoryLower = chunk.category.toLowerCase();
 
-    const tokens = q.match(/[a-z0-9_\-]+|[가-힣]{2,}/gi) || [];
+    const tokens = q.match(/[a-z0-9_-]+|[가-힣]{2,}/gi) || [];
     for (const rawToken of tokens) {
       const token = rawToken.toLowerCase();
-      // 버전 프리픽스(v0, v1, v0.2 등) 및 일반 조사/동사 불용어 배제
-      if (/^v\d+(\.\d+)?$/i.test(token) || token.length < 3) {
-        continue;
-      }
-      if (['질문', '알려줘', '설명', '분석', '어떻게', '방법', '테스트', '기본', '최신', '동향'].includes(token)) {
-        continue;
-      }
+      if (/^v\d+(\.\d+)?$/i.test(token) || token.length < 3) continue;
+      if (['질문', '알려줘', '설명', '분석', '어떻게', '방법', '테스트', '기본', '최신', '동향'].includes(token)) continue;
       if (titleLower.includes(token)) score += 10;
       if (snippetLower.includes(token)) score += 5;
       if (categoryLower.includes(token)) score += 3;
@@ -190,11 +188,13 @@ export function filterChunksByQuestion(
   return [...chunks];
 }
 
-/**
- * 헬퍼: ChatFocusFilter 적용 및 정렬
- */
-function applyFocusFilters(
+/** 청크가 고신호 기사인지 (backend 는 `is_high_signal` 로 거른다) */
+function isHighSignalChunk(chunk: ChatSearchChunk): boolean {
+  return mockArticles[chunk.id]?.is_high_signal ?? false;
+}
 
+/** 포커스 필터 적용·정렬. 24h + harness 는 0건이라 기간을 풀었다고 표시한다 (자동 완화 흉내) */
+function applyFocusFilters(
   chunks: ChatSearchChunk[],
   filters?: ChatFocusFilter | null
 ): { filtered: ChatSearchChunk[]; isRelaxed: boolean; appliedFilters: ChatFocusFilter } {
@@ -207,30 +207,23 @@ function applyFocusFilters(
 
   let candidate = [...chunks];
 
-  // 1. 카테고리 필터
   if (appliedFilters.category !== 'all') {
     candidate = candidate.filter((c) => c.category === appliedFilters.category);
   }
-
-  // 2. 고신호 한정 필터 (quality_score >= 7.8)
   if (appliedFilters.high_signal_only) {
-    candidate = candidate.filter((c) => c.quality_score >= 7.8);
+    candidate = candidate.filter(isHighSignalChunk);
   }
 
-  // 3. 기간 필터 및 0건 매칭 시 지능적 자동 완화 (Auto-Relaxation)
   let isRelaxed = false;
-  if (appliedFilters.time_range !== 'all') {
-    if (appliedFilters.time_range === '24h' && appliedFilters.category === 'harness') {
-      isRelaxed = true;
-      appliedFilters.time_range = 'all';
-      candidate = chunks.filter((c) => c.category === 'harness');
-      if (appliedFilters.high_signal_only) {
-        candidate = candidate.filter((c) => c.quality_score >= 7.8);
-      }
+  if (appliedFilters.time_range === '24h' && appliedFilters.category === 'harness') {
+    isRelaxed = true;
+    appliedFilters.time_range = 'all';
+    candidate = chunks.filter((c) => c.category === 'harness');
+    if (appliedFilters.high_signal_only) {
+      candidate = candidate.filter(isHighSignalChunk);
     }
   }
 
-  // 4. 정렬 기준 적용
   candidate.sort((a, b) => {
     if (appliedFilters.sort === 'latest') {
       return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
@@ -244,177 +237,237 @@ function applyFocusFilters(
   return { filtered: candidate, isRelaxed, appliedFilters };
 }
 
+/** global 질문의 후보 출처 (검색 + 필터, 0건이면 필터만) */
+function resolveGlobalCandidates(question: string, filters: ChatFocusFilter | null | undefined, topK: number) {
+  const filterResult = applyFocusFilters(filterChunksByQuestion(mockSearchChunks, question), filters);
+  const list =
+    filterResult.filtered.length > 0
+      ? filterResult.filtered.slice(0, topK)
+      : applyFocusFilters(mockSearchChunks, filters).filtered.slice(0, topK);
+  return {
+    candidates: list.map((c, idx) => chunkToSource(c, idx + 1)),
+    isRelaxed: filterResult.isRelaxed,
+    appliedFilters: filterResult.appliedFilters,
+  };
+}
+
+/** 답변 토큰. 기사가 있으면 그 기사로 4단 리포트 ([1] 인용), 없으면 인용 없는 짧은 답 */
+function buildAnswerTokens(articleId: number | null | undefined, isRelaxed: boolean): string[] {
+  if (typeof articleId === 'number' && mockArticles[articleId]) {
+    return generateArticleScopedAnswerTokens(mockArticles[articleId], isRelaxed);
+  }
+  return [
+    '## 1. 핵심 아키텍처 및 동작 원리\n\n',
+    '수집된 소식을 검색하지 않고 일반 지식으로 답합니다. ',
+    '구체적인 기사 근거가 필요하면 질문에 기술 이름을 넣어 주세요.',
+  ];
+}
+
+/** 질문에 든 트리거로 스트림 전 LLM 가용성 오류를 흉내 낸다 (backend `check_provider_available` 분기) */
+function providerErrorFor(question: string) {
+  if (question.includes('[TRIGGER_401]') || question.includes('[TRIGGER_CLAUDE_KEY_MISSING]')) {
+    return apiError(401, 'ERR_CLAUDE_API_KEY_MISSING', 'Anthropic Claude API 키가 설정되지 않았습니다.');
+  }
+  if (question.includes('[TRIGGER_429]') || question.includes('[TRIGGER_CLAUDE_QUOTA]')) {
+    return apiError(429, 'ERR_CLAUDE_QUOTA_EXCEEDED', 'Anthropic Claude 호출 한도 초과');
+  }
+  if (question.includes('[TRIGGER_529]') || question.includes('[TRIGGER_CLAUDE_OVERLOADED]')) {
+    return apiError(529, 'ERR_CLAUDE_OVERLOADED', 'Anthropic 서버 과부하');
+  }
+  if (question.includes('[TRIGGER_502]')) {
+    return apiError(502, 'ERR_LLM_UPSTREAM_FAILED', '외부 LLM 업스트림 통신에 실패했습니다.');
+  }
+  if (question.includes('[TRIGGER_503]')) {
+    return apiError(503, 'ERR_LLM_PROVIDER_UNAVAILABLE', '가용한 LLM 프로바이더 엔진이 설정되지 않았습니다 (API 키 미설정).');
+  }
+  if (question.includes('[TRIGGER_500]')) {
+    return apiError(500, 'ERR_SERVER_INTERNAL', '서버 내부 오류가 발생했습니다.');
+  }
+  return null;
+}
+
+/**
+ * 요청 본문 공통 검사 (backend `/stream`·`/query` 순서): JSON → 객체 → 빈 질문 → 2000자 → scope → 필드 검증.
+ * 통과하면 `{ body }`, 아니면 `{ error }` (HttpResponse).
+ */
+async function readChatRequest<T>(
+  request: Request,
+  schema: { safeParse: (v: unknown) => { success: true; data: T } | { success: false; error: { issues: { path: PropertyKey[]; code: string }[] } } }
+): Promise<{ body: T; error?: undefined } | { error: Response; body?: undefined }> {
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return { error: apiError(400, 'ERR_INVALID_PAYLOAD', '요청 본문 형식이 올바르지 않습니다.') };
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { error: apiError(400, 'ERR_INVALID_PAYLOAD', '요청 본문은 JSON 객체여야 합니다.') };
+  }
+  const obj = raw as Record<string, unknown>;
+  const question = obj.question ?? '';
+  if (typeof question !== 'string' || !question.trim()) {
+    return { error: apiError(400, 'ERR_CHAT_PAYLOAD_EMPTY', '질문 본문이 비어있습니다.') };
+  }
+  if (question.length > 2000) {
+    return { error: apiError(400, 'ERR_CHAT_PAYLOAD_TOO_LARGE', '질문은 최대 2,000자까지 입력 가능합니다.') };
+  }
+  const scope = obj.scope ?? 'global';
+  if (scope !== 'scoped' && scope !== 'global') {
+    return { error: apiError(400, 'ERR_INVALID_SCOPE_PARAM', '유효하지 않은 검색 스코프 모드입니다.') };
+  }
+  const parsed = schema.safeParse(obj);
+  if (!parsed.success) {
+    // backend: Pydantic 은 session_id 를 문자열로만 보고, 라우터가 UUID 인지 따로 본다 (400 ERR_SESSION_INVALID_UUID)
+    if (parsed.error.issues.every((i) => i.path[0] === 'session_id' && i.code === 'invalid_format')) {
+      return { error: apiError(400, 'ERR_SESSION_INVALID_UUID', '유효하지 않은 세션 UUID 형식입니다.') };
+    }
+    if (parsed.error.issues.some((i) => i.path[0] === 'model_tier')) {
+      return { error: apiError(400, 'ERR_INVALID_MODEL_TIER', `유효하지 않은 모델 티어입니다: ${String(obj.model_tier)}`) };
+    }
+    return { error: apiError(400, 'ERR_INVALID_PAYLOAD', '요청 필드 형식이 올바르지 않습니다.') };
+  }
+  return { body: parsed.data };
+}
+
+/** backend `_sse_error` 와 같은 SSE error payload */
+const streamError = (error_code: string, message: string, status_code: number, step: string) => ({
+  error_code,
+  message,
+  status_code,
+  step,
+  retryable: true,
+});
+
+const sse = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+const nowIso = () => new Date().toISOString();
+
+/** 이 턴의 질문·답을 목 저장소에 넣는다 (backend `persist_turn`: 요청 id 또는 UUID, 이미 있는 id 는 건너뜀) */
+function persistTurn(params: {
+  sessionId: string;
+  scope: ScopeMode;
+  sourceId: number | null | undefined;
+  filters: ChatFocusFilter | null | undefined;
+  question: string;
+  answer: string;
+  sources: ChatSourceItem[];
+  model: string;
+  tier: ModelTier;
+  latencyMs: number;
+  usage: TokenUsageMeta;
+  userMessageId?: string | null;
+  assistantMessageId?: string | null;
+}) {
+  const created = nowIso();
+  const userMsg: ChatMessageItem = {
+    id: params.userMessageId || crypto.randomUUID(),
+    session_id: params.sessionId,
+    role: 'user',
+    content: params.question,
+    created_at: created,
+    sources: null,
+    status: 'completed',
+    model: null,
+    model_tier: null,
+    latency_ms: null,
+    usage: null,
+  };
+  const assistantMsg: ChatMessageItem = {
+    id: params.assistantMessageId || crypto.randomUUID(),
+    session_id: params.sessionId,
+    role: 'assistant',
+    content: params.answer,
+    created_at: created,
+    sources: params.sources,
+    status: 'completed',
+    model: params.model,
+    model_tier: params.tier,
+    latency_ms: params.latencyMs,
+    usage: params.usage,
+  };
+
+  // backend persist_turn: 이 세션에 있는 id 는 건너뛰고, 다른 세션의 id 가 섞이면 이 턴을 저장하지 않는다(로그만, done 은 보낸다)
+  if (foreignMessageIds(params.sessionId, [userMsg.id, assistantMsg.id]).length > 0) return;
+  const target = mockSessionStore.find((s) => s.id === params.sessionId);
+  const ownIds = new Set(target?.messages.map((m) => m.id) ?? []);
+  const newItems = [userMsg, assistantMsg].filter((m) => !ownIds.has(m.id));
+  if (target) {
+    target.messages.push(...newItems);
+    target.updated_at = nowIso();
+    if (target.title === '새 대화' || !target.title) {
+      target.title = generateAutoTitle(params.question);
+    }
+    return;
+  }
+  enforceFifo();
+  mockSessionStore.unshift({
+    id: params.sessionId,
+    title: generateAutoTitle(params.question),
+    scope_mode: params.scope,
+    active_source_id: params.sourceId ?? null,
+    active_source: params.sourceId ? mockArticles[params.sourceId] ?? null : null,
+    active_filters: params.filters ?? null,
+    created_at: nowIso(),
+    updated_at: nowIso(),
+    messages: newItems,
+  });
+}
+
+/** 다른 세션에 이미 있는 메시지 id (backend `_existing_message_ids` 의 충돌 검사) */
+function foreignMessageIds(sessionId: string, ids: string[]): string[] {
+  const wanted = new Set(ids);
+  return mockSessionStore
+    .filter((s) => s.id !== sessionId)
+    .flatMap((s) => s.messages.map((m) => m.id))
+    .filter((id) => wanted.has(id))
+    .sort();
+}
+
+/** 세션 30개 FIFO (가장 오래 갱신되지 않은 세션부터 지운다) */
+function enforceFifo() {
+  if (mockSessionStore.length >= 30) {
+    mockSessionStore.sort((a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
+    mockSessionStore.shift();
+  }
+}
+
+const UUID_LIKE = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+
 export const chatHandlers = [
   // ==========================================================================
-  // 1. 전용 AI 챗 SSE 실시간 다중 이벤트 스트리밍 모의 핸들러 (POST /api/chat/stream)
+  // 1. POST /api/chat/stream — SSE (backend chat_service.stream_chat 순서)
+  //   scoped: status(extracting_source 30) → status(synthesizing 85) → sources → token* → done
+  //   global(검색): status(thinking 25) → status(tool_calling 50) → status(synthesizing 80) → token* → sources(인용된 것) → done
+  //   global(검색 안 함, 질문에 [TRIGGER_NO_TOOL]): status(thinking 25) → status(synthesizing 75) → token* → done
+  //   질문 분석 실패([TRIGGER_THINKING_ERROR]): status(thinking) → error(ERR_LLM_UPSTREAM_FAILED 502, step thinking)
+  //   기사 검색 실패([TRIGGER_SEARCH_ERROR]): thinking → tool_calling → error(ERR_RETRIEVER_INDEX_ERROR 500, step tool_calling)
+  //   토큰 생성 중 실패([TRIGGER_STREAM_ERROR]): ... → token → error(ERR_LLM_STREAM_FAILED 502) (done·저장 없음)
   // ==========================================================================
   http.post('*/api/chat/stream', async ({ request }) => {
-    let payload: ChatStreamRequest;
-    try {
-      payload = (await request.json()) as ChatStreamRequest;
-    } catch {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_INVALID_PAYLOAD', message: '요청 본문 JSON 파싱에 실패했습니다.' },
-        { status: 400 }
-      );
+    const read = await readChatRequest(request, ChatStreamRequestSchema);
+    if (read.error) return read.error;
+    const payload = read.body;
+    const { question, scope, source_id, filters, top_k, model, model_tier } = payload;
+
+    if (scope === 'scoped' && (!source_id || !mockArticles[source_id])) {
+      return apiError(404, 'ERR_HANDOVER_SOURCE_NOT_FOUND', `기사 ID ${source_id}를 데이터베이스에서 찾을 수 없습니다.`);
     }
 
-    const { question, scope = 'global', source_id, filters, top_k = 5, model, model_tier } = payload;
+    const providerError = providerErrorFor(question);
+    if (providerError) return providerError;
 
-    // 1) 입력 유효성 검증
-    if (!question || question.trim().length === 0) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_CHAT_PAYLOAD_EMPTY', message: '질문 본문이 비어있습니다.' },
-        { status: 400 }
-      );
-    }
+    const sessionId = payload.session_id || crypto.randomUUID();
+    const isMidStreamError = question.includes('[TRIGGER_STREAM_ERROR]');
+    const usesTool = scope === 'global' && !question.includes('[TRIGGER_NO_TOOL]');
+    const { tier, model: selectedModel, latencyMs, usage } = resolveModelAndUsage(model, model_tier);
 
-    if (question.length > 2000) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_CHAT_PAYLOAD_TOO_LARGE', message: '질문은 최대 2,000자까지 입력 가능합니다.' },
-        { status: 400 }
-      );
-    }
-
-    if (model_tier && !['haiku', 'sonnet', 'opus'].includes(model_tier)) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_INVALID_MODEL_TIER', message: `유효하지 않은 모델 티어입니다: ${model_tier}` },
-        { status: 400 }
-      );
-    }
-
-    if (
-      model &&
-      ![
-        'claude-sonnet-5-5',
-        'claude-haiku-5-5',
-        'claude-opus-5-5',
-      ].includes(model)
-    ) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_INVALID_MODEL_TIER', message: `유효하지 않은 모델 코드입니다: ${model}` },
-        { status: 400 }
-      );
-    }
-
-    // 메시지 id (선택): 문자열 1~36자, 둘 다 있으면 서로 달라야 한다. backend 는 검증 실패를 400 ERR_INVALID_PAYLOAD 로 돌려준다.
-    const { user_message_id, assistant_message_id } = payload;
-    const isInvalidMessageId = (v: unknown) =>
-      v !== undefined &&
-      v !== null &&
-      (typeof v !== 'string' || v.length < 1 || v.length > CHAT_MESSAGE_ID_MAX_LENGTH);
-    if (
-      isInvalidMessageId(user_message_id) ||
-      isInvalidMessageId(assistant_message_id) ||
-      (user_message_id && assistant_message_id && user_message_id === assistant_message_id)
-    ) {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_INVALID_PAYLOAD',
-          message: `user_message_id·assistant_message_id 는 1~${CHAT_MESSAGE_ID_MAX_LENGTH}자 문자열이고 서로 달라야 합니다.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // 2) 테스트 트리거 키워드 에러 시뮬레이션
-    if (question.includes('[TRIGGER_400]')) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_INVALID_SCOPE_PARAM', message: '유효하지 않은 검색 스코프 모드입니다.' },
-        { status: 400 }
-      );
-    }
-
-    if (question.includes('[TRIGGER_401]') || question.includes('[TRIGGER_CLAUDE_KEY_MISSING]')) {
-      return HttpResponse.json<LlmErrorResponse>(
-        {
-          error_code: 'ERR_CLAUDE_API_KEY_MISSING',
-          message: 'Anthropic Claude API 키가 설정되지 않았거나 유효하지 않습니다.',
-          status_code: 401,
-          provider: 'anthropic',
-          retryable: false,
-        },
-        { status: 401 }
-      );
-    }
-
-    if (question.includes('[TRIGGER_429]') || question.includes('[TRIGGER_CLAUDE_QUOTA]')) {
-      return HttpResponse.json<LlmErrorResponse>(
-        {
-          error_code: 'ERR_CLAUDE_QUOTA_EXCEEDED',
-          message: 'Anthropic Claude API 호출 한도를 초과했습니다. 잠시 후 다시 시도해주세요.',
-          status_code: 429,
-          provider: 'anthropic',
-          retryable: true,
-        },
-        { status: 429 }
-      );
-    }
-
-    if (question.includes('[TRIGGER_529]') || question.includes('[TRIGGER_CLAUDE_OVERLOADED]')) {
-      return HttpResponse.json<LlmErrorResponse>(
-        {
-          error_code: 'ERR_CLAUDE_OVERLOADED',
-          message: 'Anthropic Claude 서버가 일시적으로 과부하 상태입니다. 잠시 후 재시도하십시오.',
-          status_code: 529,
-          provider: 'anthropic',
-          retryable: true,
-        },
-        { status: 529 }
-      );
-    }
-
-    if (question.includes('[TRIGGER_502]')) {
-      return HttpResponse.json<LlmErrorResponse>(
-        {
-          error_code: 'ERR_LLM_UPSTREAM_FAILED',
-          message: '외부 LLM 업스트림 통신에 실패했습니다 (Anthropic Claude API 통신 장애).',
-          status_code: 502,
-          provider: 'anthropic',
-          retryable: true,
-        },
-        { status: 502 }
-      );
-    }
-
-    if (question.includes('[TRIGGER_503]')) {
-      return HttpResponse.json<LlmErrorResponse>(
-        {
-          error_code: 'ERR_LLM_PROVIDER_UNAVAILABLE',
-          message: '가용한 LLM 프로바이더 엔진이 설정되지 않았습니다 (API 키 미설정).',
-          status_code: 503,
-          provider: 'none',
-          retryable: false,
-        },
-        { status: 503 }
-      );
-    }
-
-    if (question.includes('[TRIGGER_500]')) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_SERVER_INTERNAL', message: '백엔드 AI 엔진 내부 오류가 발생했습니다.' },
-        { status: 500 }
-      );
-    }
-
-    // 3) Scoped / Global 소스 인출 및 이원화 출처 구성
-    let primarySources: ChatSourceItem[] = [];
-    let supplementarySources: ChatSourceItem[] = [];
+    let candidates: ChatSourceItem[] = [];
     let isRelaxed = false;
-    let effectiveFilters: ChatFocusFilter | undefined = undefined;
-
+    let appliedFilters: ChatFocusFilter | null = null;
     if (scope === 'scoped') {
-      if (!source_id || !mockArticles[source_id]) {
-        return HttpResponse.json<ErrorResponse>(
-          { error_code: 'ERR_HANDOVER_SOURCE_NOT_FOUND', message: `ID ${source_id}에 해당하는 기사를 찾을 수 없습니다.` },
-          { status: 404 }
-        );
-      }
-      const art = mockArticles[source_id];
-      primarySources = [
-        {
+      const art = mockArticles[source_id!];
+      candidates = [
+        toSourceItem({
           index: 1,
-          type: 'primary',
           id: art.id,
           title: art.title,
           url: art.url,
@@ -422,250 +475,111 @@ export const chatHandlers = [
           category: art.category,
           quality_score: art.quality_score,
           snippet: art.summary,
-          domain: 'github.com',
+          full_content: art.full_content ?? art.summary,
           published_at: art.published_at,
-        },
+        }),
       ];
-      supplementarySources = [mockSupplementarySources[0]];
-    } else {
-      const matchedChunks = filterChunksByQuestion(mockSearchChunks, question);
-      const filterResult = applyFocusFilters(matchedChunks, filters);
-      const candidateList =
-        filterResult.filtered.length > 0
-          ? filterResult.filtered.slice(0, top_k)
-          : applyFocusFilters(mockSearchChunks, filters).filtered.slice(0, top_k);
-
-      primarySources = candidateList.map((s, idx) => ({
-        index: idx + 1,
-        type: 'primary' as const,
-        id: s.id,
-        title: s.title,
-        url: s.url,
-        source: s.source,
-        category: s.category,
-        quality_score: s.quality_score,
-        snippet: s.snippet,
-        domain: s.url.includes('github') ? 'github.com' : 'anthropic.com',
-        published_at: s.published_at,
-      }));
-      isRelaxed = filterResult.isRelaxed;
-      effectiveFilters = filterResult.appliedFilters;
-      supplementarySources = mockSupplementarySources.slice(0, 1);
+    } else if (usesTool) {
+      const resolved = resolveGlobalCandidates(question, filters, top_k);
+      candidates = resolved.candidates;
+      isRelaxed = resolved.isRelaxed;
+      appliedFilters = resolved.appliedFilters;
     }
 
-    const allSources: ChatSourceItem[] = [...primarySources, ...supplementarySources];
-    const sessionId = payload.session_id || '7b6a48f2-2973-45f6-8c46-9562725b821a';
-    const isMidStreamError = question.includes('[TRIGGER_STREAM_ERROR]');
-
-    const { tier: selectedTier, model: selectedModel, latencyMs, usage: tokenUsage } =
-      resolveModelAndUsage(model, model_tier);
-
-    // 4) 4단 구조화 엔지니어링 리포트 마크다운 토큰 조립
-    let answerBodyTokens: string[];
-    const topPrimaryId = primarySources[0]?.id;
-    if (scope === 'scoped' && source_id && mockArticles[source_id]) {
-      answerBodyTokens = generateArticleScopedAnswerTokens(mockArticles[source_id], isRelaxed);
-    } else if (typeof topPrimaryId === 'number' && mockArticles[topPrimaryId]) {
-      answerBodyTokens = generateArticleScopedAnswerTokens(mockArticles[topPrimaryId], isRelaxed);
-    } else {
-      const answerIntro = isRelaxed
-        ? `> 💡 [안내: 선택 조건에 부합하는 소식이 없어 전체 기간으로 확장 검색했습니다]\n\n`
-        : '';
-
-      answerBodyTokens = [
-        answerIntro,
-        '## 1. 핵심 아키텍처 및 동작 원리\n\n',
-        `**FastMCP**[1]는 파이썬 데코레이터 문법 기반으로 초경량 Model Context Protocol[S1] 서버를 구축할 수 있도록 설계된 차세대 에이전트 인터페이스 프레임워크입니다.\n`,
-        '기존의 복잡한 gRPC나 수동 입출력 파싱 대신 표준 입출력(stdio)과 비동기 Server-Sent Events(SSE) 전송 계층을 추상화하여, Claude Desktop 및 임의의 AI 에이전트 클라이언트와 양방향 툴 바인딩을 지원합니다[1].\n\n',
-        '## 2. 주요 기능 및 코드 구현 예시\n\n',
-        '데코레이터를 사용하여 초간결하게 툴과 리소스를 노출할 수 있습니다:\n\n',
-        '```python\nfrom fastmcp import FastMCP\n\n# FastMCP 서버 인스턴스 초기화\nmcp = FastMCP("AgentLens-Demo", dependencies=["httpx"])\n\n@mcp.tool()\ndef inspect_agent_system(domain: str) -> str:\n    """에이전트 시스템 헬스체크 및 요약 리포트를 생성합니다."""\n    return f"Domain {domain} is fully operational."\n\nif __name__ == "__main__":\n    mcp.run(transport="stdio")\n```\n\n',
-        '## 3. 기존 기술 대비 차별점 및 벤치마크\n\n',
-        '1. **보일러플레이트 코드 85% 감축**: 단 5줄의 코드로 검증 가능한 JSON-RPC 2.0 프로토콜 엔드포인트를 완성합니다[S1].\n',
-        '2. **초당 3,400+ 동시 호출 처리량**: 비동기 AsyncIO 네이티브 이벤트 루프를 채택하여 기존 동기식 Flask/FastAPI 래퍼 대비 3.8배 높은 동시성 처리 성능을 발휘합니다.\n\n',
-        '## 4. 실무 도입 시 고려사항 및 튜닝 파라미터\n\n',
-        '• **프로덕션 런타임 분리**: 로컬 데스크톱 연동 시 stdio 전송을, 분산 클라우드 환경에서는 ASGI Uvicorn 워커 기반의 SSE 전송 모드를 채택해야 합니다.\n',
-        '• **타임아웃 및 버퍼 제어**: 긴 작업을 수행하는 툴의 경우 `timeout_seconds=30` 옵션을 명시하여 에이전트 연결 유실을 방어하십시오.',
-      ];
-    }
+    const articleId = scope === 'scoped' ? source_id : usesTool ? candidates[0]?.id : null;
+    const answerTokens = buildAnswerTokens(articleId, isRelaxed);
+    const answer = answerTokens.join('');
+    const sources = scope === 'scoped' ? candidates : usesTool ? filterCitedSources(answer, candidates) : [];
+    const sourcesPayload = {
+      sources,
+      applied_filters: scope === 'scoped' ? null : appliedFilters,
+      is_relaxed: isRelaxed,
+      primary_count: sources.length,
+      supplementary_count: 0,
+    };
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        // [Stage 1: event: status] 4단계 에이전틱 리서치 실시간 진행 통지
-        // Step 1.1: extracting_source
+        const emit = (event: string, data: unknown) => controller.enqueue(encoder.encode(sse(event, data)));
+
         await delay(30);
-        controller.enqueue(
-          encoder.encode(
-            `event: status\ndata: ${JSON.stringify({
-              step: 'extracting_source',
-              label: '🌐 원본 소스 본문 추출 중 (Trafilatura)...',
-              timestamp: new Date().toISOString(),
-              progress: 20,
-            })}\n\n`
-          )
-        );
-
-        // Step 1.2: evaluating_sufficiency
-        await delay(40);
-        controller.enqueue(
-          encoder.encode(
-            `event: status\ndata: ${JSON.stringify({
-              step: 'evaluating_sufficiency',
-              label: '🧠 본문 정보 충실도 분석 중...',
-              timestamp: new Date().toISOString(),
-              progress: 45,
-            })}\n\n`
-          )
-        );
-
-        // Step 1.3: agentic_searching
-        await delay(50);
-        controller.enqueue(
-          encoder.encode(
-            `event: status\ndata: ${JSON.stringify({
-              step: 'agentic_searching',
-              label: '🔍 보충 기술 문서 자율 검색 중: "Model Context Protocol architecture"',
-              timestamp: new Date().toISOString(),
-              progress: 65,
-              query: 'Model Context Protocol architecture',
-              sources_found: 1,
-            })}\n\n`
-          )
-        );
-
-        // Step 1.4: synthesizing
-        await delay(40);
-        controller.enqueue(
-          encoder.encode(
-            `event: status\ndata: ${JSON.stringify({
-              step: 'synthesizing',
-              label: '📝 Senior Staff Architect 4단 엔지니어링 리포트 종합 중...',
-              timestamp: new Date().toISOString(),
-              progress: 85,
-            })}\n\n`
-          )
-        );
-
-        // [Stage 2: event: sources] 이원화 출처 및 필터 정보 전송
-        await delay(30);
-        const sourcesEvent = `event: sources\ndata: ${JSON.stringify({
-          sources: allSources,
-          applied_filters: effectiveFilters,
-          is_relaxed: isRelaxed,
-          primary_count: primarySources.length,
-          supplementary_count: supplementarySources.length,
-        })}\n\n`;
-        controller.enqueue(encoder.encode(sourcesEvent));
-
-        // 미드스트림 에러 트리거 시뮬레이션
-        if (isMidStreamError) {
+        if (scope === 'scoped') {
+          emit('status', { step: 'extracting_source', label: '지정된 단일 뉴스 기사 컨텍스트 로드 중...', progress: 30, timestamp: nowIso() });
           await delay(30);
-          controller.enqueue(
-            encoder.encode(`event: token\ndata: ${JSON.stringify({ token: '## 1. 핵심 아키텍처 및 동작 원리\n\n' })}\n\n`)
-          );
-          await delay(50);
-          const errorEvent = `event: error\ndata: ${JSON.stringify({
-            error_code: 'ERR_LLM_STREAM_FAILED',
-            message: '외부 LLM 스트리밍 중 통신 연결이 단절되었습니다.',
-            status_code: 502,
-            step: 'synthesizing',
-            provider: 'anthropic',
-            retryable: true,
-          })}\n\n`;
-          controller.enqueue(encoder.encode(errorEvent));
+          emit('status', { step: 'synthesizing', label: 'Senior Staff Architect 단일 기사 심층 리포트 프롬프트 조립...', progress: 85, timestamp: nowIso() });
+          await delay(30);
+          emit('sources', sourcesPayload);
+        } else {
+          emit('status', { step: 'thinking', label: 'ReAct 추론: 질문 의도 및 도구 필요성 분석 중...', progress: 25, timestamp: nowIso() });
+          await delay(30);
+          if (question.includes('[TRIGGER_THINKING_ERROR]')) {
+            emit('error', streamError('ERR_LLM_UPSTREAM_FAILED', '질문 분석 중 오류가 발생했습니다. 다시 시도해 주세요.', 502, 'thinking'));
+            controller.close();
+            return;
+          }
+          if (usesTool) {
+            emit('status', { step: 'tool_calling', label: `Action: search_news_corpus('${question}') 실행 중...`, progress: 50, timestamp: nowIso(), query: question });
+            await delay(30);
+            if (question.includes('[TRIGGER_SEARCH_ERROR]')) {
+              emit('error', streamError('ERR_RETRIEVER_INDEX_ERROR', '기사 검색 중 오류가 발생했습니다. 다시 시도해 주세요.', 500, 'tool_calling'));
+              controller.close();
+              return;
+            }
+            emit('status', { step: 'synthesizing', label: '검증된 컨텍스트를 바탕으로 답변 생성 중...', progress: 80, timestamp: nowIso() });
+          } else {
+            emit('status', { step: 'synthesizing', label: '도구 호출 없이 직접 답변 생성 중...', progress: 75, timestamp: nowIso() });
+          }
+        }
+
+        if (isMidStreamError) {
+          await delay(25);
+          emit('token', { token: answerTokens[0] || '## 1. ' });
+          await delay(25);
+          emit('error', streamError('ERR_LLM_STREAM_FAILED', 'LLM 스트리밍 도중 외부 프로바이더 오류가 발생했습니다.', 502, 'synthesizing'));
           controller.close();
           return;
         }
 
-        // [Stage 3: event: token] 4단 마크다운 리포트 순차 토큰 전송
-        for (const token of answerBodyTokens) {
+        for (const token of answerTokens) {
           await delay(25);
-          const tokenEvent = `event: token\ndata: ${JSON.stringify({ token })}\n\n`;
-          controller.enqueue(encoder.encode(tokenEvent));
+          emit('token', { token });
         }
 
-        // [Stage 4: Dual-Layer SQLite 영속화 시뮬레이션]
-        // backend 처럼 event: done 을 보내기 전에 저장한다 (chat_service.stream_chat, 계약 8.1절).
-        // backend persist_turn 과 같게: 요청의 메시지 id 가 있으면 그 id 로, 없으면 UUID 로 저장하고,
-        // 이미 저장된 id(어느 세션이든)는 건너뛴다 (append_messages_batch 의 중복 id 건너뛰기).
-        try {
-          const userMsgItem: ChatMessageItem = {
-            id: user_message_id || crypto.randomUUID(),
-            session_id: sessionId,
-            role: 'user',
-            content: question,
-            created_at: new Date().toISOString(),
-            sources: null,
-            status: 'completed',
-            model: null,
-            model_tier: null,
-            latency_ms: null,
-            usage: null,
-          };
-          const assistantMsgItem: ChatMessageItem = {
-            id: assistant_message_id || crypto.randomUUID(),
-            session_id: sessionId,
-            role: 'assistant',
-            content: answerBodyTokens.join(''),
-            created_at: new Date().toISOString(),
-            sources: allSources,
-            status: 'completed',
-            model: selectedModel,
-            model_tier: selectedTier,
-            latency_ms: latencyMs,
-            usage: tokenUsage,
-          };
-
-          const storedIds = new Set(
-            mockSessionStore.flatMap((s) => s.messages.map((m) => String(m.id)))
-          );
-          const newItems = [userMsgItem, assistantMsgItem].filter((m) => !storedIds.has(m.id));
-          const targetSession = mockSessionStore.find((s) => s.id === sessionId);
-          if (targetSession) {
-            targetSession.messages.push(...newItems);
-            targetSession.updated_at = new Date().toISOString();
-            if (targetSession.title === '새 대화' || !targetSession.title) {
-              targetSession.title = generateAutoTitle(question);
-            }
-          } else {
-            if (mockSessionStore.length >= 30) {
-              mockSessionStore.sort(
-                (a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
-              );
-              mockSessionStore.shift();
-            }
-            mockSessionStore.unshift({
-              id: sessionId,
-              title: generateAutoTitle(question),
-              scope_mode: scope,
-              active_source_id: source_id || null,
-              active_source: source_id ? mockArticles[source_id] || null : null,
-              active_filters: effectiveFilters || null,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              messages: newItems,
-            });
-          }
-        } catch {
-          // 모의 스트림 내부 영속화 실패는 무시
+        if (usesTool) {
+          await delay(20);
+          emit('sources', sourcesPayload);
         }
 
-        // [Stage 5: event: done] 스트리밍 완료 및 통계 전송
-        await delay(40);
-        const doneEvent = `event: done\ndata: ${JSON.stringify({
+        // backend 처럼 done 을 보내기 전에 저장한다 (계약 8.1절)
+        persistTurn({
+          sessionId,
+          scope,
+          sourceId: source_id,
+          filters,
+          question,
+          answer,
+          sources,
+          model: selectedModel,
+          tier,
+          latencyMs,
+          usage,
+          userMessageId: payload.user_message_id,
+          assistantMessageId: payload.assistant_message_id,
+        });
+
+        await delay(30);
+        emit('done', {
           done: true,
           session_id: sessionId,
           model: selectedModel,
-          model_tier: selectedTier,
-          sources_count: allSources.length,
-          primary_count: primarySources.length,
-          supplementary_count: supplementarySources.length,
+          model_tier: tier,
+          sources_count: sources.length,
+          primary_count: sources.length,
+          supplementary_count: 0,
           latency_ms: latencyMs,
-          usage: tokenUsage,
-        })}\n\n`;
-        controller.enqueue(encoder.encode(doneEvent));
-
+          usage,
+        });
         controller.close();
       },
     });
@@ -681,494 +595,175 @@ export const chatHandlers = [
   }),
 
   // ==========================================================================
-  // 2. 전용 AI 챗 동기식 단건 질의 모의 응답 핸들러 (POST /api/chat/query)
-  // ==========================================================================
-  http.post('*/api/chat/query', async ({ request }) => {
-    let body: ChatQueryRequest;
-    try {
-      body = (await request.json()) as ChatQueryRequest;
-    } catch {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_INVALID_PAYLOAD', message: '요청 본문 형식이 올바르지 않습니다.' },
-        { status: 400 }
-      );
-    }
-
-    if (!body.question || body.question.trim().length === 0) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_CHAT_PAYLOAD_EMPTY', message: '질문 본문이 비어있습니다.' },
-        { status: 400 }
-      );
-    }
-
-    if (body.model_tier && !['haiku', 'sonnet', 'opus'].includes(body.model_tier)) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_INVALID_MODEL_TIER', message: `유효하지 않은 모델 티어입니다: ${body.model_tier}` },
-        { status: 400 }
-      );
-    }
-
-    if (
-      body.model &&
-      ![
-        'claude-sonnet-5-5',
-        'claude-haiku-5-5',
-        'claude-opus-5-5',
-      ].includes(body.model)
-    ) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_INVALID_MODEL_TIER', message: `유효하지 않은 모델 코드입니다: ${body.model}` },
-        { status: 400 }
-      );
-    }
-
-    if (body.question.includes('[TRIGGER_401]') || body.question.includes('[TRIGGER_CLAUDE_KEY_MISSING]')) {
-      return HttpResponse.json<LlmErrorResponse>(
-        {
-          error_code: 'ERR_CLAUDE_API_KEY_MISSING',
-          message: 'Anthropic Claude API 키가 누락되었거나 비활성 상태입니다.',
-          status_code: 401,
-          provider: 'anthropic',
-          retryable: false,
-        },
-        { status: 401 }
-      );
-    }
-
-    if (body.question.includes('[TRIGGER_429]') || body.question.includes('[TRIGGER_CLAUDE_QUOTA]')) {
-      return HttpResponse.json<LlmErrorResponse>(
-        {
-          error_code: 'ERR_CLAUDE_QUOTA_EXCEEDED',
-          message: '외부 LLM API 호출 한도를 초과했습니다.',
-          status_code: 429,
-          provider: 'anthropic',
-          retryable: true,
-        },
-        { status: 429 }
-      );
-    }
-
-    if (body.question.includes('[TRIGGER_529]') || body.question.includes('[TRIGGER_CLAUDE_OVERLOADED]')) {
-      return HttpResponse.json<LlmErrorResponse>(
-        {
-          error_code: 'ERR_CLAUDE_OVERLOADED',
-          message: 'Anthropic Claude 업스트림 서버가 과부하 상태입니다.',
-          status_code: 529,
-          provider: 'anthropic',
-          retryable: true,
-        },
-        { status: 529 }
-      );
-    }
-
-    if (body.question.includes('[TRIGGER_502]')) {
-      return HttpResponse.json<LlmErrorResponse>(
-        {
-          error_code: 'ERR_LLM_UPSTREAM_FAILED',
-          message: '외부 LLM 업스트림 통신에 실패했습니다.',
-          status_code: 502,
-          provider: 'anthropic',
-          retryable: true,
-        },
-        { status: 502 }
-      );
-    }
-
-    if (body.question.includes('[TRIGGER_503]')) {
-      return HttpResponse.json<LlmErrorResponse>(
-        {
-          error_code: 'ERR_LLM_PROVIDER_UNAVAILABLE',
-          message: '가용한 LLM 프로바이더 엔진이 설정되지 않았습니다.',
-          status_code: 503,
-          provider: 'none',
-          retryable: false,
-        },
-        { status: 503 }
-      );
-    }
-
-    await delay(120);
-
-    const sessionId = body.session_id || '7b6a48f2-2973-45f6-8c46-9562725b821a';
-    const isScoped = body.scope === 'scoped' && body.source_id;
-
-    const { tier: selectedTier, model: selectedModel, latencyMs, usage: tokenUsage } =
-      resolveModelAndUsage(body.model, body.model_tier);
-
-    let primarySources: ChatSourceItem[] = [];
-    let isRelaxed = false;
-    let effectiveFilters: ChatFocusFilter | undefined = undefined;
-
-    if (isScoped && mockArticles[body.source_id!]) {
-      const art = mockArticles[body.source_id!];
-      primarySources = [
-        {
-          index: 1,
-          type: 'primary',
-          id: art.id,
-          title: art.title,
-          url: art.url,
-          source: art.source,
-          category: art.category,
-          quality_score: art.quality_score,
-          snippet: art.summary,
-          published_at: art.published_at,
-        },
-      ];
-    } else {
-      const matchedChunks = filterChunksByQuestion(mockSearchChunks, body.question);
-      const filterResult = applyFocusFilters(matchedChunks, body.filters);
-      const candidateList =
-        filterResult.filtered.length > 0
-          ? filterResult.filtered.slice(0, body.top_k || 5)
-          : applyFocusFilters(mockSearchChunks, body.filters).filtered.slice(0, body.top_k || 5);
-
-      primarySources = candidateList.map((s, idx) => ({
-        index: idx + 1,
-        type: 'primary' as const,
-        id: s.id,
-        title: s.title,
-        url: s.url,
-        source: s.source,
-        category: s.category,
-        quality_score: s.quality_score,
-        snippet: s.snippet,
-        published_at: s.published_at,
-      }));
-      isRelaxed = filterResult.isRelaxed;
-      effectiveFilters = filterResult.appliedFilters;
-    }
-
-    const supplementarySources = mockSupplementarySources.slice(0, 1);
-    const allSources = [...primarySources, ...supplementarySources];
-
-    const responseData: ChatQueryResponse = {
-      answer: `## 1. 핵심 아키텍처 및 동작 원리\n\n질문 "${body.question}"에 대한 4단 엔지니어링 분석 결과입니다. FastMCP[1]와 Model Context Protocol[S1]을 결합하면 안정적인 멀티에이전트 워크플로우를 구성할 수 있습니다.`,
-      sources: allSources,
-      session_id: sessionId,
-      model: selectedModel,
-      model_tier: selectedTier,
-      scope: body.scope || 'global',
-      applied_filters: effectiveFilters,
-      is_relaxed: isRelaxed,
-      primary_count: primarySources.length,
-      supplementary_count: supplementarySources.length,
-      latency_ms: latencyMs,
-      usage: tokenUsage,
-    };
-
-    return HttpResponse.json(responseData, { status: 200 });
-  }),
-
-  // ==========================================================================
-  // 3. 컨텍스트 핸드오버용 기사 상세 메타데이터 조회 핸들러 (GET /api/chat/sources/:source_id)
+  // 2. GET /api/chat/sources/:source_id — 기사 상세 (핸드오버)
   // ==========================================================================
   http.get('*/api/chat/sources/:source_id', async ({ params }) => {
     const sourceId = Number(params.source_id);
-
+    if (!Number.isInteger(sourceId)) {
+      return apiError(400, 'ERR_INVALID_PAYLOAD', '요청 값 형식이 올바르지 않습니다.', [
+        { loc: ['path', 'source_id'], msg: 'Input should be a valid integer' },
+      ]);
+    }
     const article = mockArticles[sourceId];
     if (!article) {
-      return HttpResponse.json(
-        {
-          error_code: 'ERR_HANDOVER_SOURCE_NOT_FOUND',
-          message: `기사 ID ${sourceId}를 데이터베이스에서 찾을 수 없습니다.`,
-        },
-        { status: 404 }
-      );
+      return apiError(404, 'ERR_HANDOVER_SOURCE_NOT_FOUND', `기사 ID ${sourceId}를 데이터베이스에서 찾을 수 없습니다.`);
     }
-
-    return HttpResponse.json(article, { status: 200 });
+    return HttpResponse.json({ full_content: null, scraped_at: null, ...article }, { status: 200 });
   }),
 
   // ==========================================================================
-  // 4. 코퍼스 지식 검색 프리뷰 모의 핸들러 (GET /api/chat/search)
-  // ==========================================================================
-  http.get('*/api/chat/search', async ({ request }) => {
-    const url = new URL(request.url);
-    const q = url.searchParams.get('q');
-    const topK = Number(url.searchParams.get('top_k') || '5');
-    const minQuality = Number(url.searchParams.get('min_quality') || '5.0');
-    const category = url.searchParams.get('category') || 'all';
-    const timeRange = url.searchParams.get('time_range') || 'all';
-    const sort = url.searchParams.get('sort') || 'hot';
-    const highSignalOnly = url.searchParams.get('high_signal_only') === 'true';
-
-    if (!q || q.trim().length < 2) {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SEARCH_QUERY_TOO_SHORT',
-          message: '검색어는 최소 2글자 이상이어야 합니다.',
-        },
-        { status: 400 }
-      );
-    }
-
-    await delay(50);
-
-    let filtered = mockSearchChunks.filter(
-      (c) =>
-        c.title.toLowerCase().includes(q.toLowerCase()) ||
-        c.snippet.toLowerCase().includes(q.toLowerCase())
-    );
-
-    filtered = filtered.filter((c) => c.quality_score >= minQuality);
-
-    if (category !== 'all') {
-      filtered = filtered.filter((c) => c.category === category);
-    }
-
-    if (highSignalOnly) {
-      filtered = filtered.filter((c) => c.quality_score >= 7.8);
-    }
-
-    filtered.sort((a, b) => {
-      if (sort === 'latest') {
-        return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
-      }
-      if (sort === 'quality') {
-        return b.quality_score - a.quality_score;
-      }
-      return b.rag_score - a.rag_score;
-    });
-
-    const responseData: ChatSearchResponse = {
-      query: q,
-      total_matches: filtered.length,
-      chunks: filtered.slice(0, topK).map((c, idx) => ({ ...c, index: idx + 1 })),
-      latency_ms: 18,
-    };
-
-    return HttpResponse.json(responseData, { status: 200 });
-  }),
-
-  // ==========================================================================
-  // 5. 대화 세션 목록 조회 모의 핸들러 (GET /api/chat/sessions)
+  // 3. GET /api/chat/sessions — 세션 목록 (updated_at 내림차순)
   // ==========================================================================
   http.get('*/api/chat/sessions', async ({ request }) => {
     const url = new URL(request.url);
-    const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || '30'), 1), 50);
-    const offset = Math.max(Number(url.searchParams.get('offset') || '0'), 0);
+    const limit = Number(url.searchParams.get('limit') || '30');
+    const offset = Number(url.searchParams.get('offset') || '0');
 
-    // 에러 트리거 시뮬레이션
     if (url.searchParams.get('trigger_error') === '500' || url.searchParams.get('q') === '[TRIGGER_500]') {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SERVER_INTERNAL',
-          message: '세션 목록 인출 중 데이터베이스 내부 오류가 발생했습니다.',
-        },
-        { status: 500 }
-      );
+      return apiError(500, 'ERR_SERVER_INTERNAL', '세션 목록 인출 중 내부 오류가 발생했습니다.');
+    }
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50 || !Number.isInteger(offset) || offset < 0) {
+      return apiError(400, 'ERR_INVALID_PAYLOAD', '요청 값 형식이 올바르지 않습니다.', [
+        { loc: ['query', limit < 1 || limit > 50 ? 'limit' : 'offset'], msg: 'Input is out of range' },
+      ]);
     }
 
     await delay(20);
 
-    // updated_at DESC 정렬
     const sorted = [...mockSessionStore].sort(
       (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     );
-
     const summaries: ChatSessionSummary[] = sorted.slice(offset, offset + limit).map((s) => ({
       id: s.id,
       title: s.title,
       created_at: s.created_at,
       updated_at: s.updated_at,
       scope_mode: s.scope_mode,
-      active_source_id: s.active_source_id,
+      active_source_id: s.active_source_id ?? null,
       message_count: s.messages.length,
-      last_message_preview:
-        s.messages.length > 0 ? s.messages[s.messages.length - 1].content.slice(0, 100) : null,
-      active_filters: s.active_filters,
+      last_message_preview: s.messages.length > 0 ? s.messages[s.messages.length - 1].content.slice(0, 100) : null,
+      active_filters: s.active_filters ?? null,
     }));
-
     return HttpResponse.json(summaries, { status: 200 });
   }),
 
   // ==========================================================================
-  // 6. 대화 세션 생성 또는 업서트 모의 핸들러 (POST /api/chat/sessions)
+  // 4. POST /api/chat/sessions — 생성 또는 업서트 (201)
+  //   JSON·필드 오류 400 ERR_INVALID_PAYLOAD, id 가 UUID 아님 400 ERR_SESSION_INVALID_UUID.
+  //   메시지는 기존 뒤에 이어 붙이고 이 세션에 이미 있는 id(같은 요청 안 포함)는 건너뛴다.
+  //   다른 세션에 있는 id 가 섞이면 아무것도 바꾸지 않고 400 ERR_INVALID_PAYLOAD, details.message_ids.
+  //   메시지의 model_tier·usage·created_at 은 받은 그대로 저장한다 (CT-004).
   // ==========================================================================
   http.post('*/api/chat/sessions', async ({ request }) => {
-    let body: ChatSessionCreateRequest;
+    let raw: unknown;
     try {
-      body = (await request.json()) as ChatSessionCreateRequest;
+      raw = await request.json();
     } catch {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SESSION_INVALID_UUID',
-          message: '요청 본문 JSON 형식이 올바르지 않습니다.',
-        },
-        { status: 400 }
+      return apiError(400, 'ERR_INVALID_PAYLOAD', '요청 본문이 올바른 JSON 이 아닙니다.');
+    }
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      return apiError(400, 'ERR_INVALID_PAYLOAD', '요청 본문은 JSON 객체여야 합니다.');
+    }
+    const parsed = ChatSessionCreateRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return apiError(
+        400,
+        'ERR_INVALID_PAYLOAD',
+        '요청 필드 형식이 올바르지 않습니다.',
+        parsed.error.issues.map((i) => ({ loc: ['body', ...i.path.map(String)], msg: i.message }))
       );
     }
-
-    // 에러 트리거 키워드 검증
-    if (body.title?.includes('[TRIGGER_400]')) {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SESSION_INVALID_UUID',
-          message: '유효하지 않은 세션 UUID 형식이거나 파라미터 규격 오류입니다.',
-        },
-        { status: 400 }
-      );
+    const body = parsed.data;
+    if (body.id && !UUID_LIKE.test(body.id)) {
+      return apiError(400, 'ERR_SESSION_INVALID_UUID', '유효하지 않은 세션 UUID 형식이거나 파라미터 규격 오류입니다.');
     }
-
     if (body.title?.includes('[TRIGGER_500]')) {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SESSION_CREATE_FAILED',
-          message: '데이터베이스 세션 트랜잭션 커밋에 실패했습니다.',
-        },
-        { status: 500 }
-      );
+      return apiError(500, 'ERR_SESSION_CREATE_FAILED', '데이터베이스 세션 트랜잭션 커밋에 실패했습니다.');
+    }
+
+    const sessionId = body.id || crypto.randomUUID();
+    const foreign = foreignMessageIds(sessionId, (body.messages ?? []).map((m) => m.id));
+    if (foreign.length > 0) {
+      return apiError(400, 'ERR_INVALID_PAYLOAD', `다른 대화에서 이미 쓰는 메시지 id 입니다: ${foreign.join(', ')}`, {
+        message_ids: foreign,
+      });
     }
 
     await delay(30);
 
-    const sessionId = body.id || crypto.randomUUID();
-    const existingIndex = mockSessionStore.findIndex((s) => s.id === sessionId);
-
-    if (existingIndex >= 0) {
-      // 기존 세션 업서트
-      const existing = mockSessionStore[existingIndex];
-      const updated: ChatSessionDetail = {
-        ...existing,
-        title: body.title || existing.title,
-        scope_mode: body.scope_mode || existing.scope_mode,
-        active_source_id:
-          body.active_source_id !== undefined ? body.active_source_id : existing.active_source_id,
-        active_source:
-          body.active_source_id && mockArticles[body.active_source_id]
-            ? mockArticles[body.active_source_id]
-            : existing.active_source,
-        active_filters:
-          body.active_filters !== undefined ? body.active_filters : existing.active_filters,
-        updated_at: new Date().toISOString(),
-        messages: body.messages || existing.messages,
+    let session = mockSessionStore.find((s) => s.id === sessionId);
+    if (session) {
+      // backend 처럼 null 이 아닌 값만 덮어쓴다 (title·scope_mode 는 Pydantic 기본값이 있어 생략해도 기본값으로 덮인다)
+      if (body.title !== null) session.title = body.title;
+      if (body.scope_mode !== null) session.scope_mode = body.scope_mode;
+      if (body.active_source_id != null) {
+        session.active_source_id = body.active_source_id;
+        session.active_source = mockArticles[body.active_source_id] ?? null;
+      }
+      if (body.active_filters != null) session.active_filters = body.active_filters;
+      session.updated_at = nowIso();
+    } else {
+      enforceFifo();
+      session = {
+        id: sessionId,
+        title: body.title || '새 대화',
+        scope_mode: body.scope_mode || 'global',
+        active_source_id: body.active_source_id ?? null,
+        active_source: body.active_source_id ? mockArticles[body.active_source_id] ?? null : null,
+        active_filters: body.active_filters ?? null,
+        created_at: nowIso(),
+        updated_at: nowIso(),
+        messages: [],
       };
-      mockSessionStore[existingIndex] = updated;
-      return HttpResponse.json(updated, { status: 201 });
+      mockSessionStore.unshift(session);
     }
 
-    // 신규 세션 생성 시 FIFO 30개 자동 축출
-    if (mockSessionStore.length >= 30) {
-      mockSessionStore.sort(
-        (a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
-      );
-      mockSessionStore.shift();
+    const storedIds = new Set(session.messages.map((m) => m.id));
+    for (const m of body.messages ?? []) {
+      if (storedIds.has(m.id)) continue;
+      storedIds.add(m.id);
+      session.messages.push({ ...m, session_id: sessionId, created_at: m.created_at || nowIso() });
     }
 
-    const newSession: ChatSessionDetail = {
-      id: sessionId,
-      title: body.title || '새 대화',
-      scope_mode: body.scope_mode || 'global',
-      active_source_id: body.active_source_id || null,
-      active_source: body.active_source_id ? mockArticles[body.active_source_id] || null : null,
-      active_filters: body.active_filters || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      messages: body.messages || [],
-    };
-
-    mockSessionStore.unshift(newSession);
-    return HttpResponse.json(newSession, { status: 201 });
+    return HttpResponse.json(session, { status: 201 });
   }),
 
   // ==========================================================================
-  // 7. 대화 세션 상세 및 전체 메시지 이력 조회 모의 핸들러 (GET /api/chat/sessions/:session_id)
+  // 5. GET /api/chat/sessions/:session_id — 상세 (메시지 created_at 오름차순)
   // ==========================================================================
   http.get('*/api/chat/sessions/:session_id', async ({ params }) => {
     const sessionId = String(params.session_id);
-
     if (sessionId.includes('[TRIGGER_500]')) {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SERVER_INTERNAL',
-          message: '세션 상세 인출 중 데이터베이스 내부 예외가 발생했습니다.',
-        },
-        { status: 500 }
-      );
-    }
-
-    if (
-      sessionId.includes('[TRIGGER_404]') ||
-      sessionId === '00000000-0000-0000-0000-000000000000'
-    ) {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SESSION_NOT_FOUND',
-          message: `ID ${sessionId}에 해당하는 대화 세션을 찾을 수 없습니다.`,
-        },
-        { status: 404 }
-      );
+      return apiError(500, 'ERR_SERVER_INTERNAL', '세션 상세 인출 중 오류가 발생했습니다.');
     }
 
     await delay(20);
 
     const session = mockSessionStore.find((s) => s.id === sessionId);
     if (!session) {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SESSION_NOT_FOUND',
-          message: `ID ${sessionId}에 해당하는 대화 세션을 찾을 수 없습니다.`,
-        },
-        { status: 404 }
-      );
+      return apiError(404, 'ERR_SESSION_NOT_FOUND', `세션 ID ${sessionId}를 찾을 수 없습니다.`);
     }
-
-    // 시간순(created_at ASC) 정렬 보장
-    const sortedMessages = [...session.messages].sort(
+    const messages = [...session.messages].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
-
-    const detail: ChatSessionDetail = {
-      ...session,
-      messages: sortedMessages,
-    };
-
-    return HttpResponse.json(detail, { status: 200 });
+    return HttpResponse.json({ ...session, messages }, { status: 200 });
   }),
 
   // ==========================================================================
-  // 8. 대화 세션 및 연관 메시지 원자적 CASCADE 삭제 모의 핸들러 (DELETE /api/chat/sessions/:session_id)
+  // 6. DELETE /api/chat/sessions/:session_id — 세션과 메시지 삭제
   // ==========================================================================
   http.delete('*/api/chat/sessions/:session_id', async ({ params }) => {
     const sessionId = String(params.session_id);
-
     if (sessionId.includes('[TRIGGER_500]')) {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SESSION_DELETE_FAILED',
-          message: '데이터베이스 CASCADE 삭제 트랜잭션 처리에 실패했습니다.',
-        },
-        { status: 500 }
-      );
-    }
-
-    if (
-      sessionId.includes('[TRIGGER_404]') ||
-      sessionId === '00000000-0000-0000-0000-000000000000'
-    ) {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SESSION_NOT_FOUND',
-          message: `ID ${sessionId}에 해당하는 세션을 찾을 수 없습니다.`,
-        },
-        { status: 404 }
-      );
+      return apiError(500, 'ERR_SESSION_DELETE_FAILED', '데이터베이스 CASCADE 삭제 트랜잭션 처리에 실패했습니다.');
     }
 
     await delay(30);
 
     const index = mockSessionStore.findIndex((s) => s.id === sessionId);
     if (index === -1) {
-      return HttpResponse.json<ErrorResponse>(
-        {
-          error_code: 'ERR_SESSION_NOT_FOUND',
-          message: `ID ${sessionId}에 해당하는 세션을 찾을 수 없습니다.`,
-        },
-        { status: 404 }
-      );
+      return apiError(404, 'ERR_SESSION_NOT_FOUND', `세션 ID ${sessionId}를 찾을 수 없습니다.`);
     }
-
     mockSessionStore.splice(index, 1);
 
     const response: GenericSuccessResponse = {
@@ -1176,9 +771,6 @@ export const chatHandlers = [
       message: '대화 세션 및 하위 메시지가 원자적으로 영구 삭제되었습니다.',
       deleted_count: 1,
     };
-
     return HttpResponse.json(response, { status: 200 });
   }),
 ];
-
-export const handlers = [...chatHandlers];

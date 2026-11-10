@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Bot, Copy, Check, RotateCcw, Sparkles, TriangleAlert } from 'lucide-react';
@@ -21,32 +21,15 @@ export interface ChatMessageItemProps {
   isStreaming?: boolean;
   onRetry?: (messageId: string) => void;
   onCopy?: (content: string) => void;
-  onOpenSourceDetail?: (sourceId: number) => void;
 }
 
 /** 답변 안 인라인 코드. `text-[12px]` 은 기존 테스트 단언이라 그대로 둔다 (`text-xs` 와 같은 값). */
 const INLINE_CODE_CLASSES =
   'break-all rounded border border-border bg-surface-muted px-1 py-0.5 font-mono text-[12px] text-fg';
 
-export default function ChatMessageItem({
-  message,
-  isStreaming = false,
-  onRetry,
-  onCopy,
-  onOpenSourceDetail,
-}: ChatMessageItemProps) {
-  const { status: copyStatus, label: copyLabel, copy } = useCopyToClipboard();
-  const isUser = message.role === 'user';
-  const isError = message.status === 'error';
-  const sourcesMap = new Map((message.sources || []).map((s) => [String(s.index), s]));
-
-  const resolvedTier = sanitizeModelTier(message.model_tier || message.model_used);
-  const displayModelName = formatModelDisplayName(message.model_used || message.model_tier);
-
-  const handleCopy = async () => {
-    const ok = await copy(message.content);
-    if (ok) onCopy?.(message.content);
-  };
+/** 답변 마크다운 부품. 본문의 `[1]`·`[S1]` 을 인용 배지로 바꾼다. */
+function buildMarkdownComponents(sources: ChatMessage['sources']): Components {
+  const sourcesMap = new Map((sources || []).map((s) => [String(s.index), s]));
 
   const renderTextWithBadges = (text: string): React.ReactNode => {
     const parts = text.split(/(\[(?:S\d+|\d+)\])/g);
@@ -61,7 +44,6 @@ export default function ChatMessageItem({
             key={i}
             index={index}
             source={source}
-            onOpenSourceDetail={onOpenSourceDetail}
           />
         );
       }
@@ -69,33 +51,10 @@ export default function ChatMessageItem({
     });
   };
 
-  const processChildren = (children: React.ReactNode): React.ReactNode => {
-    return React.Children.map(children, (child) => {
-      if (typeof child === 'string') {
-        return renderTextWithBadges(child);
-      }
-      return child;
-    });
-  };
+  const processChildren = (children: React.ReactNode): React.ReactNode =>
+    React.Children.map(children, (child) => (typeof child === 'string' ? renderTextWithBadges(child) : child));
 
-  if (isUser) {
-    return (
-      <div className="mb-4 flex w-full justify-end">
-        <div className="flex max-w-[85%] min-w-0 items-start sm:max-w-2xl">
-          <div
-            className={cn(
-              'max-w-full min-w-0 flex-1 rounded-2xl rounded-tr-sm bg-accent-soft px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-fg',
-              MARKDOWN_WRAP_CLASSES
-            )}
-          >
-            {message.content}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const markdownComponents: Components = {
+  return {
     pre: ({ children }) => <>{children}</>,
     code: ({ className, children }) => (
       <MarkdownCode className={className} inlineClassName={INLINE_CODE_CLASSES}>
@@ -164,6 +123,44 @@ export default function ChatMessageItem({
     ),
     strong: ({ children }) => <strong className="font-semibold text-fg">{processChildren(children)}</strong>,
   };
+}
+
+function ChatMessageItem({
+  message,
+  isStreaming = false,
+  onRetry,
+  onCopy,
+}: ChatMessageItemProps) {
+  const { status: copyStatus, label: copyLabel, copy } = useCopyToClipboard();
+  const isUser = message.role === 'user';
+  const isError = message.status === 'error';
+  const resolvedTier = sanitizeModelTier(message.model_tier || message.model_used);
+  const displayModelName = formatModelDisplayName(message.model_used || message.model_tier);
+
+  const handleCopy = async () => {
+    const ok = await copy(message.content);
+    if (ok) onCopy?.(message.content);
+  };
+
+  // 마크다운 부품은 출처가 바뀔 때만 새로 만든다. 렌더마다 새 객체면 이전 답까지 다시 파싱한다 (FE-10).
+  const markdownComponents = useMemo(() => buildMarkdownComponents(message.sources), [message.sources]);
+
+  if (isUser) {
+    return (
+      <div className="mb-4 flex w-full justify-end">
+        <div className="flex max-w-[85%] min-w-0 items-start sm:max-w-2xl">
+          <div
+            className={cn(
+              'max-w-full min-w-0 flex-1 rounded-2xl rounded-tr-sm bg-accent-soft px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-fg',
+              MARKDOWN_WRAP_CLASSES
+            )}
+          >
+            {message.content}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const hasContent = Boolean(message.content && message.content.trim().length > 0);
   const sourceCounts = (() => {
@@ -278,7 +275,6 @@ export default function ChatMessageItem({
                   {resolvedTier ? (
                     <ModelTierBadge
                       tier={resolvedTier}
-                      variant="footer"
                       latencyMs={message.latency_ms ?? undefined}
                     />
                   ) : (
@@ -321,3 +317,6 @@ export default function ChatMessageItem({
     </div>
   );
 }
+
+// 스트리밍 중 다른 메시지는 props 가 그대로라 다시 그리지 않는다 (FE-10).
+export default memo(ChatMessageItem);

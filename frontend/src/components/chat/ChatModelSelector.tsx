@@ -5,21 +5,17 @@ import { ChevronDown, Check } from 'lucide-react';
 import { ModelTier, ChatModelSelectorProps } from '@/types/chat';
 import { cn } from '@/lib/cn';
 import { Popover } from '@/components/ui/Popover';
-import { TIER_META, TierIcon } from './ModelTierBadge';
+import { RELATIVE_COST_LABEL, TIER_META, TierIcon } from './ModelTierBadge';
 
 const TIERS: ModelTier[] = ['haiku', 'sonnet', 'opus'];
 
-const TRIGGER_VARIANT_CLASSES: Record<NonNullable<ChatModelSelectorProps['variant']>, string> = {
-  'header-compact': 'h-11 px-2 text-xs md:h-8',
-  'header-chip': 'h-11 px-2.5 text-xs font-semibold md:h-9',
-  'inline-chip': 'h-11 px-2.5 text-xs font-medium md:h-8',
-};
+// 입력창 좌하단 칩 하나만 쓴다 (헤더 변형은 D-37 로 지웠다). 팝오버는 입력창 위로 연다.
+const TRIGGER_CLASSES = 'h-11 px-2.5 text-xs font-medium md:h-8';
 
 export default function ChatModelSelector({
   selectedTier,
   onSelectTier,
   isStreaming,
-  variant = 'inline-chip',
   forceOpen = false,
   className = '',
 }: ChatModelSelectorProps) {
@@ -90,7 +86,6 @@ export default function ChatModelSelector({
 
   const streamingTooltip = '답변 생성 중에는 모델을 변경할 수 없습니다';
   const triggerLabel = `Claude 모델 선택: ${currentMeta.name}`;
-  const isHeaderVariant = variant === 'header-chip' || variant === 'header-compact';
 
   return (
     <div className={cn('relative inline-block', className)} onKeyDown={handleRadiogroupKeyDown}>
@@ -104,10 +99,10 @@ export default function ChatModelSelector({
         aria-expanded={isOpen}
         aria-controls={isOpen ? popoverId : undefined}
         aria-label={triggerLabel}
-        title={isStreaming ? streamingTooltip : `${currentMeta.name} (${currentMeta.cost})`}
+        title={isStreaming ? streamingTooltip : `${currentMeta.name} · ${RELATIVE_COST_LABEL} ${currentMeta.cost}`}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface text-fg transition-colors duration-150 ease-standard select-none hover:border-border-strong hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50',
-          TRIGGER_VARIANT_CLASSES[variant]
+          TRIGGER_CLASSES
         )}
       >
         <TierIcon tier={TIER_META[selectedTier] ? selectedTier : 'sonnet'} />
@@ -130,8 +125,8 @@ export default function ChatModelSelector({
         label="Claude AI 모델 선택"
         role="radiogroup"
         focusOnOpen={!forceOpen}
-        side={isHeaderVariant ? 'bottom' : 'top'}
-        align={isHeaderVariant ? 'end' : 'start'}
+        side="top"
+        align="start"
         id={popoverId}
         className="w-80 p-2"
       >
@@ -169,10 +164,11 @@ export default function ChatModelSelector({
                       {tier === 'sonnet' && (
                         <span className="rounded bg-accent-solid px-1 text-xs font-medium text-on-accent">추천</span>
                       )}
+                      {/* 비용은 측정값이 아닌 상대 순서라 '상대 비용' 으로 읽히게 하고, 근거 없던 지연 수치는 지웠다 (FE-25) */}
                       <span className="rounded bg-surface-muted px-1 text-xs font-semibold text-fg-muted">
+                        <span className="sr-only">{RELATIVE_COST_LABEL} </span>
                         {meta.cost}
                       </span>
-                      <span className="text-xs tabular-nums text-fg-subtle">{meta.latencyDesc}</span>
                     </div>
                     <p className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{meta.description}</p>
                   </div>

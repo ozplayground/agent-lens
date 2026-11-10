@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import ChatMessageItem from '@/components/chat/ChatMessageItem';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import { ChatMessage } from '@/types/chat';

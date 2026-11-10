@@ -98,3 +98,68 @@ describe('ChatMessageList Component', () => {
     }
   });
 });
+
+describe('ChatMessageList 모바일 스크롤 (FE-36)', () => {
+  const baseProps = {
+    isStreaming: false,
+    onSelectPromptSuggestion: vi.fn(),
+    onRetryMessage: vi.fn(),
+    onCopyMessage: vi.fn(),
+  };
+  const turn = (answer: string): ChatMessage[] => [
+    { id: 'u1', role: 'user', content: '질문', timestamp: '2026-11-10T00:00:00Z', scope: 'global', status: 'sent' },
+    { id: 'a1', role: 'assistant', content: answer, timestamp: '2026-11-10T00:00:01Z', scope: 'global', status: 'streaming' },
+  ];
+
+  /** jsdom 은 레이아웃을 계산하지 않으므로 스크롤 상자 크기를 직접 정한다. */
+  function sizeLog(log: HTMLElement, scrollHeight: number, clientHeight: number) {
+    Object.defineProperty(log, 'scrollHeight', { configurable: true, get: () => scrollHeight });
+    Object.defineProperty(log, 'clientHeight', { configurable: true, get: () => clientHeight });
+  }
+
+  it('메시지 목록이 절대 위치 자손(모바일 sr-only 라벨)의 기준 상자라 바깥 열이 넘치지 않는다', () => {
+    render(<ChatMessageList {...baseProps} messages={turn('답')} />);
+    // 모바일에서 `max-md:sr-only` 라벨은 position:absolute 다. 목록이 기준 상자가 아니면
+    // 라벨이 overflow-hidden 인 바깥 열을 넘쳐 열 전체가 스크롤되고 입력창이 위로 밀려난다.
+    expect(screen.getByRole('log').className.split(/\s+/)).toContain('relative');
+  });
+
+  it('새 토큰이 오면 목록 상자만 맨 아래로 내리고 조상 상자를 스크롤하는 scrollIntoView 는 쓰지 않는다', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+    const { rerender } = render(<ChatMessageList {...baseProps} isStreaming messages={turn('첫 토큰')} />);
+    const log = screen.getByRole('log');
+    sizeLog(log, 2000, 500);
+
+    rerender(<ChatMessageList {...baseProps} isStreaming messages={turn('첫 토큰 두 번째 토큰')} />);
+
+    expect(log.scrollTop).toBe(2000);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('사용자가 위로 올려 읽는 중이면 스트리밍이 이어져도 아래로 끌어내리지 않는다', () => {
+    const { rerender } = render(<ChatMessageList {...baseProps} isStreaming messages={turn('첫 토큰')} />);
+    const log = screen.getByRole('log');
+    sizeLog(log, 2000, 500);
+    log.scrollTop = 300;
+    fireEvent.scroll(log);
+
+    rerender(<ChatMessageList {...baseProps} isStreaming messages={turn('첫 토큰 두 번째 토큰')} />);
+
+    expect(log.scrollTop).toBe(300);
+  });
+
+  it('맨 아래 근처로 다시 내려오면 자동으로 따라 내려간다', () => {
+    const { rerender } = render(<ChatMessageList {...baseProps} isStreaming messages={turn('첫 토큰')} />);
+    const log = screen.getByRole('log');
+    sizeLog(log, 2000, 500);
+    log.scrollTop = 300;
+    fireEvent.scroll(log);
+    log.scrollTop = 1490; // 맨 아래(1500)에서 10px 위
+    fireEvent.scroll(log);
+
+    rerender(<ChatMessageList {...baseProps} isStreaming messages={turn('첫 토큰 두 번째 토큰')} />);
+
+    expect(log.scrollTop).toBe(2000);
+  });
+});

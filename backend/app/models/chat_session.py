@@ -18,7 +18,6 @@ class ChatSessionModel(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
-        index=True
     )
 
     messages = relationship(
@@ -40,7 +39,6 @@ class ChatMessageModel(Base):
         String(36),
         ForeignKey("chat_sessions.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
     )
     role = Column(String(20), nullable=False)  # 'user', 'assistant', 'system'
     content = Column(Text, nullable=False)

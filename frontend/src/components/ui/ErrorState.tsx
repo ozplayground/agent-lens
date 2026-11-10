@@ -1,3 +1,5 @@
+'use client';
+
 import type { ReactNode } from 'react';
 import { CircleAlert, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/cn';

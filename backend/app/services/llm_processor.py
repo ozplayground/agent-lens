@@ -3,11 +3,13 @@ import re
 import json
 import logging
 import asyncio
+import time
+from collections import OrderedDict
 from typing import Dict, Any, List, Optional, Tuple, AsyncGenerator
 from datetime import datetime, timezone
 import httpx
 from app.config import settings, load_json_config
-from app.collectors.categorizer import is_strictly_ai_related, classify_and_tag
+from app.services.categorizer import is_strictly_ai_related, classify_and_tag
 from app.services.llm_providers.base import BaseLLMProvider
 from app.services.llm_providers.anthropic_provider import (
     AnthropicLLMProvider,
@@ -88,6 +90,57 @@ CATEGORY_INSIGHTS = {
     "ai_news": "프론티어 추론 모델과 오픈소스 LLM의 성능 혁신을 통해 자율 에이전트의 기반 추론 능력(Reasoning)이 한 단계 도약함을 시사합니다."
 }
 
+class TTLCache:
+    """크기 한도(가장 오래 쓰지 않은 것부터 버림)와 만료 시간이 있는 작은 캐시 (PERF-05)."""
+
+    def __init__(self, maxsize: int, ttl: float):
+        self.maxsize = maxsize
+        self.ttl = ttl
+        self._data: "OrderedDict[Any, Tuple[float, Any]]" = OrderedDict()
+
+    def _alive(self, key: Any) -> bool:
+        item = self._data.get(key)
+        if item is None:
+            return False
+        if time.monotonic() >= item[0]:
+            del self._data[key]
+            return False
+        return True
+
+    def __contains__(self, key: Any) -> bool:
+        return self._alive(key)
+
+    def __getitem__(self, key: Any) -> Any:
+        if not self._alive(key):
+            raise KeyError(key)
+        self._data.move_to_end(key)
+        return self._data[key][1]
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        return self[key] if self._alive(key) else default
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        self._data[key] = (time.monotonic() + self.ttl, value)
+        self._data.move_to_end(key)
+        while len(self._data) > self.maxsize:
+            self._data.popitem(last=False)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def clear(self) -> None:
+        self._data.clear()
+
+
+# 기사 Ask AI 스트림이 토큰을 보낸 뒤 끊겼을 때의 마지막 이벤트 (N-01). 예외 문자열은 싣지 않는다
+STREAM_FAILED_EVENT: Dict[str, Any] = {
+    "event": "error",
+    "error_code": "ERR_LLM_STREAM_FAILED",
+    "message": "답변 생성이 중간에 끊겼습니다. 다시 시도해 주세요.",
+    "retryable": True,
+}
+
+
 def sanitize_model_identifier(model_name: Optional[str]) -> str:
     """
     Sanitizes and preserves model identifier.
@@ -116,15 +169,16 @@ class LLMProcessor:
         self.openai_key: Optional[str] = None
         self.ollama_url: Optional[str] = None
         self._unavailable_reason: Optional[str] = None
-        self._qa_cache: Dict[str, Tuple[str, str]] = {}
-        self._eval_cache: Dict[str, Dict[str, Any]] = {}
+        self._qa_cache = TTLCache(maxsize=1000, ttl=6 * 3600)
+        self._eval_cache = TTLCache(maxsize=5000, ttl=24 * 3600)
+        self._ollama_cache = TTLCache(maxsize=8, ttl=30)  # (주소, 모델) → Ollama 판정 결과 (PERF-01)
         self.anthropic_provider = AnthropicLLMProvider()
-        self.last_usage: Dict[str, Any] = {
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cache_read_input_tokens": None,
-            "cache_creation_input_tokens": None,
-        }
+
+    def clear_caches(self) -> None:
+        """평가·기사 질문·Ollama 판정 캐시를 비운다 (데이터 초기화 때, BUG-10)."""
+        self._qa_cache.clear()
+        self._eval_cache.clear()
+        self._ollama_cache.clear()
 
     def _resolve_openai_key(self) -> str:
         """OpenAI 키: 덮어쓰기 → settings → config.json → 환경 변수 → 빈 값."""
@@ -168,14 +222,23 @@ class LLMProcessor:
             or "llama3.2:latest"
         )
 
-    def _ollama_status(self, url: str, model: str) -> Tuple[bool, str]:
-        """Ollama 가용성 판정: /api/tags 한 번 (1초) 으로 응답과 설정 모델 설치를 본다. (가능 여부, 이유)."""
+    async def _ollama_status(self, url: str, model: str) -> Tuple[bool, str]:
+        """Ollama 가용성 판정 (결과를 30초 기억한다). (가능 여부, 이유)."""
         if not url:
             return False, "Ollama 주소 없음"
+        key = (url, model)
+        cached = self._ollama_cache.get(key)
+        if cached is None:
+            cached = await self._probe_ollama(url, model)
+            self._ollama_cache[key] = cached
+        return cached
+
+    async def _probe_ollama(self, url: str, model: str) -> Tuple[bool, str]:
+        """/api/tags 한 번 (1초) 으로 응답과 설정 모델 설치를 본다. 비동기라 이벤트 루프를 막지 않는다."""
         target = model if ":" in model else f"{model}:latest"
         try:
-            with httpx.Client(timeout=1.0) as client:
-                resp = client.get(f"{url}/api/tags")
+            async with httpx.AsyncClient(timeout=1.0) as client:
+                resp = await client.get(f"{url}/api/tags")
         except Exception:
             return False, "Ollama 연결 실패"
         if resp.status_code != 200:
@@ -285,20 +348,7 @@ class LLMProcessor:
             logger.debug(f"Ollama call failed or not running: {e}")
         return None, None
 
-    def is_test_environment(self) -> bool:
-        """Determines if current process is running in an automated test or CI environment."""
-        import sys
-        if getattr(settings, "TESTING", False):
-            return True
-        if os.environ.get("TESTING", "").lower() in ("true", "1", "yes"):
-            return True
-        if os.environ.get("CI", "").lower() in ("true", "1", "yes"):
-            return True
-        if "pytest" in sys.modules:
-            return True
-        return False
-
-    def has_live_provider(self, target_provider: Optional[str] = None) -> bool:
+    async def has_live_provider(self, target_provider: Optional[str] = None) -> bool:
         """Checks if a valid live LLM provider is configured and reachable."""
         if target_provider == "gemini":
             json_cfg = load_json_config()
@@ -316,7 +366,7 @@ class LLMProcessor:
         if self._resolve_openai_key():
             return True
 
-        ollama_ok, ollama_reason = self._ollama_status(self._resolve_ollama_url(), self._resolve_ollama_generate_model())
+        ollama_ok, ollama_reason = await self._ollama_status(self._resolve_ollama_url(), self._resolve_ollama_generate_model())
         if ollama_ok:
             return True
 
@@ -324,13 +374,13 @@ class LLMProcessor:
         logger.debug(f"LLM 프로바이더 판정 False: {self._unavailable_reason}")
         return False
 
-    def check_provider_available(self, target_provider: Optional[str] = None) -> bool:
+    async def check_provider_available(self, target_provider: Optional[str] = None) -> bool:
         """
         Check LLM availability.
         Raises LLMProviderUnavailableException (HTTP 503) if no live provider is configured.
         """
         self._unavailable_reason = None
-        if self.has_live_provider(target_provider=target_provider):
+        if await self.has_live_provider(target_provider=target_provider):
             return True
 
         logger.warning(f"가용한 LLM 프로바이더 없음: {self._unavailable_reason or '판정 이유 없음'}")
@@ -338,14 +388,21 @@ class LLMProcessor:
 
 
     async def generate_live_answer(
-        self, prompt: str, model: Optional[str] = None, model_tier: Optional[str] = None
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        model_tier: Optional[str] = None,
+        usage_out: Optional[Dict[str, Any]] = None,
     ) -> Tuple[str, str]:
-        """Generate answer via live LLM. Honors explicitly requested provider/model honestly without silent switching."""
+        """Generate answer via live LLM. Honors explicitly requested provider/model honestly without silent switching.
+
+        usage_out 을 주면 이 호출의 토큰 사용량(Anthropic 만)을 채운다. 요청끼리 공유하는 상태는 없다 (BUG-09).
+        """
         requested_model = (model or model_tier or "").lower()
 
         # Explicit Gemini routing
         if "gemini" in requested_model:
-            self.check_provider_available(target_provider="gemini")
+            await self.check_provider_available(target_provider="gemini")
             ans, g_model = await self._call_gemini(prompt, model=model or model_tier)
             if ans and g_model:
                 return ans, sanitize_model_identifier(g_model)
@@ -353,13 +410,13 @@ class LLMProcessor:
 
         # Explicit OpenAI routing
         if "gpt" in requested_model or "openai" in requested_model:
-            self.check_provider_available()
+            await self.check_provider_available()
             ans, o_model = await self._call_openai(prompt)
             if ans and o_model:
                 return ans, sanitize_model_identifier(o_model)
             raise LLMUpstreamException(f"OpenAI ({model}) 호출 실패 / API 장애")
 
-        self.check_provider_available()
+        await self.check_provider_available()
 
         # 1. Anthropic Claude (Priority 1 for default chat)
         if self.anthropic_provider.is_available():
@@ -368,7 +425,8 @@ class LLMProcessor:
                     prompt=prompt,
                     model=model or model_tier,
                 )
-                self.last_usage = usage
+                if usage_out is not None:
+                    usage_out.update(usage)
                 return ans, sanitize_model_identifier(resolved_model)
             except (AnthropicQuotaExceededException, LLMQuotaExceededException):
                 raise LLMQuotaExceededException("외부 LLM API 호출 한도 초과 (Anthropic 429)")
@@ -402,21 +460,28 @@ class LLMProcessor:
 
 
     async def stream_tokens(
-        self, prompt: str, model: Optional[str] = None, model_tier: Optional[str] = None
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        model_tier: Optional[str] = None,
+        usage_out: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[Tuple[str, str], None]:
-        """Stream raw tokens from actual LLM. Honors explicitly requested provider/model honestly."""
+        """Stream raw tokens from actual LLM. Honors explicitly requested provider/model honestly.
+
+        usage_out 을 주면 스트림이 끝난 뒤 이 스트림의 토큰 사용량(Anthropic 만)을 채운다 (BUG-09).
+        """
         requested_model = (model or model_tier or "").lower()
 
         # Explicit Gemini routing
         if "gemini" in requested_model:
-            self.check_provider_available(target_provider="gemini")
+            await self.check_provider_available(target_provider="gemini")
             ans, g_model = await self._call_gemini(prompt, model=model or model_tier)
             if ans and g_model:
                 yield (ans, sanitize_model_identifier(g_model))
                 return
             raise LLMUpstreamException(f"Google Gemini ({model or model_tier}) 호출 실패 / API 장애")
 
-        self.check_provider_available()
+        await self.check_provider_available()
 
         token_yielded = False
 
@@ -426,11 +491,11 @@ class LLMProcessor:
                 async for chunk, m_name in self.anthropic_provider.stream_chat(
                     prompt=prompt,
                     model=model or model_tier,
+                    usage_out=usage_out,
                 ):
                     token_yielded = True
                     yield (chunk, sanitize_model_identifier(m_name))
                 if token_yielded:
-                    self.last_usage = self.anthropic_provider.last_usage
                     return
             except (AnthropicQuotaExceededException, LLMQuotaExceededException):
                 raise LLMQuotaExceededException("외부 LLM API 호출 한도 초과 (Anthropic 429)")
@@ -514,6 +579,7 @@ class LLMProcessor:
         return sorted(list(found))
 
     def evaluate_quality_and_signal(self, title: str, summary: str, source: str) -> Dict[str, Any]:
+        """키워드 규칙 기반 품질 점수 (LLM 을 부르지 않는다). 수집 휴리스틱 폴백과 딥 리서치 후보 평가가 쓴다."""
         text = f"{title} {summary}".lower()
 
         # Strict domain gate for mixed/general feeds (GeekNews, general RSS, HackerNews)
@@ -565,7 +631,7 @@ class LLMProcessor:
 
         score = max(1.0, min(10.0, round(score, 1)))
         cutoff = getattr(settings, "QUALITY_CUTOFF_SCORE", 5.0)
-        high_thresh = getattr(settings, "HIGH_SIGNAL_THRESHOLD", 7.0)
+        high_thresh = settings.HIGH_SIGNAL_THRESHOLD
 
         is_worthwhile = score >= cutoff
         if is_mixed_source and not is_ai_domain:
@@ -584,12 +650,11 @@ class LLMProcessor:
         title: str,
         summary: str,
         source: str,
-        category_hint: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Deep LLM-grade relevance and quality evaluation.
         1. Fast heuristic pre-filter to instantly reject obvious non-AI noise without LLM latency.
-        2. Live LLM evaluation (Gemini/OpenAI) for genuine semantic relevance and deep quality scoring.
+        2. Live LLM evaluation (Anthropic → OpenAI → Ollama) for genuine semantic relevance and deep quality scoring.
         3. Strict heuristic fallback if LLM is unreachable or rate limited.
         """
         cache_key = f"{title.strip().lower()}::{source}"
@@ -616,7 +681,7 @@ class LLMProcessor:
 
         # 2. Live LLM Evaluation
         # Anti-Gemini Policy (POL-LLM-005): Gemini is decommissioned. Only use live provider if available.
-        if self.has_live_provider():
+        if await self.has_live_provider():
             prompt = (
                 f"You are a strict, world-class AI & Autonomous Agent Curator for AgentLens.\n"
                 f"AgentLens ONLY indexes topics that are directly and deeply relevant to:\n"
@@ -658,7 +723,7 @@ class LLMProcessor:
                         rel_score = float(data.get("relevance_score", 0.0))
                         q_score = float(data.get("quality_score", 5.0))
                         cutoff = getattr(settings, "QUALITY_CUTOFF_SCORE", 5.0)
-                        high_thresh = getattr(settings, "HIGH_SIGNAL_THRESHOLD", 7.0)
+                        high_thresh = settings.HIGH_SIGNAL_THRESHOLD
 
                         is_worthwhile = bool(data.get("is_worthwhile")) and is_rel and (cat != "irrelevant") and (rel_score >= 5.0) and (q_score >= cutoff)
                         is_high_signal = is_worthwhile and (q_score >= high_thresh or bool(data.get("is_high_signal")))
@@ -705,7 +770,7 @@ class LLMProcessor:
                 "evaluated_by": "heuristic_fallback"
             }
 
-        self._eval_cache[cache_key] = result
+        # 폴백 결과는 LLM 이 잠깐 안 될 때의 판정일 수 있어 캐시하지 않는다 (BUG-10)
         return result
 
     def generate_synthesis(
@@ -715,7 +780,11 @@ class LLMProcessor:
         category: str,
         why_it_matters_override: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Generates 3-bullet TL;DR and 'Why it matters' developer insight."""
+        """3줄 요약·시사점·기술 스택을 규칙 기반으로 만든다 (LLM 을 부르지 않는다).
+
+        시사점은 LLM 평가가 준 값(10자 초과)만 쓴다. 없으면 빈 문자열이다: 근거 없는 카테고리 고정 문장을
+        여러 기사에 반복 저장하지 않는다 (BUG-17).
+        """
         tech_entities = self.extract_tech_stack(f"{title} {summary}")
         clean_sum = (summary or "").strip()
 
@@ -738,58 +807,15 @@ class LLMProcessor:
         else:
             bullets.append("공식 레포지토리 및 기술 문서 릴리즈")
 
-        # Developer insight: Use override from LLM evaluation if available
-        base_insight = CATEGORY_INSIGHTS.get(category, CATEGORY_INSIGHTS["ai_news"])
+        why_it_matters = ""
         if why_it_matters_override and len(why_it_matters_override.strip()) > 10:
             why_it_matters = why_it_matters_override.strip()
-        elif tech_entities:
-            why_it_matters = f"{tech_entities[0]} 기반 구현에서 {base_insight}"
-        else:
-            why_it_matters = base_insight
 
         return {
             "tldr_bullets": bullets[:3],
             "why_it_matters": why_it_matters,
             "tech_stack": tech_entities
         }
-
-    async def answer_question_with_meta(
-        self,
-        item_title: str,
-        item_summary: str,
-        category: str,
-        tech_stack: List[str],
-        question: str
-    ) -> Tuple[str, str]:
-        """Interactive Ask AI answer generator returning (answer_text, model_used)."""
-        cache_key = f"{item_title.strip()}:{question.strip().lower()}"
-        if cache_key in self._qa_cache:
-            logger.info(f"Returning cached answer for key: {cache_key[:60]}...")
-            return self._qa_cache[cache_key]
-
-        prompt = (
-            f"당신은 최신 AI 기술, 자율 에이전트(Autonomous Agents), 하네스(Harness) 벤치마크 및 MCP(Model Context Protocol) 생태계 전문 수석 아키텍트입니다.\n"
-            f"제공된 기술 기사 정보를 바탕으로 사용자의 질문에 대해 실무 아키텍처 및 엔지니어링 관점에서 구체적이고 깊이 있는 기술 답변을 한국어 마크다운(Markdown)으로 작성해주세요.\n\n"
-            f"[분석 대상 소식]\n"
-            f"- 제목: {item_title}\n"
-            f"- 내용 및 맥락: {item_summary}\n"
-            f"- 기술 분류: {category}\n"
-            f"- 연관 기술 스택: {', '.join(tech_stack) if tech_stack else 'AI / Agent Framework'}\n\n"
-            f"[사용자 질문]\n"
-            f"{question}\n\n"
-            f"[작성 가이드라인]\n"
-            f"1. 기사 제목이나 요약을 단순 나열하거나 앵무새처럼 복사하지 마세요.\n"
-            f"2. 질문자의 의도를 정확히 파악하여 기술적 메커니즘, 실제 프로젝트에 도입/연동하는 구체적 방법, 실무 아키텍처 관점의 장단점 및 트레이드오프를 체계적으로 설명하세요.\n"
-            f"3. 가독성을 위해 마크다운 헤딩(###), 불릿 포인트(-), 볼드체, 인라인 코드(`...`)를 적극 활용하세요.\n"
-            f"4. 실무 개발팀이 바로 실행해볼 수 있는 구체적인 액션 아이템이나 주의점(Caution)을 1~2개 제시해주세요."
-        )
-
-        live_ans, model_name = await self._generate_live_answer(prompt)
-        if live_ans and model_name:
-            self._qa_cache[cache_key] = (live_ans, model_name)
-            return live_ans, model_name
-
-        return self._generate_heuristic_answer(item_title, item_summary, category, tech_stack, question)
 
     def _generate_heuristic_answer(
         self,
@@ -805,7 +831,7 @@ class LLMProcessor:
 
         if any(k in q_lower for k in ["적용", "도입", "사용", "구현", "어떻게", "how", "apply", "build"]):
             answer = (
-                f"### 🛠️ 실무 적용 및 도입 가이드\n\n"
+                f"### 실무 적용 및 도입 가이드\n\n"
                 f"**{item_title}** 기술을 실무 프로젝트 및 에이전트 워크플로우에 연동하기 위한 핵심 절차입니다:\n\n"
                 f"1. **인터페이스 연동 및 환경 구성**\n"
                 f"   - 주요 기술 스택인 `{tech_display}`의 공식 규격 및 레퍼런스를 검토하고 표준 프로토콜 인터페이스를 선언하세요.\n\n"
@@ -813,29 +839,29 @@ class LLMProcessor:
                 f"   - 자율 에이전트 환경에 직접 연동하기 전, Docker/가상 샌드박스 환경에서 회귀 테스트 및 도구 실행 권한을 엄격히 제한하세요.\n\n"
                 f"3. **관측성(Observability) 및 로깅 체계**\n"
                 f"   - 에이전트의 도구 호출 입출력과 상태 변경을 실시간 추적할 수 있도록 트레이싱 로깅을 구축하세요.\n\n"
-                f"> 💡 **기대 효과**: {category_insight}"
+                f"> **기대 효과**: {category_insight}"
             )
         elif any(k in q_lower for k in ["차이", "비교", "장점", "단점", "한계", "vs", "difference", "compare"]):
             answer = (
-                f"### ⚖️ 기술 비교 및 차별점 분석\n\n"
+                f"### 기술 비교 및 차별점 분석\n\n"
                 f"기존 방식과 비교했을 때 **{item_title}**의 주요 특징과 트레이드오프는 다음과 같습니다:\n\n"
                 f"- **핵심 차별점**: 표준화된 규격을 통해 파편화된 구현을 통합하고, 재사용성과 확장성을 극대화합니다.\n"
                 f"- **기술 스택 생태계**: `{tech_display}` 기반의 모듈화 아키텍처를 채택하여 기존 파이프라인과의 결합도를 낮춥니다.\n"
                 f"- **도입 시 고려사항 (Trade-off)**: 초기 연동 및 보안 하네스 구성 비용이 발생할 수 있으나 장기적 유지보수성과 평가 신뢰도를 확보할 수 있습니다.\n\n"
-                f"> 📌 **시사점**: {category_insight}"
+                f"> **시사점**: {category_insight}"
             )
         elif any(k in q_lower for k in ["원리", "구조", "아키텍처", "동작", "왜", "why", "architecture"]):
             answer = (
-                f"### 💡 핵심 원리 및 아키텍처 분석\n\n"
+                f"### 핵심 원리 및 아키텍처 분석\n\n"
                 f"**{item_title}**의 내부 동작 구조와 설계 원리입니다:\n\n"
                 f"- **프로토콜 및 인터페이스 레이어**: 클라이언트와 에이전트 간 비동기 메시지 교환 및 도구 실행을 표준화된 방식으로 오케스트레이션합니다.\n"
                 f"- **연관 기술 맥락**: `{tech_display}` 생태계와 결합하여 상태 관리와 런타임 신뢰성을 보장합니다.\n"
                 f"- **설계 목표**: 복합적인 도구 호출 및 멀티에이전트 환경에서 예외 처리와 회귀 검증을 체계화하는 데 목적이 있습니다.\n\n"
-                f"> 🎯 **핵심 요약**: {category_insight}"
+                f"> **핵심 요약**: {category_insight}"
             )
         elif any(k in q_lower for k in ["보안", "격리", "안전", "안정", "security", "sandbox", "safety"]):
             answer = (
-                f"### 🔒 보안 및 격리 환경 검토 사항\n\n"
+                f"### 보안 및 격리 환경 검토 사항\n\n"
                 f"**{item_title}** 도입 시 필수적으로 고려해야 할 보안 가이드라인입니다:\n\n"
                 f"1. **최소 권한 원칙 (Principle of Least Privilege)**: 에이전트 도구 실행 권한을 읽기 전용 또는 명시적 승인 기반으로 제한하세요.\n"
                 f"2. **런타임 샌드박스**: 컨테이너 격리를 통해 로컬 호스트 자원 및 네트워크로의 무단 탈출을 차단하세요.\n"
@@ -843,7 +869,7 @@ class LLMProcessor:
             )
         else:
             answer = (
-                f"### 🤖 기술 맥락 및 실무 분석\n\n"
+                f"### 기술 맥락 및 실무 분석\n\n"
                 f"**{item_title}**에 대한 기술적 분석 결과입니다:\n\n"
                 f"- **기술적 배경**: `{tech_display}` 기반의 최신 워크플로우로, {item_summary[:220] if item_summary else 'AI 에이전트 생태계의 주요 발전 소식입니다.'}\n"
                 f"- **엔지니어링 가치**: {category_insight}\n"
@@ -915,7 +941,8 @@ class LLMProcessor:
             except Exception as e:
                 logger.warning(f"Anthropic streaming failed in stream_question_answer: {e}")
                 if full_text:
-                    # 이미 토큰을 보냈으면 다른 엔진 답을 이어 붙이지 않고, done·캐시 없이 끝낸다
+                    # 이미 토큰을 보냈으면 다른 엔진 답을 이어 붙이지 않고, 캐시 없이 error 로 끝낸다 (N-01)
+                    yield dict(STREAM_FAILED_EVENT)
                     return
 
         # Note: Google Gemini streaming is permanently decommissioned per POL-LLM-005, REQ-LLM-002, and ADR-012.
@@ -948,10 +975,12 @@ class LLMProcessor:
                 except Exception as e:
                     logger.warning(f"OpenAI SDK stream failed: {e}")
                     if full_text:
+                        yield dict(STREAM_FAILED_EVENT)
                         return
 
         # 3. Fallback Heuristic Engine with smooth chunk streaming
-        if not stream_succeeded or not full_text.strip():
+        used_fallback = not stream_succeeded or not full_text.strip()
+        if used_fallback:
             fallback_ans, fallback_model = self._generate_heuristic_answer(
                 item_title=item_title,
                 item_summary=item_summary,
@@ -973,12 +1002,9 @@ class LLMProcessor:
                 await asyncio.sleep(0.015)
 
         if full_text:
-            self._qa_cache[cache_key] = (full_text, sanitize_model_identifier(model_used))
+            # 폴백 답은 LLM 이 잠깐 안 될 때의 답일 수 있어 캐시하지 않는다 (N-08, BUG-10 과 같은 규칙)
+            if not used_fallback:
+                self._qa_cache[cache_key] = (full_text, sanitize_model_identifier(model_used))
             yield {"event": "done", "total_text": full_text}
-
-    async def answer_question(self, item_title: str, item_summary: str, category: str, tech_stack: List[str], question: str) -> str:
-        """Backwards-compatible wrapper returning only answer string."""
-        ans, _ = await self.answer_question_with_meta(item_title, item_summary, category, tech_stack, question)
-        return ans
 
 llm_processor = LLMProcessor()

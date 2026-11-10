@@ -9,7 +9,6 @@ from sqlalchemy import select
 from app.models.news import NewsItem
 from app.schemas.chat import (
     ChatStreamRequest,
-    ChatQueryRequest,
     ChatSourceItem,
     ChatSourcesPayload,
     ChatStatusPayload,
@@ -19,11 +18,6 @@ from app.services.scraper import (
     ScrapeBlockedException,
     ScrapeTimeoutException,
     ScrapeEmptyContentException,
-)
-from app.services.agentic_search import (
-    AgenticSearchService,
-    SufficiencyEvaluationResult,
-    SupplementarySourceItem,
 )
 from app.services.chat_service import ChatService
 from app.database import AsyncSessionLocal
@@ -182,63 +176,6 @@ async def test_article_scraper_single_flight_lock(db_session: AsyncSession, samp
 
 
 @pytest.mark.asyncio
-async def test_agentic_search_sufficiency_and_anchoring(sample_article_scoped: NewsItem):
-    """
-    Test AgenticSearchService:
-    1. Missing installation / setup commands triggers is_sufficient = False.
-    2. Anchored sub-queries must include article entity title / tech stack prefix.
-    3. Maximum of 2 sub-queries allowed.
-    """
-    searcher = AgenticSearchService()
-    scraped_content = "LangGraph v0.3 introduces StateGraph with checkpointers. No install commands or pip commands are discussed."
-
-    question = "LangGraph v0.3를 실제로 설치하고 로컬 SQLite로 시작하는 pip 명령어와 설정 방법을 알려줘."
-    eval_res: SufficiencyEvaluationResult = await searcher.evaluate_sufficiency(
-        question=question,
-        article_title=sample_article_scoped.title,
-        tech_stack=sample_article_scoped.tech_stack,
-        scraped_content=scraped_content,
-    )
-
-    assert eval_res.is_sufficient is False
-    assert len(eval_res.queries) >= 1
-    assert len(eval_res.queries) <= 2
-    # Check context anchoring: either title or tech stack prefix present
-    first_q = eval_res.queries[0]
-    assert "LangGraph" in first_q
-
-
-@pytest.mark.asyncio
-async def test_agentic_search_relevance_filtering():
-    """
-    Test AgenticSearchService relevance filtering:
-    - Items with relevance < 0.60 are filtered out.
-    - Top items >= 0.60 are formatted as SupplementarySourceItem with [S1], [S2] indices.
-    """
-    searcher = AgenticSearchService()
-    mock_candidates = [
-        {"title": "LangGraph Official Installation & Quickstart", "url": "https://python.langchain.com/docs/langgraph/install", "snippet": "pip install -U langgraph langchain-core", "score": 0.92},
-        {"title": "LangGraph SQLite Checkpointer API Reference", "url": "https://langchain-ai.github.io/langgraph/reference/checkpointers", "snippet": "from langgraph.checkpoint.sqlite import SqliteSaver", "score": 0.78},
-        {"title": "Totally Unrelated Weather API in Python", "url": "https://weather.example.com", "snippet": "Get current weather with requests", "score": 0.35},
-    ]
-
-    with patch.object(searcher, "_search_web_candidates", new_callable=AsyncMock) as mock_search:
-        mock_search.return_value = mock_candidates
-
-        supp_sources = await searcher.search_supplementary(
-            queries=["LangGraph official installation pip quickstart"],
-            topic_context="LangGraph Multi-Agent Workflows v0.3",
-        )
-
-        assert len(supp_sources) == 2
-        assert supp_sources[0].index == "S1"
-        assert supp_sources[0].type == "supplementary"
-        assert supp_sources[0].relevance_score >= 0.60
-        assert supp_sources[1].index == "S2"
-        assert supp_sources[1].type == "supplementary"
-
-
-@pytest.mark.asyncio
 async def test_chat_scoped_sse_agentic_lifecycle(db_session: AsyncSession, sample_article_scoped: NewsItem):
     """
     Test ChatService.stream_chat in Scoped mode emits fixed single-article SSE protocol:
@@ -264,13 +201,12 @@ async def test_chat_scoped_sse_agentic_lifecycle(db_session: AsyncSession, sampl
     )
 
     with patch("app.services.scraper.ArticleScraperService.get_article_content", new_callable=AsyncMock) as mock_scrape, \
-         patch("app.services.agentic_search.AgenticSearchService.evaluate_and_search", new_callable=AsyncMock) as mock_eval_search, \
          patch("app.services.llm_processor.llm_processor.check_provider_available", return_value=(True, "mock-gemini")), \
          patch("app.services.llm_processor.llm_processor.stream_tokens") as mock_stream_tokens:
 
         mock_scrape.return_value = mock_scraped_text
 
-        async def fake_tokens(prompt: str):
+        async def fake_tokens(prompt: str, **kwargs):
             yield "## 1. 핵심 아키텍처 및 동작 원리\nLangGraph는 상태 머신 기반입니다[1].\n", "mock-gemini"
             yield "## 2. 주요 기능 및 코드 구현 예시\n```python\npip install langgraph\n```[1]\n", "mock-gemini"
             yield "## 3. 기존 기술 대비 차별점 및 벤치마크\n2배 빠릅니다[1].\n", "mock-gemini"
@@ -288,7 +224,6 @@ async def test_chat_scoped_sse_agentic_lifecycle(db_session: AsyncSession, sampl
         assert "evaluating_sufficiency" not in full_stream
         assert "agentic_searching" not in full_stream
         assert "synthesizing" in full_stream
-        assert mock_eval_search.call_count == 0
 
         assert "event: sources" in full_stream
         assert '"primary_count": 1' in full_stream
@@ -320,28 +255,10 @@ async def test_chat_scoped_graceful_degradation_when_scrape_fails(db_session: As
     )
 
     with patch("app.services.scraper.ArticleScraperService.get_article_content", side_effect=ScrapeBlockedException("HTTP 403 Forbidden")), \
-         patch("app.services.agentic_search.AgenticSearchService.evaluate_and_search", new_callable=AsyncMock) as mock_eval_search, \
          patch("app.services.llm_processor.llm_processor.check_provider_available", return_value=(True, "mock-gemini")), \
          patch("app.services.llm_processor.llm_processor.stream_tokens") as mock_stream_tokens:
 
-        mock_eval_search.return_value = (
-            False,
-            ["LangGraph official guide"],
-            [
-                ChatSourceItem(
-                    index="S1",
-                    type="supplementary",
-                    title="LangGraph Supplementary Guide",
-                    url="https://example.com/supp",
-                    source="web_search",
-                    snippet="Supplementary info",
-                    domain="example.com",
-                    relevance_score=0.85
-                )
-            ]
-        )
-
-        async def fake_tokens(prompt: str):
+        async def fake_tokens(prompt: str, **kwargs):
             yield "## 1. 핵심 아키텍처 및 동작 원리\n요약 기반 분석입니다[1].", "mock-gemini"
 
         mock_stream_tokens.side_effect = fake_tokens
@@ -394,122 +311,6 @@ async def test_article_scraper_empty_content_exception(db_session: AsyncSession,
         mock_get.return_value = Response(200, text=empty_html, request=Request("GET", sample_article_scoped.url))
         with pytest.raises(ScrapeEmptyContentException):
             await scraper.fetch_and_parse(sample_article_scoped.url)
-
-
-@pytest.mark.asyncio
-async def test_agentic_search_sufficiency_true_when_content_already_answers(sample_article_scoped: NewsItem):
-    """
-    Verify is_sufficient = True when content already contains full installation and answers.
-    """
-    searcher = AgenticSearchService()
-    rich_content = (
-        "LangGraph installation: run `pip install -U langgraph` to install. "
-        "Initialize your graph with StateGraph. " * 20
-    )
-    res = await searcher.evaluate_sufficiency(
-        question="LangGraph 설치하는 pip 명령어가 뭐야?",
-        article_title=sample_article_scoped.title,
-        tech_stack=sample_article_scoped.tech_stack,
-        scraped_content=rich_content,
-    )
-    assert res.is_sufficient is True
-    assert len(res.queries) == 0
-
-
-@pytest.mark.asyncio
-async def test_chat_query_scoped_with_agentic_workflow_success(db_session: AsyncSession, sample_article_scoped: NewsItem):
-    """
-    Verify synchronous query_chat in Scoped mode returns dual sources,
-    primary_count=1, supplementary_count>=1, and 4-tier structured answer.
-    """
-    chat_service = ChatService(db_session)
-    req = ChatQueryRequest(
-        question="LangGraph v0.3 상세 분석 및 시작 코드",
-        scope="scoped",
-        source_id=sample_article_scoped.id,
-    )
-
-    mock_content = "LangGraph v0.3 comprehensive guide. " * 30
-
-    with patch("app.services.scraper.ArticleScraperService.get_article_content", new_callable=AsyncMock, return_value=mock_content), \
-         patch("app.services.agentic_search.AgenticSearchService.evaluate_and_search", new_callable=AsyncMock) as mock_eval_search, \
-         patch("app.services.llm_processor.llm_processor.generate_live_answer", new_callable=AsyncMock) as mock_gen:
-
-        mock_gen.return_value = (
-            "## 1. 핵심 아키텍처 및 동작 원리\n상태 머신[1]\n## 2. 주요 기능 및 코드 구현 예시\n코드[1]\n## 3. 기존 기술 대비 차별점 및 벤치마크\n차별점\n## 4. 실무 도입 시 고려사항 및 튜닝 파라미터\n주의점",
-            "claude-sonnet-5-5"
-        )
-
-        res = await chat_service.query_chat(req)
-        assert res.scope == "scoped"
-        assert res.primary_count == 1
-        assert res.supplementary_count == 0
-        assert len(res.sources) == 1
-        assert res.sources[0].index == 1
-        assert res.sources[0].type == "primary"
-        assert mock_eval_search.call_count == 0
-        assert "## 1. 핵심 아키텍처 및 동작 원리" in res.answer
-
-
-@pytest.mark.asyncio
-async def test_agentic_search_comparison_and_patch_triggers():
-    """Verify comparison (vs) and patch/changelog triggers."""
-    searcher = AgenticSearchService()
-
-    # Comparison trigger
-    res_comp = await searcher.evaluate_sufficiency(
-        question="LangGraph vs AutoGen vs CrewAI 성능 차이점 비교 분석",
-        article_title="LangGraph Overview",
-        tech_stack="Python, LangGraph",
-        scraped_content="LangGraph is a library for building stateful, multi-actor applications with LLMs.",
-    )
-    assert res_comp.is_sufficient is False
-    assert "comparison_benchmarks" in res_comp.missing_aspects
-    assert any("comparison" in q for q in res_comp.queries)
-
-    # Patch / Changelog trigger
-    res_patch = await searcher.evaluate_sufficiency(
-        question="LangGraph v0.3 최신 릴리즈 패치 내역 및 브레이킹 체인지",
-        article_title="LangGraph Overview",
-        tech_stack="Python, LangGraph",
-        scraped_content="LangGraph basic overview without version notes.",
-    )
-    assert res_patch.is_sufficient is False
-    assert "patch_changelog" in res_patch.missing_aspects
-    assert any("release notes" in q for q in res_patch.queries)
-
-
-@pytest.mark.asyncio
-async def test_agentic_search_web_candidates_and_relevance():
-    """Verify web candidate search parsing and keyword relevance calculation."""
-    searcher = AgenticSearchService()
-
-    # Calculate relevance test
-    cand_high = {"title": "LangGraph StateGraph Architecture", "snippet": "Detailed graph state guide"}
-    score_high = searcher._calculate_relevance(cand_high, "LangGraph StateGraph Multi-Agent")
-    assert score_high >= 0.60
-
-    cand_low = {"title": "Cooking Recipes for Soup", "snippet": "Tomato soup in 15 minutes"}
-    score_low = searcher._calculate_relevance(cand_low, "LangGraph StateGraph Multi-Agent")
-    assert score_low < 0.60
-
-    # Search candidates with mock
-    mock_ddg_response = {
-        "Heading": "LangGraph Python",
-        "AbstractText": "LangGraph is a stateful multi-agent framework.",
-        "AbstractURL": "https://python.langchain.com/langgraph",
-        "RelatedTopics": [
-            {
-                "Text": "LangGraph GitHub - Official Repo",
-                "FirstURL": "https://github.com/langchain-ai/langgraph"
-            }
-        ]
-    }
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = Response(200, json=mock_ddg_response, request=Request("GET", "https://api.duckduckgo.com/"))
-        cands = await searcher._search_web_candidates("LangGraph official")
-        assert len(cands) >= 1
-        assert any("langgraph" in c["url"].lower() for c in cands)
 
 
 @pytest.mark.asyncio
@@ -600,8 +401,7 @@ async def test_chat_global_react_llm_planner_and_citation_filtering(db_session: 
     assert scoped_plan["thought"] == "단일 기사 컨텍스트 고정"
 
     # 2. Live LLM planner decides 'none' even when a tech keyword is mentioned casually
-    with patch("app.services.llm_processor.llm_processor.is_test_environment", return_value=False), \
-         patch("app.services.llm_processor.llm_processor.has_live_provider", return_value=True), \
+    with patch("app.services.llm_processor.llm_processor.has_live_provider", return_value=True), \
          patch("app.services.llm_processor.llm_processor.generate_live_answer", new_callable=AsyncMock) as mock_gen:
         mock_gen.return_value = (
             '{"thought": "단순 파이썬 문법 질문이므로 뉴스 검색 불필요", "action": "none", "search_query": ""}',
@@ -629,6 +429,5 @@ async def test_chat_global_react_llm_planner_and_citation_filtering(db_session: 
     filtered = chat_service._filter_cited_sources("이 기능은 두 번째 기사[2]에서 자세히 다룹니다.", candidates, "질문")
     assert len(filtered) == 1
     assert filtered[0].id == 102
-
 
 

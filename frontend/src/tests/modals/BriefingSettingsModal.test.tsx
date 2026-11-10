@@ -30,7 +30,6 @@ const settings: BriefingSettings = {
     slack_webhook_url: 'https://hooks.slack.com/services/T000/B000/XXX',
     discord_webhook_url: '',
     auto_dispatch_daily_briefing: false,
-    auto_alert_high_signal: false,
   },
 };
 

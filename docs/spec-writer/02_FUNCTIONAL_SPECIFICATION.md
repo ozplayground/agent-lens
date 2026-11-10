@@ -1,11 +1,11 @@
 # AgentLens 전체 기능정의서 인덱스 (Functional Specification Index)
 
 Updated: 2026-11-10
-기준: v0.4.1 (main)
+기준: v0.4.2 (main)
 
-- **작성일자**: 2026-11-09
+- **작성일자**: 2026-11-09 (v0.4.2 갱신 2026-11-10)
 - **작성자**: 기획 명세 작성가 (`spec-writer`)
-- **문서 버전**: v1.0 (as-built. v0.3.1 인덱스를 대체한다)
+- **문서 버전**: v1.1 (as-built. v0.3.1 인덱스를 대체한다)
 - **상태**: Draft
 - **선행 산출물**: PRD `docs/spec-writer/01_PRD.md`
 - **함께 보는 문서**: 전역 정책 `docs/spec-writer/03_POLICIES_AND_EDGES.md`
@@ -16,19 +16,21 @@ Updated: 2026-11-10
 
 ## 0. 도메인 FSD 요약
 
-| 문서 | ID 접두사 | 단위 기능 수 | Must / Should / Could / Won't | 다루는 것 |
+| 문서 | ID 접두사 | 단위 기능 수 (살아 있음 / 삭제) | Must / Should / Could / Won't | 다루는 것 |
 |---|---|---|---|---|
-| [fsd/01_NEWS_FEED_SPECIFICATION.md](./fsd/01_NEWS_FEED_SPECIFICATION.md) | NEWS | 19 | 9 / 7 / 3 / 0 | 피드 목록·필터·검색·정렬, 북마크, 카드, 상세 대화상자, 기사 단위 AI 질문, RSS, 트렌드 레이더, 통계, 피드 단축키, 삭제·초기화, 요약 바 브리핑, 챗 핸드오버 |
-| [fsd/02_AI_CHAT_SPECIFICATION.md](./fsd/02_AI_CHAT_SPECIFICATION.md) | CHAT | 25 | 11 / 12 / 1 / 1 | 세션 관리, 입력·SSE 스트리밍, ReAct 검색 계획, RAG 검색, 단일 기사 모드, 인용, 모델 선택, 포커스 필터, 핸드오버, 내보내기, 오류·중단, 공급자 폴백, 폭별 화면 |
-| [fsd/03_COLLECTION_SPECIFICATION.md](./fsd/03_COLLECTION_SPECIFICATION.md) | COLL | 25 | 18 / 7 / 0 / 0 | 수집기 6종, 관련성·품질 게이트, 분류·태그, hotness, 요약 합성, 중복 제거·저장, 크롤 로그, 스케줄·수동 트리거·초기화, `make collect`, LLM 공급자 선택, 스크래퍼 |
-| [fsd/04_BRIEFING_AND_SHARING_SPECIFICATION.md](./fsd/04_BRIEFING_AND_SHARING_SPECIFICATION.md) | BRF | 13 | 6 / 6 / 0 / 1 | 일일 브리핑 생성·요약 바·대화상자, Notion, 이메일(SMTP), Slack/Discord 웹훅, 연동 설정, 자동 발송 |
-| [fsd/05_SOURCES_AND_RESEARCH_SPECIFICATION.md](./fsd/05_SOURCES_AND_RESEARCH_SPECIFICATION.md) | SRC | 14 | 6 / 5 / 3 / 0 | `sources.json`, 소스 목록·추가·켜기/끄기·삭제, URL 검사, 자율 딥 리서치와 판정 규칙, 감사 일지 |
-| [fsd/06_MCP_SERVER_SPECIFICATION.md](./fsd/06_MCP_SERVER_SPECIFICATION.md) | MCP | 7 | 4 / 2 / 1 / 0 | stdio MCP 서버와 도구 4개, MCP 정보 API, 연동 대화상자 |
-| [fsd/07_UI_COMMON_SPECIFICATION.md](./fsd/07_UI_COMMON_SPECIFICATION.md) | UI | 14 | 6 / 8 / 0 / 0 | 헤더, 수집 진행 줄, 테마, 단축키, 피드 키보드 탐색, 커맨드 팔레트, 모달 규칙, 반응형, 모바일 뷰포트, 로딩·오류·빈 상태, 마크다운, 복사, 접근성. 라우트·대화상자 목록·화면 상태·localStorage |
-| **합계** | | **117** | **60 / 47 / 8 / 2** | |
+| [fsd/01_NEWS_FEED_SPECIFICATION.md](./fsd/01_NEWS_FEED_SPECIFICATION.md) | NEWS | 17 / 2 | 9 / 7 / 1 / 0 | 피드 목록·필터·검색·정렬, 북마크, 카드, 상세 대화상자, 기사 단위 AI 질문(스트리밍), RSS, 트렌드 레이더, 통계, 피드 단축키, 초기화, 요약 바 브리핑, 챗 핸드오버 |
+| [fsd/02_AI_CHAT_SPECIFICATION.md](./fsd/02_AI_CHAT_SPECIFICATION.md) | CHAT | 23 / 2 | 11 / 12 / 0 / 0 | 세션 관리, 입력·SSE 스트리밍, ReAct 검색 계획, RAG 검색, 단일 기사 모드, 인용, 모델 선택, 포커스 필터, 핸드오버, 내보내기, 오류·중단, 공급자 폴백, 폭별 화면 |
+| [fsd/03_COLLECTION_SPECIFICATION.md](./fsd/03_COLLECTION_SPECIFICATION.md) | COLL | 24 / 1 | 18 / 6 / 0 / 0 | 수집기 6종, 관련성·품질 게이트, 분류·태그, hotness, 요약 합성, 중복 제거·저장, 크롤 로그, 스케줄·수동 트리거·초기화, 수집 잠금, `make collect`, LLM 공급자 선택, 스크래퍼 |
+| [fsd/04_BRIEFING_AND_SHARING_SPECIFICATION.md](./fsd/04_BRIEFING_AND_SHARING_SPECIFICATION.md) | BRF | 12 / 1 | 6 / 6 / 0 / 0 | 일일 브리핑 생성·요약 바·대화상자, Notion, 이메일(SMTP), Slack/Discord 웹훅(테스트·자동 발송), 연동 설정, 자동 발송 |
+| [fsd/05_SOURCES_AND_RESEARCH_SPECIFICATION.md](./fsd/05_SOURCES_AND_RESEARCH_SPECIFICATION.md) | SRC | 11 / 3 | 6 / 5 / 0 / 0 | `sources.json`, 소스 목록·추가·켜기/끄기·삭제, URL 검사, 자율 딥 리서치와 판정 규칙, 감사 일지 |
+| [fsd/06_MCP_SERVER_SPECIFICATION.md](./fsd/06_MCP_SERVER_SPECIFICATION.md) | MCP | 6 / 1 | 4 / 2 / 0 / 0 | stdio MCP 서버와 도구 4개, 연동 대화상자 |
+| [fsd/07_UI_COMMON_SPECIFICATION.md](./fsd/07_UI_COMMON_SPECIFICATION.md) | UI | 14 / 0 | 6 / 8 / 0 / 0 | 헤더, 수집 진행 줄, 테마, 단축키, 피드 키보드 탐색, 커맨드 팔레트, 모달 규칙, 반응형, 모바일 뷰포트, 로딩·오류·빈 상태, 마크다운, 복사, 접근성. 라우트·대화상자 목록·화면 상태·localStorage |
+| **합계** | | **107 / 10** | **60 / 46 / 1 / 0** | |
 
-- v0.4.1 리뷰 수정은 단위 기능의 수·ID·우선순위·화면 코드를 바꾸지 않았다. 바뀐 동작은 FUNC-NEWS-005·010, FUNC-CHAT-002·006·008·009·015·019·020·021·022, FUNC-COLL-023, FUNC-SRC-006·007·011·012, FUNC-UI-014(접근 이름) 에 반영했다. 해결된 문제 목록은 `docs/spec-writer/03_POLICIES_AND_EDGES.md` 4.8절.
-- 옛 색인(`docs/functional-spec/README.md`)은 COLL 을 24개로 적었다. 이번 재작성에서 `make collect`(CLI)를 옛 COLL-01 에서 떼어 `FUNC-COLL-002` 로 세웠으므로 25개다.
+- **v0.4.2 삭제 (10개)**: 화면에서 부르지 않던 API·코드를 지우며 단위 기능 10개를 '삭제(v0.4.2)' 로 표시했다. ID 는 다시 쓰지 않고, 각 FSD 에 삭제 사유만 남긴 7대 명세 틀을 둔다. `FUNC-NEWS-011`(`POST /api/news/{id}/ask`), `FUNC-NEWS-012`(`GET /api/news/{id}`), `FUNC-CHAT-023`(`POST /api/chat/query`, `GET /api/chat/search`), `FUNC-CHAT-024`(보충 웹 검색 엔진 `agentic_search.py`), `FUNC-COLL-024`(테스트 환경 판정), `FUNC-BRF-012`(`WebhookSettingsModal`, `POST /api/webhook/send-briefing`), `FUNC-SRC-005`(`POST /api/sources/github`), `FUNC-SRC-009`(`POST /api/research/discover`), `FUNC-SRC-010`(`POST /api/research/register-candidate`), `FUNC-MCP-006`(`GET /api/mcp/info`). 함께 지운 경로: `DELETE /api/news/all`(FUNC-NEWS-017 의 API 부분), `POST /api/briefing/generate`(FUNC-BRF-001 의 중복 경로). 지운 엔드포인트는 모두 11개다.
+- v0.4.2 에서 우선순위가 바뀐 살아 있는 기능은 없다. 117 → 107 은 Could 7개(NEWS-011·012, CHAT-023, SRC-005·009·010, MCP-006), Won't 2개(CHAT-024, BRF-012), Should 1개(COLL-024)가 빠진 결과다.
+- v0.4.1 리뷰 수정은 단위 기능의 수·ID·우선순위·화면 코드를 바꾸지 않았다. 해결된 문제 목록은 `docs/spec-writer/03_POLICIES_AND_EDGES.md` 4.8절(v0.4.1), 4.9절(v0.4.2).
+- 옛 색인(`docs/functional-spec/README.md`)은 COLL 을 24개로 적었다. 재작성 때 `make collect`(CLI)를 옛 COLL-01 에서 떼어 `FUNC-COLL-002` 로 세웠으므로 25개가 되었고, v0.4.2 에서 `FUNC-COLL-024` 를 지워 살아 있는 기능은 24개다.
 - 우선순위는 as-built 역할로 spec-writer 가 분류한 값이다 (PRD 열린 질문 Q2). 같은 기능을 두 FSD 가 함께 적은 곳은 우선순위를 맞췄다: `FUNC-NEWS-018` ↔ `FUNC-BRF-002`(Must), `FUNC-NEWS-019` ↔ `FUNC-CHAT-018`(Must).
 
 ---
@@ -59,8 +61,8 @@ Updated: 2026-11-10
   │     ├── [2Depth: 데이터 관리 SCR-COLL-003]
   │     │     └── [3Depth: 데이터 전체 삭제·초기화] (FUNC-NEWS-017)
   │     └── [2Depth: API 전용 (화면 없음)]
-  │           ├── [3Depth: 기사 단위 AI 질문 (일괄 응답)] (FUNC-NEWS-011)
-  │           ├── [3Depth: 기사 단건 조회] (FUNC-NEWS-012)
+  │           ├── [3Depth: 기사 단위 AI 질문 (일괄 응답)] (FUNC-NEWS-011) 삭제(v0.4.2)
+  │           ├── [3Depth: 기사 단건 조회] (FUNC-NEWS-012) 삭제(v0.4.2)
   │           └── [3Depth: RSS 출력] (FUNC-NEWS-013)
   │
   ├── [1Depth: AI 챗 (CHAT)]
@@ -92,8 +94,8 @@ Updated: 2026-11-10
   │     │     ├── [3Depth: 내보내기] (FUNC-CHAT-019)
   │     │     └── [3Depth: 오류·중단·재시도] (FUNC-CHAT-020)
   │     ├── [2Depth: API·미연결 코드]
-  │     │     ├── [3Depth: 동기 단건 질의 API] (FUNC-CHAT-023)
-  │     │     └── [3Depth: 보충 웹 검색 엔진 (미연결)] (FUNC-CHAT-024)
+  │     │     ├── [3Depth: 동기 단건 질의 API] (FUNC-CHAT-023) 삭제(v0.4.2)
+  │     │     └── [3Depth: 보충 웹 검색 엔진 (미연결)] (FUNC-CHAT-024) 삭제(v0.4.2)
   │     └── [2Depth: 화면 공통]
   │           └── [3Depth: 반응형·모바일] (FUNC-CHAT-025)
   │
@@ -126,7 +128,7 @@ Updated: 2026-11-10
   │     │     └── [3Depth: MCP 수집 트리거] (FUNC-COLL-022)
   │     └── [2Depth: LLM·보조 모듈 (화면 없음)]
   │           ├── [3Depth: LLM 프로바이더 선택·폴백] (FUNC-COLL-023)
-  │           ├── [3Depth: 테스트 환경 판정] (FUNC-COLL-024)
+  │           ├── [3Depth: 테스트 환경 판정] (FUNC-COLL-024) 삭제(v0.4.2)
   │           └── [3Depth: 기사 본문 스크래퍼] (FUNC-COLL-025)
   │
   ├── [1Depth: 브리핑·공유 (BRF)]
@@ -145,11 +147,11 @@ Updated: 2026-11-10
   │     │     └── [3Depth: 연동 설정 조회·저장] (FUNC-BRF-011)
   │     ├── [2Depth: 외부 채널 발송 (서버)]
   │     │     ├── [3Depth: 이메일 템플릿] (FUNC-BRF-008)
-  │     │     └── [3Depth: 웹훅 브리핑 발송] (FUNC-BRF-010)
+  │     │     └── [3Depth: 웹훅 브리핑 발송 (자동 발송 전용)] (FUNC-BRF-010)
   │     ├── [2Depth: 스케줄러 (서버)]
   │     │     └── [3Depth: 자동 발송 스케줄] (FUNC-BRF-013)
-  │     └── [2Depth: 미사용 컴포넌트 SCR-BRF-004]
-  │           └── [3Depth: 웹훅 설정 모달 (미사용)] (FUNC-BRF-012)
+  │     └── [2Depth: 미사용 컴포넌트 (SCR-BRF-004 폐기)]
+  │           └── [3Depth: 웹훅 설정 모달] (FUNC-BRF-012) 삭제(v0.4.2)
   │
   ├── [1Depth: 소스·딥 리서치 (SRC)]
   │     ├── [2Depth: 소스 설정 파일 (화면 없음)]
@@ -159,13 +161,13 @@ Updated: 2026-11-10
   │     ├── [2Depth: 등록된 수집원 탭 SCR-SRC-003, 삭제 확인 창 SCR-SRC-004]
   │     │     ├── [3Depth: 소스 목록 조회] (FUNC-SRC-003)
   │     │     ├── [3Depth: RSS 피드 추가] (FUNC-SRC-004)
-  │     │     ├── [3Depth: GitHub 저장소 추가 (API 전용)] (FUNC-SRC-005)
+  │     │     ├── [3Depth: GitHub 저장소 추가 (API 전용)] (FUNC-SRC-005) 삭제(v0.4.2)
   │     │     ├── [3Depth: 소스 켜기/끄기] (FUNC-SRC-006)
   │     │     └── [3Depth: 소스 삭제] (FUNC-SRC-007)
   │     └── [2Depth: AI 딥 리서처 탭 SCR-SRC-002]
   │           ├── [3Depth: 단일 URL 검사] (FUNC-SRC-008)
-  │           ├── [3Depth: 카탈로그 후보 탐색 (API 전용)] (FUNC-SRC-009)
-  │           ├── [3Depth: 후보 등록 (API 전용)] (FUNC-SRC-010)
+  │           ├── [3Depth: 카탈로그 후보 탐색 (API 전용)] (FUNC-SRC-009) 삭제(v0.4.2)
+  │           ├── [3Depth: 후보 등록 (API 전용)] (FUNC-SRC-010) 삭제(v0.4.2)
   │           ├── [3Depth: 자율 딥 리서치 실행] (FUNC-SRC-011)
   │           ├── [3Depth: 후보 평가·판정 규칙 (내부 모듈)] (FUNC-SRC-012)
   │           ├── [3Depth: 딥 리서치 상태 조회] (FUNC-SRC-013)
@@ -179,7 +181,7 @@ Updated: 2026-11-10
   │     │     ├── [3Depth: 도구 search_agent_news] (FUNC-MCP-004)
   │     │     └── [3Depth: 도구 trigger_agentlens_crawl] (FUNC-MCP-005)
   │     ├── [2Depth: 웹 API (화면 없음)]
-  │     │     └── [3Depth: MCP 정보 API GET /api/mcp/info] (FUNC-MCP-006)
+  │     │     └── [3Depth: MCP 정보 API GET /api/mcp/info] (FUNC-MCP-006) 삭제(v0.4.2)
   │     └── [2Depth: MCP 연동 대화상자 SCR-MCP-001]
   │           └── [3Depth: MCP 연동 대화상자] (FUNC-MCP-007)
   │
@@ -211,7 +213,7 @@ Updated: 2026-11-10
 
 | 동작 | 단위 기능 (관점) |
 |---|---|
-| 초기화 & 재수집 | FUNC-NEWS-017 (피드 후속 동작, 기사 전체 삭제 API), FUNC-COLL-020 (서버 처리, `make reset`), FUNC-UI-002 (확인 창·진행 줄) |
+| 초기화 & 재수집 | FUNC-NEWS-017 (피드 후속 동작. 기사 전체 삭제 API `DELETE /api/news/all` 은 v0.4.2 에서 지움), FUNC-COLL-020 (서버 처리, 수집 잠금, `make reset`), FUNC-UI-002 (확인 창·진행 줄) |
 | 즉시 수집·진행 표시 | FUNC-COLL-019 (서버·폴링), FUNC-UI-002 (진행 줄 공유 저장소) |
 | 브리핑 바로가기 | FUNC-NEWS-018 (요약 바 안의 배치·갱신), FUNC-BRF-002 (브리핑 값 표시) |
 | 챗 핸드오버 | FUNC-NEWS-019 (피드 쪽 진입점), FUNC-CHAT-018 (챗 쪽 URL 처리) |
@@ -240,8 +242,8 @@ Updated: 2026-11-10
 | `FUNC-NEWS-008` | 뉴스 피드 | 피드 화면 | 기사 카드 | Must | SCR-NEWS-001 | `REQ-NEWS-003` | 같음 |
 | `FUNC-NEWS-009` | 뉴스 피드 | 기사 상세 | 기사 상세 대화상자 | Must | SCR-NEWS-002 | `REQ-NEWS-003` | 같음 |
 | `FUNC-NEWS-010` | 뉴스 피드 | 기사 상세 | 기사 단위 AI 질문 (스트리밍) | Must | SCR-NEWS-002 | `REQ-NEWS-004` | 같음 |
-| `FUNC-NEWS-011` | 뉴스 피드 | API 전용 | 기사 단위 AI 질문 (일괄 응답) | Could | 없음 | `REQ-NEWS-007` | 같음 |
-| `FUNC-NEWS-012` | 뉴스 피드 | API 전용 | 기사 단건 조회 | Could | 없음 | `REQ-NEWS-007` | 같음 |
+| `FUNC-NEWS-011` | 뉴스 피드 | API 전용 | 기사 단위 AI 질문 (일괄 응답) — 삭제(v0.4.2) | 삭제 (옛 Could) | 없음 | `REQ-NEWS-007` | 같음 |
+| `FUNC-NEWS-012` | 뉴스 피드 | API 전용 | 기사 단건 조회 — 삭제(v0.4.2) | 삭제 (옛 Could) | 없음 | `REQ-NEWS-007` | 같음 |
 | `FUNC-NEWS-013` | 뉴스 피드 | API 전용 | RSS 출력 | Could | 없음 (새 탭 XML) | `REQ-NEWS-007` | 같음 |
 | `FUNC-NEWS-014` | 뉴스 피드 | 트렌드 레이더 | 트렌드 레이더 | Should | SCR-NEWS-001, SCR-NEWS-003 | `REQ-NEWS-006` | 같음 |
 | `FUNC-NEWS-015` | 뉴스 피드 | 피드 화면 | 통계 | Should | SCR-NEWS-001 | `REQ-NEWS-006` | 같음 |
@@ -276,8 +278,8 @@ Updated: 2026-11-10
 | `FUNC-CHAT-020` | AI 챗 | 답변 활용·복구 | 오류·중단·재시도 | Must | SCR-CHAT-001 | `REQ-CHAT-005` | 같음 |
 | `FUNC-CHAT-021` | AI 챗 | 모델·공급자 | 토큰 한도·출력 완료 | Must | 없음(API), SCR-CHAT-001 | `REQ-CHAT-004` | 같음 |
 | `FUNC-CHAT-022` | AI 챗 | 모델·공급자 | LLM 공급자 선택 순서·가용성 판정·폴백 | Must | 없음(API) | `REQ-COLL-005` | 같음 |
-| `FUNC-CHAT-023` | AI 챗 | API·미연결 코드 | 동기 단건 질의 API | Could | 없음(API) | `REQ-CHAT-011` | 같음 |
-| `FUNC-CHAT-024` | AI 챗 | API·미연결 코드 | 보충 웹 검색 엔진 (미연결) | Won't | 없음(API) | `REQ-CHAT-012` | 같음 |
+| `FUNC-CHAT-023` | AI 챗 | API·미연결 코드 | 동기 단건 질의 API — 삭제(v0.4.2) | 삭제 (옛 Could) | 없음(API) | `REQ-CHAT-011` | 같음 |
+| `FUNC-CHAT-024` | AI 챗 | API·미연결 코드 | 보충 웹 검색 엔진 (미연결) — 삭제(v0.4.2) | 삭제 (옛 Won't) | 없음(API) | `REQ-CHAT-012` | 같음 |
 | `FUNC-CHAT-025` | AI 챗 | 화면 공통 | 반응형·모바일 | Should | SCR-CHAT-001, SCR-UI-002 | `REQ-UI-007` | 같음 |
 
 ### 2.3 수집·분류·요약 (COLL)
@@ -307,7 +309,7 @@ Updated: 2026-11-10
 | `FUNC-COLL-021` | 수집 | 수집 상태와 트리거 | 시작 시 초기 수집 | Should | 없음 | `REQ-COLL-006` | 같음 |
 | `FUNC-COLL-022` | 수집 | 수집 상태와 트리거 | MCP 수집 트리거 | Should | 없음 (MCP stdio) | `REQ-MCP-002` | 같음 |
 | `FUNC-COLL-023` | 수집 | LLM·보조 모듈 | LLM 프로바이더 선택·폴백 | Must | 없음 | `REQ-COLL-005` | 같음 |
-| `FUNC-COLL-024` | 수집 | LLM·보조 모듈 | 테스트 환경 판정 | Should | 없음 | `REQ-COLL-006` | 같음 |
+| `FUNC-COLL-024` | 수집 | LLM·보조 모듈 | 테스트 환경 판정 — 삭제(v0.4.2) | 삭제 (옛 Should) | 없음 | `REQ-COLL-006` | 같음 |
 | `FUNC-COLL-025` | 수집 | LLM·보조 모듈 | 기사 본문 스크래퍼 | Should | 없음 | `REQ-CHAT-002` | 같음 |
 
 ### 2.4 브리핑·공유 (BRF)
@@ -323,9 +325,9 @@ Updated: 2026-11-10
 | `FUNC-BRF-007` | 브리핑 | 설정 대화상자 | SMTP 연결 테스트 | Should | SCR-BRF-003 | `REQ-BRF-005` | 같음 |
 | `FUNC-BRF-008` | 브리핑 | 외부 채널 발송 | 이메일 템플릿 | Should | 없음 (메일 본문) | `REQ-BRF-004` | 같음 |
 | `FUNC-BRF-009` | 브리핑 | 설정 대화상자 | 웹훅 테스트 전송 | Should | SCR-BRF-003 | `REQ-BRF-005` | 같음 |
-| `FUNC-BRF-010` | 브리핑 | 외부 채널 발송 | 웹훅 브리핑 발송 | Should | 없음 | `REQ-BRF-006` | 같음 |
+| `FUNC-BRF-010` | 브리핑 | 외부 채널 발송 | 웹훅 브리핑 발송 (자동 발송 전용) | Should | 없음 | `REQ-BRF-006` | 같음 |
 | `FUNC-BRF-011` | 브리핑 | 설정 대화상자 | 연동 설정 조회·저장 | Must | SCR-BRF-003 | `REQ-BRF-005` | 같음 |
-| `FUNC-BRF-012` | 브리핑 | 미사용 컴포넌트 | 웹훅 설정 모달 (미사용) | Won't | SCR-BRF-004 | `REQ-BRF-008` | 같음 |
+| `FUNC-BRF-012` | 브리핑 | 미사용 컴포넌트 | 웹훅 설정 모달 — 삭제(v0.4.2) | 삭제 (옛 Won't) | 없음 (SCR-BRF-004 폐기) | `REQ-BRF-008` | 같음 |
 | `FUNC-BRF-013` | 브리핑 | 스케줄러 | 자동 발송 스케줄 | Should | 없음 | `REQ-BRF-007` | 같음 |
 
 ### 2.5 소스·딥 리서치 (SRC)
@@ -336,12 +338,12 @@ Updated: 2026-11-10
 | `FUNC-SRC-002` | 소스 | 소스 & 리서처 대화상자 | 소스 관리 대화상자 | Must | SCR-SRC-001 | `REQ-SRC-001` | 같음 |
 | `FUNC-SRC-003` | 소스 | 등록된 수집원 탭 | 소스 목록 조회 | Must | SCR-SRC-003 | `REQ-SRC-001` | 같음 |
 | `FUNC-SRC-004` | 소스 | 등록된 수집원 탭 | RSS 피드 추가 | Must | SCR-SRC-003 | `REQ-SRC-002` | 같음 |
-| `FUNC-SRC-005` | 소스 | API 전용 | GitHub 저장소 추가 | Could | 없음 | `REQ-SRC-005` | 같음 |
+| `FUNC-SRC-005` | 소스 | API 전용 | GitHub 저장소 추가 — 삭제(v0.4.2) | 삭제 (옛 Could) | 없음 | `REQ-SRC-005` | 같음 |
 | `FUNC-SRC-006` | 소스 | 등록된 수집원 탭 | 소스 켜기/끄기 | Must | SCR-SRC-003 | `REQ-SRC-002` | 같음 |
 | `FUNC-SRC-007` | 소스 | 등록된 수집원 탭 | 소스 삭제 | Must | SCR-SRC-003, SCR-SRC-004 | `REQ-SRC-002` | 같음 |
 | `FUNC-SRC-008` | 소스 | AI 딥 리서처 탭 | 단일 URL 검사 | Should | SCR-SRC-002 | `REQ-SRC-004` | 같음 |
-| `FUNC-SRC-009` | 소스 | API 전용 | 카탈로그 후보 탐색 | Could | 없음 | `REQ-SRC-005` | 같음 |
-| `FUNC-SRC-010` | 소스 | API 전용 | 후보 등록 | Could | 없음 | `REQ-SRC-005` | 같음 |
+| `FUNC-SRC-009` | 소스 | API 전용 | 카탈로그 후보 탐색 — 삭제(v0.4.2) | 삭제 (옛 Could) | 없음 | `REQ-SRC-005` | 같음 |
+| `FUNC-SRC-010` | 소스 | API 전용 | 후보 등록 — 삭제(v0.4.2) | 삭제 (옛 Could) | 없음 | `REQ-SRC-005` | 같음 |
 | `FUNC-SRC-011` | 소스 | AI 딥 리서처 탭 | 자율 딥 리서치 실행 | Should | SCR-SRC-002 (스케줄은 화면 없음) | `REQ-SRC-003` | 같음 |
 | `FUNC-SRC-012` | 소스 | 내부 모듈 | 후보 평가·판정 규칙 | Should | 없음 | `REQ-SRC-003` | 같음 |
 | `FUNC-SRC-013` | 소스 | AI 딥 리서처 탭 | 딥 리서치 상태 조회 | Should | SCR-SRC-002 | `REQ-SRC-003` | 같음 |
@@ -356,7 +358,7 @@ Updated: 2026-11-10
 | `FUNC-MCP-003` | MCP | MCP 서버 프로세스 | 도구 `get_mcp_and_skills_ecosystem` | Must | 없음 | `REQ-MCP-001` | 같음 |
 | `FUNC-MCP-004` | MCP | MCP 서버 프로세스 | 도구 `search_agent_news` | Must | 없음 | `REQ-MCP-001` | 같음 |
 | `FUNC-MCP-005` | MCP | MCP 서버 프로세스 | 도구 `trigger_agentlens_crawl` | Should | 없음 | `REQ-MCP-002` | 같음 |
-| `FUNC-MCP-006` | MCP | 웹 API | MCP 정보 API `GET /api/mcp/info` | Could | 없음 | `REQ-MCP-004` | 같음 |
+| `FUNC-MCP-006` | MCP | 웹 API | MCP 정보 API `GET /api/mcp/info` — 삭제(v0.4.2) | 삭제 (옛 Could) | 없음 | `REQ-MCP-004` | 같음 |
 | `FUNC-MCP-007` | MCP | MCP 연동 대화상자 | MCP 연동 대화상자 | Should | SCR-MCP-001 | `REQ-MCP-003` | 같음 |
 
 ### 2.7 UI 공통 (UI)
@@ -388,7 +390,7 @@ Updated: 2026-11-10
 | `REQ-NEWS-004` | Must | FUNC-NEWS-010 |
 | `REQ-NEWS-005` | Should | FUNC-NEWS-007 |
 | `REQ-NEWS-006` | Should | FUNC-NEWS-014, 015 |
-| `REQ-NEWS-007` | Could | FUNC-NEWS-011, 012, 013 |
+| `REQ-NEWS-007` | Could | FUNC-NEWS-013 (011·012 는 v0.4.2 삭제) |
 | `REQ-CHAT-001` | Must | FUNC-CHAT-008, 009, 010, 012 |
 | `REQ-CHAT-002` | Must | FUNC-CHAT-013, FUNC-COLL-025 |
 | `REQ-CHAT-003` | Must | FUNC-CHAT-014 |
@@ -399,14 +401,14 @@ Updated: 2026-11-10
 | `REQ-CHAT-008` | Should | FUNC-CHAT-016, 017 |
 | `REQ-CHAT-009` | Should | FUNC-CHAT-011 |
 | `REQ-CHAT-010` | Should | FUNC-CHAT-019 |
-| `REQ-CHAT-011` | Could | FUNC-CHAT-023 |
-| `REQ-CHAT-012` | Won't | FUNC-CHAT-024 |
+| `REQ-CHAT-011` | 삭제(v0.4.2) | (FUNC-CHAT-023 삭제) |
+| `REQ-CHAT-012` | 삭제(v0.4.2) | (FUNC-CHAT-024 삭제) |
 | `REQ-COLL-001` | Must | FUNC-COLL-001, 003~009 |
 | `REQ-COLL-002` | Must | FUNC-COLL-010, 011, 012 |
 | `REQ-COLL-003` | Must | FUNC-COLL-013, 014, 015 |
 | `REQ-COLL-004` | Must | FUNC-COLL-017, 018, 019, FUNC-UI-002 |
 | `REQ-COLL-005` | Must | FUNC-COLL-023, FUNC-CHAT-022 |
-| `REQ-COLL-006` | Should | FUNC-COLL-002, 016, 021, 024 |
+| `REQ-COLL-006` | Should | FUNC-COLL-002, 016, 021 (024 는 v0.4.2 삭제) |
 | `REQ-COLL-007` | Should | FUNC-COLL-020, FUNC-NEWS-017, FUNC-UI-002 |
 | `REQ-BRF-001` | Must | FUNC-BRF-001 |
 | `REQ-BRF-002` | Must | FUNC-BRF-002, 003, FUNC-NEWS-018 |
@@ -415,16 +417,16 @@ Updated: 2026-11-10
 | `REQ-BRF-005` | Must | FUNC-BRF-005, 007, 009, 011 |
 | `REQ-BRF-006` | Should | FUNC-BRF-010 |
 | `REQ-BRF-007` | Should | FUNC-BRF-013 |
-| `REQ-BRF-008` | Won't | FUNC-BRF-012 |
+| `REQ-BRF-008` | 삭제(v0.4.2) | (FUNC-BRF-012 삭제) |
 | `REQ-SRC-001` | Must | FUNC-SRC-001, 002, 003 |
 | `REQ-SRC-002` | Must | FUNC-SRC-004, 006, 007 |
 | `REQ-SRC-003` | Should | FUNC-SRC-011, 012, 013, 014 |
 | `REQ-SRC-004` | Should | FUNC-SRC-008 |
-| `REQ-SRC-005` | Could | FUNC-SRC-005, 009, 010 |
+| `REQ-SRC-005` | 삭제(v0.4.2) | (FUNC-SRC-005, 009, 010 삭제) |
 | `REQ-MCP-001` | Must | FUNC-MCP-001~004 |
 | `REQ-MCP-002` | Should | FUNC-MCP-005, FUNC-COLL-022 |
 | `REQ-MCP-003` | Should | FUNC-MCP-007 |
-| `REQ-MCP-004` | Could | FUNC-MCP-006 |
+| `REQ-MCP-004` | 삭제(v0.4.2) | (FUNC-MCP-006 삭제) |
 | `REQ-UI-001` | Must | FUNC-UI-001 |
 | `REQ-UI-002` | Must | FUNC-UI-009 |
 | `REQ-UI-003` | Must | FUNC-UI-014 |
@@ -434,7 +436,7 @@ Updated: 2026-11-10
 | `REQ-UI-007` | Should | FUNC-UI-010, FUNC-CHAT-025 |
 | `REQ-UI-008` | Should | FUNC-UI-013 |
 
-Won't(후속 후보) 요구사항 `REQ-COLL-008`, `REQ-COLL-009`, `REQ-CHAT-013`, `REQ-NEWS-008`, `REQ-BRF-009`~`011`, `REQ-UI-009`, `REQ-UI-010` 에는 대응 단위 기능이 없다 (코드에 없거나 수정 과제다, PRD 3.2절).
+Won't(후속 후보) 요구사항 `REQ-COLL-008`, `REQ-COLL-009`, `REQ-CHAT-013`, `REQ-NEWS-008`, `REQ-BRF-010`, `REQ-BRF-011`, `REQ-UI-010` 에는 대응 단위 기능이 없다 (코드에 없거나 수정 과제다, PRD 3.2절). `REQ-BRF-009`(단어 경계 자르기)는 v0.4.2 에서 구현되어 FUNC-BRF-001 BR-0 에 들어갔고, `REQ-UI-009`(화면 문구와 동작 일치)도 v0.4.2 에서 구현됐다. `REQ-BRF-010` 은 일부 구현됐다.
 
 ---
 
@@ -463,14 +465,14 @@ Won't(후속 후보) 요구사항 `REQ-COLL-008`, `REQ-COLL-009`, `REQ-CHAT-013`
 | `SCR-BRF-001` | 요약 바의 브리핑 버튼 (`SCR-NEWS-001` 요약 바 안의 영역) | 버튼 | `frontend/src/components/feed/InsightsBar.tsx` | BRF | FUNC-BRF-002, FUNC-NEWS-018 |
 | `SCR-BRF-002` | 일일 브리핑 대화상자 | 대화상자 `xl` | `frontend/src/components/DailyBriefingModal.tsx` | BRF | FUNC-BRF-003, 004, 006 |
 | `SCR-BRF-003` | 공유 & 알림 설정 대화상자 | 대화상자 `md` | `frontend/src/components/BriefingSettingsModal.tsx` | BRF | FUNC-BRF-005, 007, 009, 011 |
-| `SCR-BRF-004` | 웹훅 알림 설정 모달 (어디서도 렌더하지 않음) | 대화상자 | `frontend/src/components/WebhookSettingsModal.tsx` | BRF | FUNC-BRF-012 |
+| `SCR-BRF-004` | (폐기, v0.4.2) 웹훅 알림 설정 모달 | - | 컴포넌트를 지웠다 | BRF | (FUNC-BRF-012 삭제) |
 | `SCR-SRC-001` | 소스 & 리서처 대화상자 | 대화상자 `xl` | `frontend/src/components/SourcesModal.tsx` | SRC | FUNC-SRC-002 |
 | `SCR-SRC-002` | AI 딥 리서처 탭 | 탭 | `frontend/src/components/sources/DeepResearcherTab.tsx` | SRC | FUNC-SRC-008, 011, 013, 014 |
 | `SCR-SRC-003` | 등록된 수집원 탭 | 탭 | `frontend/src/components/sources/SourcesListTab.tsx` | SRC | FUNC-SRC-003, 004, 006, 007 |
 | `SCR-SRC-004` | 소스 삭제 확인 창 | 확인 창 `sm` | `SourcesModal.tsx` 안의 `ConfirmDialog` | SRC | FUNC-SRC-007 |
 | `SCR-MCP-001` | AgentLens MCP 연동 대화상자 | 대화상자 `lg` | `frontend/src/components/McpModal.tsx` | MCP | FUNC-MCP-007 |
 
-- 라우트: `/`(피드), `/chat`(챗), `/api/health`(프론트 헬스체크). 404·로딩·오류 커스텀 페이지는 없다 (`docs/spec-writer/fsd/07_UI_COMMON_SPECIFICATION.md` '화면·라우트').
+- 라우트: `/`(피드), `/chat`(챗), `/api/health`(프론트 헬스체크). 404·로딩 커스텀 페이지는 없고, v0.4.2 부터 홈·챗 공용 라우트 오류 경계(`frontend/src/app/error.tsx`)가 있다 (`docs/spec-writer/fsd/07_UI_COMMON_SPECIFICATION.md` '화면·라우트').
 - 코드를 따로 두지 않은 작은 층: 뉴스 상세 질의응답 탭의 `대화 초기화` 확인 창(`SCR-NEWS-002` 안), 챗 알림 영역(`SCR-CHAT-001` 안). 전체 대화상자 목록은 UI 공통 FSD '대화상자·드로어·시트·팝오버' 표.
 
 ---
@@ -499,3 +501,12 @@ Won't(후속 후보) 요구사항 `REQ-COLL-008`, `REQ-COLL-009`, `REQ-CHAT-013`
 | `docs/operations.md` | `docs/devops-engineer/01_DEPLOYMENT_SPEC.md` |
 | `docs/test-strategy.md`, `docs/test-cases.md` | `docs/qa-engineer/01_QA_TEST_PLAN.md` |
 | `docs/known-issues.md` (영역을 넘나드는 문제) | 각 FSD '알려진 불일치·위험' 과 `docs/spec-writer/03_POLICIES_AND_EDGES.md` 4절 |
+
+---
+
+## 6. 변경 이력
+
+| 버전 | 날짜 | 바뀐 점 |
+|---|---|---|
+| v0.4.2 | 2026-11-10 | 단위 기능 10개 삭제 표시(살아 있는 기능 117 → 107, Must 60 / Should 46 / Could 1 / Won't 0). `SCR-BRF-004` 폐기. `REQ-CHAT-011`·`012`, `REQ-BRF-008`, `REQ-SRC-005`, `REQ-MCP-004` 삭제 표시. FUNC-BRF-010 을 자동 발송 전용으로. 라우트 오류 경계 추가 |
+| v0.4.1 | 2026-11-09 | as-built 재작성 (117개) |

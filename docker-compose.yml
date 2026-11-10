@@ -15,16 +15,19 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
       - PROJECT_NAME=AgentLens
-      - VERSION=${VERSION:-0.4.1}
+      - VERSION=${VERSION:-0.4.2}
       - HOST=0.0.0.0
       - PORT=8000
       - DATABASE_URL=sqlite+aiosqlite:///./data/agentlens.db
+      - PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-http://localhost:${FRONTEND_PORT:-3001}}
       - SECRET_KEY=${SECRET_KEY:-agentlens-default-secret-key-32chars-minimum-safe-value}
-      - CRAWL_SCHEDULE_HOURS=${CRAWL_SCHEDULE_HOURS:-0,6,12,18}
-      - CRAWL_TIMEZONE=${CRAWL_TIMEZONE:-UTC}
+      # 스케줄: 루트 .env 나 셸에 정했을 때만 넘긴다. 정하지 않으면 config.json scheduler.* 를 쓴다.
+      # 빈 값(VAR=)으로 정하지 않는다: 빈 문자열도 그대로 넘어가고 Settings 가 숫자·불리언으로 읽지 못해 기동이 멈춘다
+      - CRAWL_SCHEDULE_HOURS
+      - CRAWL_TIMEZONE
+      - SCHEDULER_ENABLED
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5-5}
-      - ANTHROPIC_COLLECTION_MODEL=${ANTHROPIC_COLLECTION_MODEL:-claude-sonnet-5-5}
       - ANTHROPIC_DEFAULT_CHAT_MODEL=${ANTHROPIC_DEFAULT_CHAT_MODEL:-claude-sonnet-5-5}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}

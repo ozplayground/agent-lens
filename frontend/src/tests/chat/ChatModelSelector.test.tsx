@@ -4,7 +4,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import ChatModelSelector from '@/components/chat/ChatModelSelector';
 import ModelTierBadge from '@/components/chat/ModelTierBadge';
 import ModelChangeDivider from '@/components/chat/ModelChangeDivider';
-import { ModelTier } from '@/types/chat';
+import { ModelTier, type ChatModelSelectorProps } from '@/types/chat';
 
 describe('ChatModelSelector Component (v4.0 TDD)', () => {
   const defaultProps = {
@@ -45,10 +45,9 @@ describe('ChatModelSelector Component (v4.0 TDD)', () => {
     expect(within(radiogroup).getByText(/Sonnet 5.5/i)).toBeInTheDocument();
     expect(within(radiogroup).getByText(/Opus 5.5/i)).toBeInTheDocument();
 
-    // Verify Relative Cost and Latency indicators
-    expect(screen.getByText('~0.3s')).toBeInTheDocument();
-    expect(screen.getByText('~0.6s')).toBeInTheDocument();
-    expect(screen.getByText('~1.8s')).toBeInTheDocument();
+    // 상대 비용만 보인다. 측정하지 않은 지연 수치(~0.3s 등)는 지웠다 (FE-25)
+    expect(within(radiogroup).getByRole('radio', { name: /Haiku 5\.5/ })).toHaveTextContent(/상대 비용\s*\$(?!\$)/);
+    expect(within(radiogroup).getByRole('radio', { name: /Opus 5\.5/ })).toHaveTextContent(/상대 비용\s*\$\$\$/);
 
     // Verify Sonnet 5.5 [추천] badge
     expect(within(radiogroup).getByText(/추천/i)).toBeInTheDocument();
@@ -122,23 +121,19 @@ describe('ChatModelSelector Component (v4.0 TDD)', () => {
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
   });
 
-  it('renders header-compact variant appropriately', () => {
-    render(<ChatModelSelector {...defaultProps} variant="header-compact" />);
-
-    const trigger = screen.getByRole('button', { name: /Claude 모델 선택|Sonnet/i });
-    expect(trigger).toBeInTheDocument();
-    expect(trigger.className).toContain('text-xs');
-  });
-
-  it('renders header-chip variant appropriately and positions popover downwards', () => {
-    render(<ChatModelSelector {...defaultProps} variant="header-chip" forceOpen={true} />);
-
-    const trigger = screen.getByRole('button', { name: /Claude 모델 선택|Sonnet/i });
-    expect(trigger).toBeInTheDocument();
-    expect(trigger.className).toContain('font-semibold');
+  it('D-37: 입력창 칩 하나만 남아 팝오버를 입력창 위로 연다 (헤더용 변형 없음)', () => {
+    render(<ChatModelSelector {...defaultProps} forceOpen={true} />);
 
     const radiogroup = screen.getByRole('radiogroup');
-    expect(radiogroup.className).toContain('top-full');
+    expect(radiogroup.className).toContain('bottom-full');
+    expect(radiogroup.className).not.toContain('top-full');
+  });
+
+  it('D-37: 변형 prop 이 없다 (입력창 칩 하나뿐이라 variant 를 지웠다)', () => {
+    const props: ChatModelSelectorProps = { selectedTier: 'sonnet', onSelectTier: vi.fn(), isStreaming: false };
+    // @ts-expect-error variant 는 값이 하나뿐이고 컴포넌트가 읽지 않아 지웠다 (tsc --noEmit 이 확인)
+    const removed = <ChatModelSelector {...props} variant="inline-chip" />;
+    expect(removed).toBeTruthy();
   });
 
   it('honors forceOpen prop', () => {
@@ -178,16 +173,16 @@ describe('ModelChangeDivider Component (v4.0 TDD)', () => {
 });
 
 describe('ModelTierBadge Component (v4.0 TDD)', () => {
-  it('renders chip variant with tier icon, name, and relative cost', () => {
-    render(<ModelTierBadge tier="haiku" variant="chip" showCost={true} />);
+  it('renders tier icon, name, and relative cost', () => {
+    render(<ModelTierBadge tier="haiku" showCost={true} />);
 
     expect(screen.getByText(/Haiku 5.5/i)).toBeInTheDocument();
     expect(document.querySelector('[data-tier-icon="haiku"]')).not.toBeNull();
     expect(screen.getByText('$')).toBeInTheDocument();
   });
 
-  it('renders footer variant with latency in milliseconds', () => {
-    render(<ModelTierBadge tier="sonnet" variant="footer" latencyMs={642} />);
+  it('renders measured latency in milliseconds', () => {
+    render(<ModelTierBadge tier="sonnet" latencyMs={642} />);
 
     expect(screen.getByText(/Sonnet 5.5/i)).toBeInTheDocument();
     expect(document.querySelector('[data-tier-icon="sonnet"]')).not.toBeNull();

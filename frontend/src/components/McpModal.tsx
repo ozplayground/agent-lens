@@ -54,6 +54,11 @@ export default function McpModal({ isOpen, onClose }: { isOpen: boolean; onClose
             Claude Desktop 설정 (<code className="rounded border border-border bg-surface-muted px-1 py-0.5 font-mono text-sm font-normal break-all">claude_desktop_config.json</code>)
           </h3>
           <CodeBlock code={MCP_CONFIG} language="json" />
+          <p className="text-sm leading-relaxed text-fg-muted">
+            <code className="font-mono">cwd</code> 는 이 저장소 backend 폴더의 절대 경로로 바꿉니다.{' '}
+            <code className="font-mono">command</code> 는 backend 의존성이 설치된 Python(예: 저장소의{' '}
+            <code className="font-mono">.venv/bin/python</code>)을 씁니다.
+          </p>
         </section>
       </div>
     </Dialog>

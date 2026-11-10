@@ -178,141 +178,6 @@ async def test_get_chat_source_not_found():
     assert "99999" in err["message"] or "찾을 수 없습니다" in err["message"]
 
 # ==============================================================================
-# 3. Knowledge Search Preview API (GET /api/chat/search)
-# ==============================================================================
-
-@pytest.mark.asyncio
-async def test_chat_search_success():
-    """Verify GET /api/chat/search returns preview chunks with BM25 and RAG scores."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.get("/api/chat/search?q=LangGraph&top_k=5")
-    assert res.status_code == 200
-    data = res.json()
-    assert data["query"] == "LangGraph"
-    assert data["total_matches"] >= 1
-    assert len(data["chunks"]) >= 1
-    assert any("LangGraph" in c["title"] for c in data["chunks"])
-    assert any(c["id"] in (1, 102) for c in data["chunks"])
-    chunk = data["chunks"][0]
-    assert "bm25_score" in chunk
-    assert "rag_score" in chunk
-    assert "latency_ms" in data
-
-@pytest.mark.asyncio
-async def test_chat_search_query_too_short():
-    """Verify search query with fewer than 2 characters returns 400 Bad Request."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.get("/api/chat/search?q=a")
-    assert res.status_code == 400
-    err = res.json()
-    assert err["error_code"] == "ERR_SEARCH_QUERY_TOO_SHORT"
-
-@pytest.mark.asyncio
-async def test_chat_search_filters():
-    """Verify category and min_quality filters work as expected."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.get("/api/chat/search?q=Python&category=mcp_plugins_skills&min_quality=9.0")
-    assert res.status_code == 200
-    data = res.json()
-    for chunk in data["chunks"]:
-        assert chunk["category"] == "mcp_plugins_skills"
-        assert chunk["quality_score"] >= 9.0
-
-# ==============================================================================
-# 4. Synchronous Single Query API (POST /api/chat/query)
-# ==============================================================================
-
-@pytest.mark.asyncio
-async def test_chat_query_global_mode_success():
-    """Verify POST /api/chat/query generates grounded answer in Global mode via real LLM."""
-    from unittest.mock import patch
-    payload = {
-        "question": "FastMCP와 LangGraph의 특징을 비교해주세요.",
-        "scope": "global",
-        "top_k": 3
-    }
-    with patch("app.services.chat_service.llm_processor.generate_live_answer", return_value=("FastMCP와 LangGraph 비교 분석 답변입니다[1].", "gemini-2.5-flash")):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            res = await ac.post("/api/chat/query", json=payload)
-    assert res.status_code == 200
-    data = res.json()
-    assert "answer" in data and len(data["answer"]) > 0
-    assert "sources" in data
-    assert isinstance(data["sources"], list)
-    assert len(data["sources"]) >= 1
-    assert data["scope"] == "global"
-    assert "session_id" in data
-    assert "model" in data
-    assert "latency_ms" in data
-
-@pytest.mark.asyncio
-async def test_chat_query_scoped_mode_success():
-    """Verify POST /api/chat/query grounds on single article in Scoped mode via real LLM."""
-    from unittest.mock import patch
-    payload = {
-        "question": "이 프레임워크의 데코레이터 문법과 지원 프로토콜을 알려주세요.",
-        "scope": "scoped",
-        "source_id": 101
-    }
-    with patch("app.services.chat_service.llm_processor.generate_live_answer", return_value=("FastMCP 데코레이터 문법 상세 답변입니다[1].", "gemini-2.5-flash")), \
-         patch("app.services.agentic_search.AgenticSearchService.evaluate_and_search", return_value=(False, [], [])):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            res = await ac.post("/api/chat/query", json=payload)
-    assert res.status_code == 200
-    data = res.json()
-    assert data["scope"] == "scoped"
-    assert len(data["sources"]) == 1
-    assert data["sources"][0]["id"] == 101
-
-@pytest.mark.asyncio
-async def test_chat_query_empty_question_validation():
-    """Verify empty or whitespace-only question returns 400 ERR_CHAT_PAYLOAD_EMPTY."""
-    for empty_q in ["", "   ", "\n\t"]:
-        payload = {"question": empty_q, "scope": "global"}
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            res = await ac.post("/api/chat/query", json=payload)
-        assert res.status_code == 400
-        err = res.json()
-        assert err["error_code"] == "ERR_CHAT_PAYLOAD_EMPTY"
-
-@pytest.mark.asyncio
-async def test_chat_query_too_large_question_validation():
-    """Verify question exceeding 2000 characters returns 400 ERR_CHAT_PAYLOAD_TOO_LARGE."""
-    payload = {"question": "a" * 2001, "scope": "global"}
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.post("/api/chat/query", json=payload)
-    assert res.status_code == 400
-    err = res.json()
-    assert err["error_code"] == "ERR_CHAT_PAYLOAD_TOO_LARGE"
-
-@pytest.mark.asyncio
-async def test_chat_query_scoped_source_not_found():
-    """Verify scoped mode with non-existent source_id returns 404 ERR_HANDOVER_SOURCE_NOT_FOUND."""
-    payload = {
-        "question": "기사 요약해줘",
-        "scope": "scoped",
-        "source_id": 99999
-    }
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.post("/api/chat/query", json=payload)
-    assert res.status_code == 404
-    err = res.json()
-    assert err["error_code"] == "ERR_HANDOVER_SOURCE_NOT_FOUND"
-
-@pytest.mark.asyncio
-async def test_chat_query_invalid_scope():
-    """Verify invalid scope param returns 400 ERR_INVALID_SCOPE_PARAM."""
-    payload = {
-        "question": "유효하지 않은 스코프 테스트",
-        "scope": "invalid_scope"
-    }
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.post("/api/chat/query", json=payload)
-    assert res.status_code == 400
-    err = res.json()
-    assert err["error_code"] == "ERR_INVALID_SCOPE_PARAM"
-
-# ==============================================================================
 # 5. Real-time SSE Streaming API (POST /api/chat/stream)
 # ==============================================================================
 
@@ -326,7 +191,7 @@ async def test_chat_stream_global_sse_success():
         "session_id": str(uuid.uuid4())
     }
 
-    async def mock_stream_tokens(prompt):
+    async def mock_stream_tokens(prompt, **kwargs):
         yield ("LangGraph 0.2", "Google gemini-2.5-flash")
         yield (" 릴리즈 분석입니다.", "Google gemini-2.5-flash")
 
@@ -361,8 +226,11 @@ async def test_chat_stream_global_sse_success():
     assert "sources_count" in done_json
 
 @pytest.mark.asyncio
-async def test_chat_stream_scoped_sse_success():
+async def test_chat_stream_scoped_sse_success(fake_llm):
     """Verify POST /api/chat/stream in Scoped mode isolates single source."""
+    import llm_fakes
+    # 스크래퍼가 여는 기사 페이지는 흉내가 답한다 (실제 네트워크로 나가지 않는다, TEST-03)
+    fake_llm.register_web("https://github.com/jlowin/fastmcp", text=llm_fakes.FAKE_ARTICLE_HTML)
     from unittest.mock import patch
     payload = {
         "question": "FastMCP의 주요 기술 구조와 특징을 설명해주세요.",
@@ -370,7 +238,7 @@ async def test_chat_stream_scoped_sse_success():
         "source_id": 101
     }
 
-    async def mock_stream_tokens(prompt):
+    async def mock_stream_tokens(prompt, **kwargs):
         yield ("FastMCP", "Google gemini-2.5-flash")
         yield (" 주요 아키텍처입니다.", "Google gemini-2.5-flash")
 
@@ -522,45 +390,6 @@ async def test_sqlite_fts_retriever_auto_relaxation_on_zero_matches():
         assert applied.time_range == "all"
 
 @pytest.mark.asyncio
-async def test_chat_search_with_focus_filters():
-    """Verify GET /api/chat/search binds category, time_range, sort, and high_signal_only query params."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.get("/api/chat/search?q=Python&category=mcp_plugins_skills&time_range=7d&sort=quality&high_signal_only=true")
-    assert res.status_code == 200
-    data = res.json()
-    assert "chunks" in data
-    for c in data["chunks"]:
-        assert c["category"] == "mcp_plugins_skills"
-        assert c["quality_score"] >= 5.0
-
-@pytest.mark.asyncio
-async def test_chat_query_with_focus_filters_and_relaxation():
-    """Verify POST /api/chat/query returns applied_filters and is_relaxed fields in response."""
-    from unittest.mock import patch
-
-    payload = {
-        "question": "Archived StateGraph Deep Dive에 대해 알려줘",
-        "scope": "global",
-        "filters": {
-            "category": "agent_tech",
-            "time_range": "24h",
-            "sort": "hot",
-            "high_signal_only": False
-        }
-    }
-    with patch("app.services.chat_service.llm_processor.generate_live_answer") as mock_llm:
-        mock_llm.return_value = ("에이전트 메모리 아키텍처 분석 답변입니다[1].", "Mock Gemini 2.5")
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            res = await ac.post("/api/chat/query", json=payload)
-    assert res.status_code == 200
-    data = res.json()
-    assert "applied_filters" in data
-    assert data["applied_filters"] is not None
-    assert "is_relaxed" in data
-    assert data["is_relaxed"] is True
-    assert data["applied_filters"]["time_range"] == "all"
-
-@pytest.mark.asyncio
 async def test_chat_stream_sources_event_includes_focus_filter_metadata():
     """Verify SSE event: sources delivers applied_filters and is_relaxed metadata."""
     from unittest.mock import patch
@@ -576,7 +405,7 @@ async def test_chat_stream_sources_event_includes_focus_filter_metadata():
         }
     }
 
-    async def mock_stream_tokens(prompt):
+    async def mock_stream_tokens(prompt, **kwargs):
         yield ("LangGraph", "Mock Gemini")
         yield (" v0.2", "Mock Gemini")
 
@@ -653,7 +482,7 @@ async def test_chat_stream_midstream_failure_yields_sse_error_event():
 
     payload = {"question": "스트리밍 도중 끊김 테스트", "scope": "global"}
 
-    async def faulty_stream_tokens(prompt):
+    async def faulty_stream_tokens(prompt, **kwargs):
         yield ("첫번째 토큰 ", "Gemini")
         raise RuntimeError("LLM Connection broken abruptly")
 
@@ -670,32 +499,3 @@ async def test_chat_stream_midstream_failure_yields_sse_error_event():
     assert "ERR_LLM_STREAM_FAILED" in body
     assert "event: sources" not in body
     assert "event: done" not in body
-
-@pytest.mark.asyncio
-async def test_chat_query_llm_provider_unavailable_returns_503():
-    """Verify POST /api/chat/query returns 503 when no LLM provider is available."""
-    from unittest.mock import patch
-    from app.services.chat_service import LLMProviderUnavailableException
-
-    payload = {"question": "질문", "scope": "global"}
-    with patch("app.services.chat_service.llm_processor.generate_live_answer", side_effect=LLMProviderUnavailableException("가용한 LLM 프로바이더 엔진 미설정")):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            res = await ac.post("/api/chat/query", json=payload)
-    assert res.status_code == 503
-    err = res.json()
-    assert err["error_code"] == "ERR_LLM_PROVIDER_UNAVAILABLE"
-
-@pytest.mark.asyncio
-async def test_chat_query_llm_upstream_failed_returns_502():
-    """Verify POST /api/chat/query returns 502 when LLM upstream call fails."""
-    from unittest.mock import patch
-    from app.services.chat_service import LLMUpstreamException
-
-    payload = {"question": "질문", "scope": "global"}
-    with patch("app.services.chat_service.llm_processor.generate_live_answer", side_effect=LLMUpstreamException("업스트림 실패")):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            res = await ac.post("/api/chat/query", json=payload)
-    assert res.status_code == 502
-    err = res.json()
-    assert err["error_code"] == "ERR_LLM_UPSTREAM_FAILED"
-

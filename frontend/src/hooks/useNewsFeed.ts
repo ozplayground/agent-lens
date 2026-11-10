@@ -13,14 +13,14 @@ interface UseNewsFeedProps {
 }
 
 export function useNewsFeed({ bookmarkedItems }: UseNewsFeedProps) {
-  const [category, setCategory] = useState<CategoryType>('all');
-  const [source, setSource] = useState<string>('all');
+  const [category, setCategoryState] = useState<CategoryType>('all');
+  const [source, setSourceState] = useState<string>('all');
   // `search` 는 입력창 값(바로 바뀜), `appliedSearch` 는 목록 요청에 쓰는 값(입력이 멈춘 뒤 바뀜).
   const [search, setSearchValue] = useState<string>('');
   const [appliedSearch, setAppliedSearch] = useState<string>('');
-  const [sort, setSort] = useState<string>('hot');
-  const [highSignalOnly, setHighSignalOnly] = useState<boolean>(false);
-  const [page, setPage] = useState<number>(1);
+  const [sort, setSortState] = useState<string>('hot');
+  const [highSignalOnly, setHighSignalOnlyState] = useState<boolean>(false);
+  const [page, setPageState] = useState<number>(1);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   // 검색어 반영: 요청 키와 1페이지 되돌리기를 같은 렌더에서 바꿔 요청을 한 번만 보낸다 (FE-09).
@@ -32,7 +32,7 @@ export function useNewsFeed({ bookmarkedItems }: UseNewsFeedProps) {
     pendingSearch.current = null;
     setSearchValue(value);
     setAppliedSearch(value);
-    setPage(1);
+    setPageState(1);
   }, []);
   /** 입력창용. 화면 값은 바로 바꾸고, 목록 요청은 입력이 SEARCH_DEBOUNCE_MS 동안 멈춘 뒤 1페이지부터 한다. 빈 값은 바로 반영한다. */
   const setSearch = useCallback(
@@ -54,6 +54,47 @@ export function useNewsFeed({ bookmarkedItems }: UseNewsFeedProps) {
       if (searchTimer.current) clearTimeout(searchTimer.current);
     },
     []
+  );
+
+  // 페이지·필터·정렬을 바꿀 때 기다리던 검색어가 있으면 먼저 반영한다. 같은 렌더에서 바뀌므로 요청은 한 번이고,
+  // 나중에 타이머가 1페이지로 되돌리지 않는다 (FE-35).
+  const flushPendingSearch = useCallback(() => {
+    if (pendingSearch.current !== null) commitSearch(pendingSearch.current);
+  }, [commitSearch]);
+  const setPage = useCallback(
+    (value: number) => {
+      flushPendingSearch();
+      setPageState(value);
+    },
+    [flushPendingSearch]
+  );
+  const setCategory = useCallback(
+    (value: CategoryType) => {
+      flushPendingSearch();
+      setCategoryState(value);
+    },
+    [flushPendingSearch]
+  );
+  const setSource = useCallback(
+    (value: string) => {
+      flushPendingSearch();
+      setSourceState(value);
+    },
+    [flushPendingSearch]
+  );
+  const setSort = useCallback(
+    (value: string) => {
+      flushPendingSearch();
+      setSortState(value);
+    },
+    [flushPendingSearch]
+  );
+  const setHighSignalOnly = useCallback(
+    (value: boolean) => {
+      flushPendingSearch();
+      setHighSignalOnlyState(value);
+    },
+    [flushPendingSearch]
   );
 
   // 목록 키(필터·정렬·검색어·페이지)와 다시 읽기 번호를 나눈다 (spec 14.5, R22).
@@ -144,7 +185,7 @@ export function useNewsFeed({ bookmarkedItems }: UseNewsFeedProps) {
     if (search.trim()) {
       const term = search.toLowerCase();
       filtered = filtered.filter(
-        (i) => i.title.toLowerCase().includes(term) || i.summary.toLowerCase().includes(term)
+        (i) => i.title.toLowerCase().includes(term) || (i.summary ?? '').toLowerCase().includes(term)
       );
     }
     return filtered;
@@ -183,15 +224,15 @@ export function useNewsFeed({ bookmarkedItems }: UseNewsFeedProps) {
 
   // Enter 등으로 다시 읽을 때 기다리던 검색어가 있으면 먼저 반영한다 (요청은 한 번).
   const loadNews = useCallback(() => {
-    if (pendingSearch.current !== null) commitSearch(pendingSearch.current);
+    flushPendingSearch();
     setNewsReload((n) => n + 1);
-  }, [commitSearch]);
+  }, [flushPendingSearch]);
 
   const resetFilters = () => {
-    setCategory('all');
-    setSource('all');
+    setCategoryState('all');
+    setSourceState('all');
     commitSearch('');
-    setHighSignalOnly(false);
+    setHighSignalOnlyState(false);
   };
 
   return {

@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-11-09T14:00:05.785Z",
-  "base": "http://localhost:3001",
-  "chrome": "Chrome/157.0.8103.38",
+  "generatedAt": "2026-11-10T06:00:06.610Z",
+  "base": "http://localhost:23001",
+  "chrome": "Chrome/157.0.8103.39",
   "environment": {
     "devIndicator": false,
-    "base": "http://localhost:3001",
-    "chrome": "Chrome/157.0.8103.38",
-    "commit": "9e0c9e5e7937e8e47925206a82e80f29e73b7528",
-    "firstNewsId": 4
+    "base": "http://localhost:23001",
+    "chrome": "Chrome/157.0.8103.39",
+    "commit": "4944a5e6f4363e159659ed198a2e612338731ea3",
+    "firstNewsId": 1361
   },
   "options": {
     "screenshots": "none",
@@ -66,7 +66,7 @@
       },
       "device": "mobile",
       "dialog": null,
-      "cardCount": 5,
+      "cardCount": 18,
       "themeApplied": {
         "htmlClass": "light",
         "dataTheme": "light",
@@ -97,7 +97,7 @@
           "pass": true
         },
         "R6": {
-          "checked": 36,
+          "checked": 95,
           "failures": [],
           "pass": true,
           "menuChecked": 10
@@ -222,8 +222,11 @@
             },
             {
               "id": "trend",
-              "status": "absent",
-              "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+              "roles": [
+                "button"
+              ],
+              "name": "/트렌드|급상승/",
+              "status": "found"
             },
             {
               "id": "menu-sources",
@@ -297,7 +300,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 107,
+          "targets": 340,
           "failures": []
         },
         "placeholder": {
@@ -307,7 +310,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 17,
+          "targets": 18,
           "failures": []
         },
         "scrollRow": {
@@ -329,12 +332,12 @@
         },
         "ariaControls": {
           "pass": true,
-          "targets": 0,
+          "targets": 1,
           "failures": []
         },
         "keepAll": {
           "pass": true,
-          "targets": 5,
+          "targets": 7,
           "failures": []
         },
         "vRhythm": {
@@ -374,15 +377,15 @@
         },
         "cardMetric": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": [],
           "summary": {
-            "cards": 5,
+            "cards": 18,
             "bySource": {
-              "huggingface": {
-                "cards": 5,
-                "scoreShown": 0,
-                "hotnessShown": 0
+              "github": {
+                "cards": 18,
+                "scoreShown": 18,
+                "hotnessShown": 18
               }
             }
           }
@@ -433,12 +436,12 @@
         },
         "cardFooter": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "terms": {
           "pass": true,
-          "targets": 134,
+          "targets": 445,
           "failures": []
         }
       },
@@ -464,9 +467,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_3_",
+          "ariaLabelledby": "_r_18_",
           "ariaLabel": null,
-          "name": "[HF Daily] Terminal-style Mathematical Modeling Bench: The First Agentic and Ver",
+          "name": "affaan-m/ECC: The agent harness performance optimization system. Skills, instinc",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -613,9 +616,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_0_",
+          "ariaLabelledby": "_r_j_",
           "ariaLabel": null,
-          "name": "오늘의 AI 브리핑 2026년 11월 09일",
+          "name": "오늘의 AI 브리핑 2026년 11월 10일",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -631,7 +634,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 88,
+          "targets": 103,
           "failures": []
         },
         "placeholder": {
@@ -656,7 +659,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 21,
+          "targets": 24,
           "failures": []
         },
         "pictograph": {
@@ -676,7 +679,7 @@
           ]
         },
         "R6": {
-          "checked": 16,
+          "checked": 19,
           "failures": [],
           "pass": true
         }
@@ -705,7 +708,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_v_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -781,7 +784,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_v_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -857,7 +860,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_c5fdb_",
+          "ariaLabelledby": "_r_m_",
           "ariaLabel": null,
           "name": "자동 수집 스케줄",
           "labelled": true,
@@ -900,7 +903,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 2,
+          "targets": 1,
           "failures": []
         },
         "R6": {
@@ -933,7 +936,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_4lfdb_",
+          "ariaLabelledby": "_r_s_",
           "ariaLabel": null,
           "name": "AgentLens MCP 연동",
           "labelled": true,
@@ -951,7 +954,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 19,
+          "targets": 23,
           "failures": []
         },
         "placeholder": {
@@ -976,7 +979,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 1,
+          "targets": 2,
           "failures": []
         },
         "R6": {
@@ -1009,7 +1012,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_dlfdb_",
+          "ariaLabelledby": "_r_12_",
           "ariaLabel": null,
           "name": "소스 & 리서처",
           "labelled": true,
@@ -1027,7 +1030,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 90,
+          "targets": 266,
           "failures": []
         },
         "placeholder": {
@@ -1052,7 +1055,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 11,
+          "targets": 33,
           "failures": []
         },
         "R6": {
@@ -1228,8 +1231,44 @@
       "device": "mobile",
       "state": "radar",
       "label": "레이더 펼침",
-      "skipped": true,
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "checks": {
+        "R3": {
+          "scrollWidth": 360,
+          "innerWidth": 360,
+          "pass": true
+        },
+        "clip": {
+          "pass": true,
+          "targets": 412,
+          "failures": []
+        },
+        "placeholder": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "occluded": {
+          "pass": true,
+          "targets": 13,
+          "failures": []
+        },
+        "scrollRow": {
+          "pass": true,
+          "targets": 2,
+          "failures": []
+        },
+        "ariaControls": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "keepAll": {
+          "pass": true,
+          "targets": 7,
+          "failures": []
+        }
+      },
+      "pass": true
     },
     {
       "id": "feed-light-390x844",
@@ -1241,7 +1280,7 @@
       },
       "device": "mobile",
       "dialog": null,
-      "cardCount": 5,
+      "cardCount": 18,
       "themeApplied": {
         "htmlClass": "light",
         "dataTheme": "light",
@@ -1279,7 +1318,7 @@
           "pass": true
         },
         "R6": {
-          "checked": 36,
+          "checked": 95,
           "failures": [],
           "pass": true,
           "menuChecked": 10
@@ -1404,8 +1443,11 @@
             },
             {
               "id": "trend",
-              "status": "absent",
-              "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+              "roles": [
+                "button"
+              ],
+              "name": "/트렌드|급상승/",
+              "status": "found"
             },
             {
               "id": "menu-sources",
@@ -1479,7 +1521,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 107,
+          "targets": 340,
           "failures": []
         },
         "placeholder": {
@@ -1511,12 +1553,12 @@
         },
         "ariaControls": {
           "pass": true,
-          "targets": 0,
+          "targets": 1,
           "failures": []
         },
         "keepAll": {
           "pass": true,
-          "targets": 5,
+          "targets": 7,
           "failures": []
         },
         "vRhythm": {
@@ -1544,9 +1586,9 @@
           "failures": [],
           "source": {
             "viewport": 390,
-            "visibleWidth": 322,
+            "visibleWidth": 306,
             "minWidth": 305,
-            "fullyVisibleChips": 3,
+            "fullyVisibleChips": 2,
             "toggleTop": 236,
             "toggleRight": 374,
             "contentRight": 374,
@@ -1556,15 +1598,15 @@
         },
         "cardMetric": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": [],
           "summary": {
-            "cards": 5,
+            "cards": 18,
             "bySource": {
-              "huggingface": {
-                "cards": 5,
-                "scoreShown": 0,
-                "hotnessShown": 0
+              "github": {
+                "cards": 18,
+                "scoreShown": 18,
+                "hotnessShown": 18
               }
             }
           }
@@ -1615,12 +1657,12 @@
         },
         "cardFooter": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "terms": {
           "pass": true,
-          "targets": 134,
+          "targets": 445,
           "failures": []
         }
       },
@@ -1646,9 +1688,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_3_",
+          "ariaLabelledby": "_r_1s_",
           "ariaLabel": null,
-          "name": "[HF Daily] Terminal-style Mathematical Modeling Bench: The First Agentic and Ver",
+          "name": "affaan-m/ECC: The agent harness performance optimization system. Skills, instinc",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -1795,9 +1837,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_0_",
+          "ariaLabelledby": "_r_1p_",
           "ariaLabel": null,
-          "name": "오늘의 AI 브리핑 2026년 11월 09일",
+          "name": "오늘의 AI 브리핑 2026년 11월 10일",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -1813,7 +1855,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 88,
+          "targets": 103,
           "failures": []
         },
         "placeholder": {
@@ -1838,7 +1880,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 21,
+          "targets": 24,
           "failures": []
         },
         "pictograph": {
@@ -1858,7 +1900,7 @@
           ]
         },
         "R6": {
-          "checked": 16,
+          "checked": 19,
           "failures": [],
           "pass": true
         }
@@ -1887,7 +1929,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -1963,7 +2005,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -2039,7 +2081,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_c5fdb_",
+          "ariaLabelledby": "_r_17_",
           "ariaLabel": null,
           "name": "자동 수집 스케줄",
           "labelled": true,
@@ -2115,7 +2157,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_4lfdb_",
+          "ariaLabelledby": "_r_1d_",
           "ariaLabel": null,
           "name": "AgentLens MCP 연동",
           "labelled": true,
@@ -2133,7 +2175,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 19,
+          "targets": 23,
           "failures": []
         },
         "placeholder": {
@@ -2191,7 +2233,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_dlfdb_",
+          "ariaLabelledby": "_r_1j_",
           "ariaLabel": null,
           "name": "소스 & 리서처",
           "labelled": true,
@@ -2209,7 +2251,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 90,
+          "targets": 266,
           "failures": []
         },
         "placeholder": {
@@ -2234,7 +2276,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 11,
+          "targets": 33,
           "failures": []
         },
         "R6": {
@@ -2410,8 +2452,44 @@
       "device": "mobile",
       "state": "radar",
       "label": "레이더 펼침",
-      "skipped": true,
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "checks": {
+        "R3": {
+          "scrollWidth": 390,
+          "innerWidth": 390,
+          "pass": true
+        },
+        "clip": {
+          "pass": true,
+          "targets": 412,
+          "failures": []
+        },
+        "placeholder": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "occluded": {
+          "pass": true,
+          "targets": 19,
+          "failures": []
+        },
+        "scrollRow": {
+          "pass": true,
+          "targets": 2,
+          "failures": []
+        },
+        "ariaControls": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "keepAll": {
+          "pass": true,
+          "targets": 7,
+          "failures": []
+        }
+      },
+      "pass": true
     },
     {
       "id": "feed-light-768x1024",
@@ -2423,7 +2501,7 @@
       },
       "device": "tablet",
       "dialog": null,
-      "cardCount": 5,
+      "cardCount": 18,
       "themeApplied": {
         "htmlClass": "light",
         "dataTheme": "light",
@@ -2605,8 +2683,11 @@
             },
             {
               "id": "trend",
-              "status": "absent",
-              "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+              "roles": [
+                "button"
+              ],
+              "name": "/트렌드|급상승/",
+              "status": "found"
             },
             {
               "id": "menu-sources",
@@ -2650,7 +2731,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 115,
+          "targets": 350,
           "failures": []
         },
         "placeholder": {
@@ -2660,7 +2741,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 37,
+          "targets": 39,
           "failures": []
         },
         "scrollRow": {
@@ -2682,12 +2763,12 @@
         },
         "ariaControls": {
           "pass": true,
-          "targets": 0,
+          "targets": 1,
           "failures": []
         },
         "keepAll": {
           "pass": true,
-          "targets": 5,
+          "targets": 7,
           "failures": []
         },
         "vRhythm": {
@@ -2711,7 +2792,7 @@
         },
         "rowAlign": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "toolbarLayout": {
@@ -2722,28 +2803,28 @@
             {
               "label": "카테고리",
               "viewport": 768,
-              "rowWidth": 720,
-              "fullyVisibleChips": 5
+              "rowWidth": 684,
+              "fullyVisibleChips": 4
             },
             {
               "label": "소스",
               "viewport": 768,
-              "rowWidth": 583.4,
-              "fullyVisibleChips": 3
+              "rowWidth": 547.4,
+              "fullyVisibleChips": 4
             }
           ]
         },
         "cardMetric": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": [],
           "summary": {
-            "cards": 5,
+            "cards": 18,
             "bySource": {
-              "huggingface": {
-                "cards": 5,
-                "scoreShown": 0,
-                "hotnessShown": 0
+              "github": {
+                "cards": 18,
+                "scoreShown": 18,
+                "hotnessShown": 18
               }
             }
           }
@@ -2794,12 +2875,12 @@
         },
         "cardFooter": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "terms": {
           "pass": true,
-          "targets": 142,
+          "targets": 455,
           "failures": []
         }
       },
@@ -2825,9 +2906,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_3_",
+          "ariaLabelledby": "_r_1s_",
           "ariaLabel": null,
-          "name": "[HF Daily] Terminal-style Mathematical Modeling Bench: The First Agentic and Ver",
+          "name": "affaan-m/ECC: The agent harness performance optimization system. Skills, instinc",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -2868,7 +2949,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 3,
+          "targets": 2,
           "failures": []
         },
         "pictograph": {
@@ -2969,9 +3050,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_0_",
+          "ariaLabelledby": "_r_1p_",
           "ariaLabel": null,
-          "name": "오늘의 AI 브리핑 2026년 11월 09일",
+          "name": "오늘의 AI 브리핑 2026년 11월 10일",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -2987,7 +3068,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 91,
+          "targets": 106,
           "failures": []
         },
         "placeholder": {
@@ -3012,7 +3093,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 17,
+          "targets": 20,
           "failures": []
         },
         "pictograph": {
@@ -3056,7 +3137,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -3127,7 +3208,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -3198,7 +3279,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_c5fdb_",
+          "ariaLabelledby": "_r_17_",
           "ariaLabel": null,
           "name": "자동 수집 스케줄",
           "labelled": true,
@@ -3269,7 +3350,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_4lfdb_",
+          "ariaLabelledby": "_r_1d_",
           "ariaLabel": null,
           "name": "AgentLens MCP 연동",
           "labelled": true,
@@ -3287,7 +3368,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 19,
+          "targets": 23,
           "failures": []
         },
         "placeholder": {
@@ -3340,7 +3421,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_dlfdb_",
+          "ariaLabelledby": "_r_1j_",
           "ariaLabel": null,
           "name": "소스 & 리서처",
           "labelled": true,
@@ -3358,7 +3439,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 90,
+          "targets": 266,
           "failures": []
         },
         "placeholder": {
@@ -3383,7 +3464,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 8,
+          "targets": 16,
           "failures": []
         }
       },
@@ -3544,8 +3625,44 @@
       "device": "tablet",
       "state": "radar",
       "label": "레이더 펼침",
-      "skipped": true,
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "checks": {
+        "R3": {
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "pass": true
+        },
+        "clip": {
+          "pass": true,
+          "targets": 422,
+          "failures": []
+        },
+        "placeholder": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "occluded": {
+          "pass": true,
+          "targets": 51,
+          "failures": []
+        },
+        "scrollRow": {
+          "pass": true,
+          "targets": 2,
+          "failures": []
+        },
+        "ariaControls": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "keepAll": {
+          "pass": true,
+          "targets": 7,
+          "failures": []
+        }
+      },
+      "pass": true
     },
     {
       "id": "feed-light-1024x768",
@@ -3557,7 +3674,7 @@
       },
       "device": "desktop",
       "dialog": null,
-      "cardCount": 5,
+      "cardCount": 18,
       "themeApplied": {
         "htmlClass": "light",
         "dataTheme": "light",
@@ -3739,8 +3856,11 @@
             },
             {
               "id": "trend",
-              "status": "absent",
-              "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+              "roles": [
+                "button"
+              ],
+              "name": "/트렌드|급상승/",
+              "status": "found"
             },
             {
               "id": "menu-sources",
@@ -3784,7 +3904,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 119,
+          "targets": 357,
           "failures": []
         },
         "placeholder": {
@@ -3794,12 +3914,12 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 36,
+          "targets": 43,
           "failures": []
         },
         "scrollRow": {
           "pass": true,
-          "targets": 3,
+          "targets": 4,
           "failures": [],
           "toolbar": {
             "viewport": 1024,
@@ -3816,12 +3936,12 @@
         },
         "ariaControls": {
           "pass": true,
-          "targets": 0,
+          "targets": 1,
           "failures": []
         },
         "keepAll": {
           "pass": true,
-          "targets": 5,
+          "targets": 7,
           "failures": []
         },
         "vRhythm": {
@@ -3845,7 +3965,7 @@
         },
         "rowAlign": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "toolbarLayout": {
@@ -3862,22 +3982,22 @@
             {
               "label": "소스",
               "viewport": 1024,
-              "rowWidth": 823.4,
-              "fullyVisibleChips": 3
+              "rowWidth": 787.4,
+              "fullyVisibleChips": 6
             }
           ]
         },
         "cardMetric": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": [],
           "summary": {
-            "cards": 5,
+            "cards": 18,
             "bySource": {
-              "huggingface": {
-                "cards": 5,
-                "scoreShown": 0,
-                "hotnessShown": 0
+              "github": {
+                "cards": 18,
+                "scoreShown": 18,
+                "hotnessShown": 18
               }
             }
           }
@@ -3928,12 +4048,12 @@
         },
         "cardFooter": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "terms": {
           "pass": true,
-          "targets": 145,
+          "targets": 464,
           "failures": []
         }
       },
@@ -3959,9 +4079,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_3_",
+          "ariaLabelledby": "_r_1s_",
           "ariaLabel": null,
-          "name": "[HF Daily] Terminal-style Mathematical Modeling Bench: The First Agentic and Ver",
+          "name": "affaan-m/ECC: The agent harness performance optimization system. Skills, instinc",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -4002,7 +4122,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 3,
+          "targets": 1,
           "failures": []
         },
         "pictograph": {
@@ -4103,9 +4223,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_0_",
+          "ariaLabelledby": "_r_1p_",
           "ariaLabel": null,
-          "name": "오늘의 AI 브리핑 2026년 11월 09일",
+          "name": "오늘의 AI 브리핑 2026년 11월 10일",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -4121,7 +4241,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 91,
+          "targets": 106,
           "failures": []
         },
         "placeholder": {
@@ -4146,7 +4266,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 17,
+          "targets": 18,
           "failures": []
         },
         "pictograph": {
@@ -4190,7 +4310,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -4261,7 +4381,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -4332,7 +4452,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_c5fdb_",
+          "ariaLabelledby": "_r_17_",
           "ariaLabel": null,
           "name": "자동 수집 스케줄",
           "labelled": true,
@@ -4403,7 +4523,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_4lfdb_",
+          "ariaLabelledby": "_r_1d_",
           "ariaLabel": null,
           "name": "AgentLens MCP 연동",
           "labelled": true,
@@ -4421,7 +4541,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 19,
+          "targets": 23,
           "failures": []
         },
         "placeholder": {
@@ -4474,7 +4594,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_dlfdb_",
+          "ariaLabelledby": "_r_1j_",
           "ariaLabel": null,
           "name": "소스 & 리서처",
           "labelled": true,
@@ -4492,7 +4612,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 90,
+          "targets": 266,
           "failures": []
         },
         "placeholder": {
@@ -4517,7 +4637,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 4,
+          "targets": 10,
           "failures": []
         }
       },
@@ -4678,8 +4798,44 @@
       "device": "desktop",
       "state": "radar",
       "label": "레이더 펼침",
-      "skipped": true,
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "checks": {
+        "R3": {
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "pass": true
+        },
+        "clip": {
+          "pass": true,
+          "targets": 429,
+          "failures": []
+        },
+        "placeholder": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "occluded": {
+          "pass": true,
+          "targets": 52,
+          "failures": []
+        },
+        "scrollRow": {
+          "pass": true,
+          "targets": 3,
+          "failures": []
+        },
+        "ariaControls": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "keepAll": {
+          "pass": true,
+          "targets": 7,
+          "failures": []
+        }
+      },
+      "pass": true
     },
     {
       "id": "feed-light-1440x900",
@@ -4691,7 +4847,7 @@
       },
       "device": "desktop",
       "dialog": null,
-      "cardCount": 5,
+      "cardCount": 18,
       "themeApplied": {
         "htmlClass": "light",
         "dataTheme": "light",
@@ -4725,7 +4881,7 @@
           "mode": "first-row",
           "rowCount": 3,
           "top": 336,
-          "maxBottom": 619,
+          "maxBottom": 639,
           "innerHeight": 900,
           "pass": true
         },
@@ -4881,8 +5037,11 @@
             },
             {
               "id": "trend",
-              "status": "absent",
-              "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+              "roles": [
+                "button"
+              ],
+              "name": "/트렌드|급상승/",
+              "status": "found"
             },
             {
               "id": "menu-sources",
@@ -4926,7 +5085,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 119,
+          "targets": 356,
           "failures": []
         },
         "placeholder": {
@@ -4936,12 +5095,12 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 40,
+          "targets": 46,
           "failures": []
         },
         "scrollRow": {
           "pass": true,
-          "targets": 3,
+          "targets": 4,
           "failures": [],
           "toolbar": {
             "viewport": 1440,
@@ -4958,12 +5117,12 @@
         },
         "ariaControls": {
           "pass": true,
-          "targets": 0,
+          "targets": 1,
           "failures": []
         },
         "keepAll": {
           "pass": true,
-          "targets": 5,
+          "targets": 7,
           "failures": []
         },
         "vRhythm": {
@@ -4987,7 +5146,7 @@
         },
         "rowAlign": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "toolbarLayout": {
@@ -5005,21 +5164,21 @@
               "label": "소스",
               "viewport": 1440,
               "rowWidth": 1079.4,
-              "fullyVisibleChips": 3
+              "fullyVisibleChips": 7
             }
           ]
         },
         "cardMetric": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": [],
           "summary": {
-            "cards": 5,
+            "cards": 18,
             "bySource": {
-              "huggingface": {
-                "cards": 5,
-                "scoreShown": 0,
-                "hotnessShown": 0
+              "github": {
+                "cards": 18,
+                "scoreShown": 18,
+                "hotnessShown": 18
               }
             }
           }
@@ -5070,12 +5229,12 @@
         },
         "cardFooter": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "terms": {
           "pass": true,
-          "targets": 145,
+          "targets": 463,
           "failures": []
         }
       },
@@ -5101,9 +5260,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_3_",
+          "ariaLabelledby": "_r_1s_",
           "ariaLabel": null,
-          "name": "[HF Daily] Terminal-style Mathematical Modeling Bench: The First Agentic and Ver",
+          "name": "affaan-m/ECC: The agent harness performance optimization system. Skills, instinc",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -5144,7 +5303,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 3,
+          "targets": 1,
           "failures": []
         },
         "pictograph": {
@@ -5245,9 +5404,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_0_",
+          "ariaLabelledby": "_r_1p_",
           "ariaLabel": null,
-          "name": "오늘의 AI 브리핑 2026년 11월 09일",
+          "name": "오늘의 AI 브리핑 2026년 11월 10일",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -5263,7 +5422,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 91,
+          "targets": 106,
           "failures": []
         },
         "placeholder": {
@@ -5288,7 +5447,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 17,
+          "targets": 18,
           "failures": []
         },
         "pictograph": {
@@ -5332,7 +5491,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -5403,7 +5562,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -5474,7 +5633,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_c5fdb_",
+          "ariaLabelledby": "_r_17_",
           "ariaLabel": null,
           "name": "자동 수집 스케줄",
           "labelled": true,
@@ -5545,7 +5704,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_4lfdb_",
+          "ariaLabelledby": "_r_1d_",
           "ariaLabel": null,
           "name": "AgentLens MCP 연동",
           "labelled": true,
@@ -5563,7 +5722,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 19,
+          "targets": 23,
           "failures": []
         },
         "placeholder": {
@@ -5616,7 +5775,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_dlfdb_",
+          "ariaLabelledby": "_r_1j_",
           "ariaLabel": null,
           "name": "소스 & 리서처",
           "labelled": true,
@@ -5634,7 +5793,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 90,
+          "targets": 266,
           "failures": []
         },
         "placeholder": {
@@ -5659,7 +5818,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 4,
+          "targets": 10,
           "failures": []
         }
       },
@@ -5820,8 +5979,44 @@
       "device": "desktop",
       "state": "radar",
       "label": "레이더 펼침",
-      "skipped": true,
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "checks": {
+        "R3": {
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "pass": true
+        },
+        "clip": {
+          "pass": true,
+          "targets": 428,
+          "failures": []
+        },
+        "placeholder": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "occluded": {
+          "pass": true,
+          "targets": 58,
+          "failures": []
+        },
+        "scrollRow": {
+          "pass": true,
+          "targets": 3,
+          "failures": []
+        },
+        "ariaControls": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "keepAll": {
+          "pass": true,
+          "targets": 7,
+          "failures": []
+        }
+      },
+      "pass": true
     },
     {
       "id": "feed-dark-360x780",
@@ -5833,7 +6028,7 @@
       },
       "device": "mobile",
       "dialog": null,
-      "cardCount": 5,
+      "cardCount": 18,
       "themeApplied": {
         "htmlClass": "dark",
         "dataTheme": "dark",
@@ -5864,7 +6059,7 @@
           "pass": true
         },
         "R6": {
-          "checked": 36,
+          "checked": 95,
           "failures": [],
           "pass": true,
           "menuChecked": 10
@@ -5989,8 +6184,11 @@
             },
             {
               "id": "trend",
-              "status": "absent",
-              "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+              "roles": [
+                "button"
+              ],
+              "name": "/트렌드|급상승/",
+              "status": "found"
             },
             {
               "id": "menu-sources",
@@ -6064,7 +6262,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 107,
+          "targets": 340,
           "failures": []
         },
         "placeholder": {
@@ -6074,7 +6272,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 17,
+          "targets": 18,
           "failures": []
         },
         "scrollRow": {
@@ -6096,12 +6294,12 @@
         },
         "ariaControls": {
           "pass": true,
-          "targets": 0,
+          "targets": 1,
           "failures": []
         },
         "keepAll": {
           "pass": true,
-          "targets": 5,
+          "targets": 7,
           "failures": []
         },
         "vRhythm": {
@@ -6141,15 +6339,15 @@
         },
         "cardMetric": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": [],
           "summary": {
-            "cards": 5,
+            "cards": 18,
             "bySource": {
-              "huggingface": {
-                "cards": 5,
-                "scoreShown": 0,
-                "hotnessShown": 0
+              "github": {
+                "cards": 18,
+                "scoreShown": 18,
+                "hotnessShown": 18
               }
             }
           }
@@ -6200,12 +6398,12 @@
         },
         "cardFooter": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "terms": {
           "pass": true,
-          "targets": 134,
+          "targets": 445,
           "failures": []
         }
       },
@@ -6231,9 +6429,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_3_",
+          "ariaLabelledby": "_r_1s_",
           "ariaLabel": null,
-          "name": "[HF Daily] Terminal-style Mathematical Modeling Bench: The First Agentic and Ver",
+          "name": "affaan-m/ECC: The agent harness performance optimization system. Skills, instinc",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -6380,9 +6578,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_0_",
+          "ariaLabelledby": "_r_1p_",
           "ariaLabel": null,
-          "name": "오늘의 AI 브리핑 2026년 11월 09일",
+          "name": "오늘의 AI 브리핑 2026년 11월 10일",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -6398,7 +6596,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 88,
+          "targets": 103,
           "failures": []
         },
         "placeholder": {
@@ -6423,7 +6621,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 21,
+          "targets": 24,
           "failures": []
         },
         "pictograph": {
@@ -6443,7 +6641,7 @@
           ]
         },
         "R6": {
-          "checked": 16,
+          "checked": 19,
           "failures": [],
           "pass": true
         }
@@ -6472,7 +6670,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -6548,7 +6746,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -6624,7 +6822,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_c5fdb_",
+          "ariaLabelledby": "_r_17_",
           "ariaLabel": null,
           "name": "자동 수집 스케줄",
           "labelled": true,
@@ -6667,7 +6865,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 2,
+          "targets": 1,
           "failures": []
         },
         "R6": {
@@ -6700,7 +6898,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_4lfdb_",
+          "ariaLabelledby": "_r_1d_",
           "ariaLabel": null,
           "name": "AgentLens MCP 연동",
           "labelled": true,
@@ -6718,7 +6916,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 19,
+          "targets": 23,
           "failures": []
         },
         "placeholder": {
@@ -6743,7 +6941,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 1,
+          "targets": 2,
           "failures": []
         },
         "R6": {
@@ -6776,7 +6974,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_dlfdb_",
+          "ariaLabelledby": "_r_1j_",
           "ariaLabel": null,
           "name": "소스 & 리서처",
           "labelled": true,
@@ -6794,7 +6992,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 90,
+          "targets": 266,
           "failures": []
         },
         "placeholder": {
@@ -6819,7 +7017,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 11,
+          "targets": 33,
           "failures": []
         },
         "R6": {
@@ -6995,8 +7193,44 @@
       "device": "mobile",
       "state": "radar",
       "label": "레이더 펼침",
-      "skipped": true,
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "checks": {
+        "R3": {
+          "scrollWidth": 360,
+          "innerWidth": 360,
+          "pass": true
+        },
+        "clip": {
+          "pass": true,
+          "targets": 412,
+          "failures": []
+        },
+        "placeholder": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "occluded": {
+          "pass": true,
+          "targets": 13,
+          "failures": []
+        },
+        "scrollRow": {
+          "pass": true,
+          "targets": 2,
+          "failures": []
+        },
+        "ariaControls": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "keepAll": {
+          "pass": true,
+          "targets": 7,
+          "failures": []
+        }
+      },
+      "pass": true
     },
     {
       "id": "feed-dark-390x844",
@@ -7008,7 +7242,7 @@
       },
       "device": "mobile",
       "dialog": null,
-      "cardCount": 5,
+      "cardCount": 18,
       "themeApplied": {
         "htmlClass": "dark",
         "dataTheme": "dark",
@@ -7046,7 +7280,7 @@
           "pass": true
         },
         "R6": {
-          "checked": 36,
+          "checked": 95,
           "failures": [],
           "pass": true,
           "menuChecked": 10
@@ -7171,8 +7405,11 @@
             },
             {
               "id": "trend",
-              "status": "absent",
-              "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+              "roles": [
+                "button"
+              ],
+              "name": "/트렌드|급상승/",
+              "status": "found"
             },
             {
               "id": "menu-sources",
@@ -7246,7 +7483,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 107,
+          "targets": 340,
           "failures": []
         },
         "placeholder": {
@@ -7278,12 +7515,12 @@
         },
         "ariaControls": {
           "pass": true,
-          "targets": 0,
+          "targets": 1,
           "failures": []
         },
         "keepAll": {
           "pass": true,
-          "targets": 5,
+          "targets": 7,
           "failures": []
         },
         "vRhythm": {
@@ -7311,9 +7548,9 @@
           "failures": [],
           "source": {
             "viewport": 390,
-            "visibleWidth": 322,
+            "visibleWidth": 306,
             "minWidth": 305,
-            "fullyVisibleChips": 3,
+            "fullyVisibleChips": 2,
             "toggleTop": 236,
             "toggleRight": 374,
             "contentRight": 374,
@@ -7323,15 +7560,15 @@
         },
         "cardMetric": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": [],
           "summary": {
-            "cards": 5,
+            "cards": 18,
             "bySource": {
-              "huggingface": {
-                "cards": 5,
-                "scoreShown": 0,
-                "hotnessShown": 0
+              "github": {
+                "cards": 18,
+                "scoreShown": 18,
+                "hotnessShown": 18
               }
             }
           }
@@ -7382,12 +7619,12 @@
         },
         "cardFooter": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "terms": {
           "pass": true,
-          "targets": 134,
+          "targets": 445,
           "failures": []
         }
       },
@@ -7413,9 +7650,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_3_",
+          "ariaLabelledby": "_r_1s_",
           "ariaLabel": null,
-          "name": "[HF Daily] Terminal-style Mathematical Modeling Bench: The First Agentic and Ver",
+          "name": "affaan-m/ECC: The agent harness performance optimization system. Skills, instinc",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -7562,9 +7799,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_0_",
+          "ariaLabelledby": "_r_1p_",
           "ariaLabel": null,
-          "name": "오늘의 AI 브리핑 2026년 11월 09일",
+          "name": "오늘의 AI 브리핑 2026년 11월 10일",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -7580,7 +7817,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 88,
+          "targets": 103,
           "failures": []
         },
         "placeholder": {
@@ -7605,7 +7842,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 21,
+          "targets": 24,
           "failures": []
         },
         "pictograph": {
@@ -7625,7 +7862,7 @@
           ]
         },
         "R6": {
-          "checked": 16,
+          "checked": 19,
           "failures": [],
           "pass": true
         }
@@ -7654,7 +7891,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -7730,7 +7967,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -7806,7 +8043,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_c5fdb_",
+          "ariaLabelledby": "_r_17_",
           "ariaLabel": null,
           "name": "자동 수집 스케줄",
           "labelled": true,
@@ -7882,7 +8119,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_4lfdb_",
+          "ariaLabelledby": "_r_1d_",
           "ariaLabel": null,
           "name": "AgentLens MCP 연동",
           "labelled": true,
@@ -7900,7 +8137,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 19,
+          "targets": 23,
           "failures": []
         },
         "placeholder": {
@@ -7958,7 +8195,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_dlfdb_",
+          "ariaLabelledby": "_r_1j_",
           "ariaLabel": null,
           "name": "소스 & 리서처",
           "labelled": true,
@@ -7976,7 +8213,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 90,
+          "targets": 266,
           "failures": []
         },
         "placeholder": {
@@ -8001,7 +8238,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 11,
+          "targets": 33,
           "failures": []
         },
         "R6": {
@@ -8177,8 +8414,44 @@
       "device": "mobile",
       "state": "radar",
       "label": "레이더 펼침",
-      "skipped": true,
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "checks": {
+        "R3": {
+          "scrollWidth": 390,
+          "innerWidth": 390,
+          "pass": true
+        },
+        "clip": {
+          "pass": true,
+          "targets": 412,
+          "failures": []
+        },
+        "placeholder": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "occluded": {
+          "pass": true,
+          "targets": 19,
+          "failures": []
+        },
+        "scrollRow": {
+          "pass": true,
+          "targets": 2,
+          "failures": []
+        },
+        "ariaControls": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "keepAll": {
+          "pass": true,
+          "targets": 7,
+          "failures": []
+        }
+      },
+      "pass": true
     },
     {
       "id": "feed-dark-768x1024",
@@ -8190,7 +8463,7 @@
       },
       "device": "tablet",
       "dialog": null,
-      "cardCount": 5,
+      "cardCount": 18,
       "themeApplied": {
         "htmlClass": "dark",
         "dataTheme": "dark",
@@ -8372,8 +8645,11 @@
             },
             {
               "id": "trend",
-              "status": "absent",
-              "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+              "roles": [
+                "button"
+              ],
+              "name": "/트렌드|급상승/",
+              "status": "found"
             },
             {
               "id": "menu-sources",
@@ -8417,7 +8693,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 115,
+          "targets": 350,
           "failures": []
         },
         "placeholder": {
@@ -8427,7 +8703,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 37,
+          "targets": 39,
           "failures": []
         },
         "scrollRow": {
@@ -8449,12 +8725,12 @@
         },
         "ariaControls": {
           "pass": true,
-          "targets": 0,
+          "targets": 1,
           "failures": []
         },
         "keepAll": {
           "pass": true,
-          "targets": 5,
+          "targets": 7,
           "failures": []
         },
         "vRhythm": {
@@ -8478,7 +8754,7 @@
         },
         "rowAlign": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "toolbarLayout": {
@@ -8489,28 +8765,28 @@
             {
               "label": "카테고리",
               "viewport": 768,
-              "rowWidth": 720,
-              "fullyVisibleChips": 5
+              "rowWidth": 684,
+              "fullyVisibleChips": 4
             },
             {
               "label": "소스",
               "viewport": 768,
-              "rowWidth": 583.4,
-              "fullyVisibleChips": 3
+              "rowWidth": 547.4,
+              "fullyVisibleChips": 4
             }
           ]
         },
         "cardMetric": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": [],
           "summary": {
-            "cards": 5,
+            "cards": 18,
             "bySource": {
-              "huggingface": {
-                "cards": 5,
-                "scoreShown": 0,
-                "hotnessShown": 0
+              "github": {
+                "cards": 18,
+                "scoreShown": 18,
+                "hotnessShown": 18
               }
             }
           }
@@ -8561,12 +8837,12 @@
         },
         "cardFooter": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "terms": {
           "pass": true,
-          "targets": 142,
+          "targets": 455,
           "failures": []
         }
       },
@@ -8592,9 +8868,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_3_",
+          "ariaLabelledby": "_r_1s_",
           "ariaLabel": null,
-          "name": "[HF Daily] Terminal-style Mathematical Modeling Bench: The First Agentic and Ver",
+          "name": "affaan-m/ECC: The agent harness performance optimization system. Skills, instinc",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -8635,7 +8911,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 3,
+          "targets": 2,
           "failures": []
         },
         "pictograph": {
@@ -8736,9 +9012,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_0_",
+          "ariaLabelledby": "_r_1p_",
           "ariaLabel": null,
-          "name": "오늘의 AI 브리핑 2026년 11월 09일",
+          "name": "오늘의 AI 브리핑 2026년 11월 10일",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -8754,7 +9030,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 91,
+          "targets": 106,
           "failures": []
         },
         "placeholder": {
@@ -8779,7 +9055,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 17,
+          "targets": 20,
           "failures": []
         },
         "pictograph": {
@@ -8823,7 +9099,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -8894,7 +9170,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -8965,7 +9241,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_c5fdb_",
+          "ariaLabelledby": "_r_17_",
           "ariaLabel": null,
           "name": "자동 수집 스케줄",
           "labelled": true,
@@ -9036,7 +9312,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_4lfdb_",
+          "ariaLabelledby": "_r_1d_",
           "ariaLabel": null,
           "name": "AgentLens MCP 연동",
           "labelled": true,
@@ -9054,7 +9330,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 19,
+          "targets": 23,
           "failures": []
         },
         "placeholder": {
@@ -9107,7 +9383,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_dlfdb_",
+          "ariaLabelledby": "_r_1j_",
           "ariaLabel": null,
           "name": "소스 & 리서처",
           "labelled": true,
@@ -9125,7 +9401,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 90,
+          "targets": 266,
           "failures": []
         },
         "placeholder": {
@@ -9150,7 +9426,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 8,
+          "targets": 16,
           "failures": []
         }
       },
@@ -9311,8 +9587,44 @@
       "device": "tablet",
       "state": "radar",
       "label": "레이더 펼침",
-      "skipped": true,
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "checks": {
+        "R3": {
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "pass": true
+        },
+        "clip": {
+          "pass": true,
+          "targets": 422,
+          "failures": []
+        },
+        "placeholder": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "occluded": {
+          "pass": true,
+          "targets": 51,
+          "failures": []
+        },
+        "scrollRow": {
+          "pass": true,
+          "targets": 2,
+          "failures": []
+        },
+        "ariaControls": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "keepAll": {
+          "pass": true,
+          "targets": 7,
+          "failures": []
+        }
+      },
+      "pass": true
     },
     {
       "id": "feed-dark-1024x768",
@@ -9324,7 +9636,7 @@
       },
       "device": "desktop",
       "dialog": null,
-      "cardCount": 5,
+      "cardCount": 18,
       "themeApplied": {
         "htmlClass": "dark",
         "dataTheme": "dark",
@@ -9506,8 +9818,11 @@
             },
             {
               "id": "trend",
-              "status": "absent",
-              "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+              "roles": [
+                "button"
+              ],
+              "name": "/트렌드|급상승/",
+              "status": "found"
             },
             {
               "id": "menu-sources",
@@ -9551,7 +9866,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 119,
+          "targets": 357,
           "failures": []
         },
         "placeholder": {
@@ -9561,12 +9876,12 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 36,
+          "targets": 43,
           "failures": []
         },
         "scrollRow": {
           "pass": true,
-          "targets": 3,
+          "targets": 4,
           "failures": [],
           "toolbar": {
             "viewport": 1024,
@@ -9583,12 +9898,12 @@
         },
         "ariaControls": {
           "pass": true,
-          "targets": 0,
+          "targets": 1,
           "failures": []
         },
         "keepAll": {
           "pass": true,
-          "targets": 5,
+          "targets": 7,
           "failures": []
         },
         "vRhythm": {
@@ -9612,7 +9927,7 @@
         },
         "rowAlign": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "toolbarLayout": {
@@ -9629,22 +9944,22 @@
             {
               "label": "소스",
               "viewport": 1024,
-              "rowWidth": 823.4,
-              "fullyVisibleChips": 3
+              "rowWidth": 787.4,
+              "fullyVisibleChips": 6
             }
           ]
         },
         "cardMetric": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": [],
           "summary": {
-            "cards": 5,
+            "cards": 18,
             "bySource": {
-              "huggingface": {
-                "cards": 5,
-                "scoreShown": 0,
-                "hotnessShown": 0
+              "github": {
+                "cards": 18,
+                "scoreShown": 18,
+                "hotnessShown": 18
               }
             }
           }
@@ -9695,12 +10010,12 @@
         },
         "cardFooter": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "terms": {
           "pass": true,
-          "targets": 145,
+          "targets": 464,
           "failures": []
         }
       },
@@ -9726,9 +10041,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_3_",
+          "ariaLabelledby": "_r_1s_",
           "ariaLabel": null,
-          "name": "[HF Daily] Terminal-style Mathematical Modeling Bench: The First Agentic and Ver",
+          "name": "affaan-m/ECC: The agent harness performance optimization system. Skills, instinc",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -9769,7 +10084,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 3,
+          "targets": 1,
           "failures": []
         },
         "pictograph": {
@@ -9870,9 +10185,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_0_",
+          "ariaLabelledby": "_r_1p_",
           "ariaLabel": null,
-          "name": "오늘의 AI 브리핑 2026년 11월 09일",
+          "name": "오늘의 AI 브리핑 2026년 11월 10일",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -9888,7 +10203,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 91,
+          "targets": 106,
           "failures": []
         },
         "placeholder": {
@@ -9913,7 +10228,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 17,
+          "targets": 18,
           "failures": []
         },
         "pictograph": {
@@ -9957,7 +10272,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -10028,7 +10343,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -10099,7 +10414,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_c5fdb_",
+          "ariaLabelledby": "_r_17_",
           "ariaLabel": null,
           "name": "자동 수집 스케줄",
           "labelled": true,
@@ -10170,7 +10485,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_4lfdb_",
+          "ariaLabelledby": "_r_1d_",
           "ariaLabel": null,
           "name": "AgentLens MCP 연동",
           "labelled": true,
@@ -10188,7 +10503,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 19,
+          "targets": 23,
           "failures": []
         },
         "placeholder": {
@@ -10241,7 +10556,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_dlfdb_",
+          "ariaLabelledby": "_r_1j_",
           "ariaLabel": null,
           "name": "소스 & 리서처",
           "labelled": true,
@@ -10259,7 +10574,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 90,
+          "targets": 266,
           "failures": []
         },
         "placeholder": {
@@ -10284,7 +10599,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 4,
+          "targets": 10,
           "failures": []
         }
       },
@@ -10445,8 +10760,44 @@
       "device": "desktop",
       "state": "radar",
       "label": "레이더 펼침",
-      "skipped": true,
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "checks": {
+        "R3": {
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "pass": true
+        },
+        "clip": {
+          "pass": true,
+          "targets": 429,
+          "failures": []
+        },
+        "placeholder": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "occluded": {
+          "pass": true,
+          "targets": 52,
+          "failures": []
+        },
+        "scrollRow": {
+          "pass": true,
+          "targets": 3,
+          "failures": []
+        },
+        "ariaControls": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "keepAll": {
+          "pass": true,
+          "targets": 7,
+          "failures": []
+        }
+      },
+      "pass": true
     },
     {
       "id": "feed-dark-1440x900",
@@ -10458,7 +10809,7 @@
       },
       "device": "desktop",
       "dialog": null,
-      "cardCount": 5,
+      "cardCount": 18,
       "themeApplied": {
         "htmlClass": "dark",
         "dataTheme": "dark",
@@ -10492,7 +10843,7 @@
           "mode": "first-row",
           "rowCount": 3,
           "top": 336,
-          "maxBottom": 619,
+          "maxBottom": 639,
           "innerHeight": 900,
           "pass": true
         },
@@ -10648,8 +10999,11 @@
             },
             {
               "id": "trend",
-              "status": "absent",
-              "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+              "roles": [
+                "button"
+              ],
+              "name": "/트렌드|급상승/",
+              "status": "found"
             },
             {
               "id": "menu-sources",
@@ -10693,7 +11047,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 119,
+          "targets": 356,
           "failures": []
         },
         "placeholder": {
@@ -10703,12 +11057,12 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 40,
+          "targets": 46,
           "failures": []
         },
         "scrollRow": {
           "pass": true,
-          "targets": 3,
+          "targets": 4,
           "failures": [],
           "toolbar": {
             "viewport": 1440,
@@ -10725,12 +11079,12 @@
         },
         "ariaControls": {
           "pass": true,
-          "targets": 0,
+          "targets": 1,
           "failures": []
         },
         "keepAll": {
           "pass": true,
-          "targets": 5,
+          "targets": 7,
           "failures": []
         },
         "vRhythm": {
@@ -10754,7 +11108,7 @@
         },
         "rowAlign": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "toolbarLayout": {
@@ -10772,21 +11126,21 @@
               "label": "소스",
               "viewport": 1440,
               "rowWidth": 1079.4,
-              "fullyVisibleChips": 3
+              "fullyVisibleChips": 7
             }
           ]
         },
         "cardMetric": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": [],
           "summary": {
-            "cards": 5,
+            "cards": 18,
             "bySource": {
-              "huggingface": {
-                "cards": 5,
-                "scoreShown": 0,
-                "hotnessShown": 0
+              "github": {
+                "cards": 18,
+                "scoreShown": 18,
+                "hotnessShown": 18
               }
             }
           }
@@ -10837,12 +11191,12 @@
         },
         "cardFooter": {
           "pass": true,
-          "targets": 5,
+          "targets": 18,
           "failures": []
         },
         "terms": {
           "pass": true,
-          "targets": 145,
+          "targets": 463,
           "failures": []
         }
       },
@@ -10868,9 +11222,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_3_",
+          "ariaLabelledby": "_r_1s_",
           "ariaLabel": null,
-          "name": "[HF Daily] Terminal-style Mathematical Modeling Bench: The First Agentic and Ver",
+          "name": "affaan-m/ECC: The agent harness performance optimization system. Skills, instinc",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -10911,7 +11265,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 3,
+          "targets": 1,
           "failures": []
         },
         "pictograph": {
@@ -11012,9 +11366,9 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_r_0_",
+          "ariaLabelledby": "_r_1p_",
           "ariaLabel": null,
-          "name": "오늘의 AI 브리핑 2026년 11월 09일",
+          "name": "오늘의 AI 브리핑 2026년 11월 10일",
           "labelled": true,
           "appShellInert": true,
           "openCount": 1,
@@ -11030,7 +11384,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 91,
+          "targets": 106,
           "failures": []
         },
         "placeholder": {
@@ -11055,7 +11409,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 17,
+          "targets": 18,
           "failures": []
         },
         "pictograph": {
@@ -11099,7 +11453,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -11170,7 +11524,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_55fdb_",
+          "ariaLabelledby": "_r_1g_",
           "ariaLabel": null,
           "name": "공유 & 알림 설정",
           "labelled": true,
@@ -11241,7 +11595,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_c5fdb_",
+          "ariaLabelledby": "_r_17_",
           "ariaLabel": null,
           "name": "자동 수집 스케줄",
           "labelled": true,
@@ -11312,7 +11666,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_4lfdb_",
+          "ariaLabelledby": "_r_1d_",
           "ariaLabel": null,
           "name": "AgentLens MCP 연동",
           "labelled": true,
@@ -11330,7 +11684,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 19,
+          "targets": 23,
           "failures": []
         },
         "placeholder": {
@@ -11383,7 +11737,7 @@
         "R7": {
           "role": "dialog",
           "ariaModal": "true",
-          "ariaLabelledby": "_R_dlfdb_",
+          "ariaLabelledby": "_r_1j_",
           "ariaLabel": null,
           "name": "소스 & 리서처",
           "labelled": true,
@@ -11401,7 +11755,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 90,
+          "targets": 266,
           "failures": []
         },
         "placeholder": {
@@ -11426,7 +11780,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 4,
+          "targets": 10,
           "failures": []
         }
       },
@@ -11587,8 +11941,44 @@
       "device": "desktop",
       "state": "radar",
       "label": "레이더 펼침",
-      "skipped": true,
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "checks": {
+        "R3": {
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "pass": true
+        },
+        "clip": {
+          "pass": true,
+          "targets": 428,
+          "failures": []
+        },
+        "placeholder": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "occluded": {
+          "pass": true,
+          "targets": 58,
+          "failures": []
+        },
+        "scrollRow": {
+          "pass": true,
+          "targets": 3,
+          "failures": []
+        },
+        "ariaControls": {
+          "pass": true,
+          "targets": 1,
+          "failures": []
+        },
+        "keepAll": {
+          "pass": true,
+          "targets": 7,
+          "failures": []
+        }
+      },
+      "pass": true
     },
     {
       "id": "chat-light-360x780",
@@ -11878,7 +12268,7 @@
     },
     {
       "id": "chat-light-360x780-source",
-      "route": "/chat?sourceId=4",
+      "route": "/chat?sourceId=1361",
       "theme": "light",
       "viewport": {
         "width": 360,
@@ -12289,7 +12679,7 @@
     },
     {
       "id": "chat-light-390x844-source",
-      "route": "/chat?sourceId=4",
+      "route": "/chat?sourceId=1361",
       "theme": "light",
       "viewport": {
         "width": 390,
@@ -12691,7 +13081,7 @@
     },
     {
       "id": "chat-light-768x1024-source",
-      "route": "/chat?sourceId=4",
+      "route": "/chat?sourceId=1361",
       "theme": "light",
       "viewport": {
         "width": 768,
@@ -12949,7 +13339,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 34,
+          "targets": 147,
           "failures": []
         },
         "placeholder": {
@@ -12959,7 +13349,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 18,
+          "targets": 26,
           "failures": []
         },
         "scrollRow": {
@@ -12974,7 +13364,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "chatAlign": {
@@ -12989,7 +13379,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 36,
+          "targets": 120,
           "failures": []
         },
         "modelPicker": {
@@ -13003,12 +13393,41 @@
           "failures": []
         },
         "pictograph": {
-          "pass": true,
-          "targets": 18,
-          "failures": []
+          "pass": false,
+          "targets": 46,
+          "failures": [
+            {
+              "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(28) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+              "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+              "rect": {
+                "left": 8,
+                "top": 1856.5,
+                "right": 279,
+                "bottom": 1919.8,
+                "width": 271,
+                "height": 63.3
+              },
+              "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+              "char": "⚡"
+            },
+            {
+              "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(30) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+              "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+              "rect": {
+                "left": 8,
+                "top": 1991,
+                "right": 279,
+                "bottom": 2054.3,
+                "width": 271,
+                "height": 63.3
+              },
+              "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+              "char": "⚡"
+            }
+          ]
         }
       },
-      "pass": true
+      "pass": false
     },
     {
       "id": "chat-light-1024x768-focus-filter",
@@ -13098,7 +13517,7 @@
     },
     {
       "id": "chat-light-1024x768-source",
-      "route": "/chat?sourceId=4",
+      "route": "/chat?sourceId=1361",
       "theme": "light",
       "viewport": {
         "width": 1024,
@@ -13115,7 +13534,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 38,
+          "targets": 151,
           "failures": []
         },
         "placeholder": {
@@ -13125,7 +13544,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 20,
+          "targets": 28,
           "failures": []
         },
         "scrollRow": {
@@ -13140,7 +13559,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "chatScope": {
@@ -13150,7 +13569,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 40,
+          "targets": 124,
           "failures": []
         }
       },
@@ -13175,7 +13594,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 36,
+          "targets": 149,
           "failures": []
         },
         "placeholder": {
@@ -13185,7 +13604,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 19,
+          "targets": 27,
           "failures": []
         },
         "scrollRow": {
@@ -13200,7 +13619,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "toast": {
@@ -13215,7 +13634,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 38,
+          "targets": 122,
           "failures": []
         }
       },
@@ -13356,7 +13775,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 34,
+          "targets": 147,
           "failures": []
         },
         "placeholder": {
@@ -13366,7 +13785,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 18,
+          "targets": 28,
           "failures": []
         },
         "scrollRow": {
@@ -13381,7 +13800,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "chatAlign": {
@@ -13396,7 +13815,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 36,
+          "targets": 120,
           "failures": []
         },
         "modelPicker": {
@@ -13410,12 +13829,41 @@
           "failures": []
         },
         "pictograph": {
-          "pass": true,
-          "targets": 18,
-          "failures": []
+          "pass": false,
+          "targets": 46,
+          "failures": [
+            {
+              "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(28) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+              "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+              "rect": {
+                "left": 8,
+                "top": 1856.5,
+                "right": 279,
+                "bottom": 1919.8,
+                "width": 271,
+                "height": 63.3
+              },
+              "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+              "char": "⚡"
+            },
+            {
+              "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(30) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+              "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+              "rect": {
+                "left": 8,
+                "top": 1991,
+                "right": 279,
+                "bottom": 2054.3,
+                "width": 271,
+                "height": 63.3
+              },
+              "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+              "char": "⚡"
+            }
+          ]
         }
       },
-      "pass": true
+      "pass": false
     },
     {
       "id": "chat-light-1440x900-focus-filter",
@@ -13505,7 +13953,7 @@
     },
     {
       "id": "chat-light-1440x900-source",
-      "route": "/chat?sourceId=4",
+      "route": "/chat?sourceId=1361",
       "theme": "light",
       "viewport": {
         "width": 1440,
@@ -13522,7 +13970,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 38,
+          "targets": 151,
           "failures": []
         },
         "placeholder": {
@@ -13532,7 +13980,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 20,
+          "targets": 30,
           "failures": []
         },
         "scrollRow": {
@@ -13547,7 +13995,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "chatScope": {
@@ -13557,7 +14005,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 40,
+          "targets": 124,
           "failures": []
         }
       },
@@ -13582,7 +14030,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 36,
+          "targets": 149,
           "failures": []
         },
         "placeholder": {
@@ -13592,7 +14040,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 19,
+          "targets": 29,
           "failures": []
         },
         "scrollRow": {
@@ -13607,7 +14055,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "toast": {
@@ -13622,7 +14070,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 38,
+          "targets": 122,
           "failures": []
         }
       },
@@ -13916,7 +14364,7 @@
     },
     {
       "id": "chat-dark-360x780-source",
-      "route": "/chat?sourceId=4",
+      "route": "/chat?sourceId=1361",
       "theme": "dark",
       "viewport": {
         "width": 360,
@@ -14327,7 +14775,7 @@
     },
     {
       "id": "chat-dark-390x844-source",
-      "route": "/chat?sourceId=4",
+      "route": "/chat?sourceId=1361",
       "theme": "dark",
       "viewport": {
         "width": 390,
@@ -14729,7 +15177,7 @@
     },
     {
       "id": "chat-dark-768x1024-source",
-      "route": "/chat?sourceId=4",
+      "route": "/chat?sourceId=1361",
       "theme": "dark",
       "viewport": {
         "width": 768,
@@ -14987,7 +15435,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 34,
+          "targets": 147,
           "failures": []
         },
         "placeholder": {
@@ -14997,7 +15445,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 18,
+          "targets": 26,
           "failures": []
         },
         "scrollRow": {
@@ -15012,7 +15460,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "chatAlign": {
@@ -15027,7 +15475,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 36,
+          "targets": 120,
           "failures": []
         },
         "modelPicker": {
@@ -15041,12 +15489,41 @@
           "failures": []
         },
         "pictograph": {
-          "pass": true,
-          "targets": 18,
-          "failures": []
+          "pass": false,
+          "targets": 46,
+          "failures": [
+            {
+              "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(28) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+              "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+              "rect": {
+                "left": 8,
+                "top": 1856.5,
+                "right": 279,
+                "bottom": 1919.8,
+                "width": 271,
+                "height": 63.3
+              },
+              "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+              "char": "⚡"
+            },
+            {
+              "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(30) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+              "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+              "rect": {
+                "left": 8,
+                "top": 1991,
+                "right": 279,
+                "bottom": 2054.3,
+                "width": 271,
+                "height": 63.3
+              },
+              "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+              "char": "⚡"
+            }
+          ]
         }
       },
-      "pass": true
+      "pass": false
     },
     {
       "id": "chat-dark-1024x768-focus-filter",
@@ -15136,7 +15613,7 @@
     },
     {
       "id": "chat-dark-1024x768-source",
-      "route": "/chat?sourceId=4",
+      "route": "/chat?sourceId=1361",
       "theme": "dark",
       "viewport": {
         "width": 1024,
@@ -15153,7 +15630,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 38,
+          "targets": 151,
           "failures": []
         },
         "placeholder": {
@@ -15163,7 +15640,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 20,
+          "targets": 28,
           "failures": []
         },
         "scrollRow": {
@@ -15178,7 +15655,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "chatScope": {
@@ -15188,7 +15665,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 40,
+          "targets": 124,
           "failures": []
         }
       },
@@ -15213,7 +15690,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 36,
+          "targets": 149,
           "failures": []
         },
         "placeholder": {
@@ -15223,7 +15700,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 19,
+          "targets": 27,
           "failures": []
         },
         "scrollRow": {
@@ -15238,7 +15715,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "toast": {
@@ -15253,7 +15730,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 38,
+          "targets": 122,
           "failures": []
         }
       },
@@ -15394,7 +15871,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 34,
+          "targets": 147,
           "failures": []
         },
         "placeholder": {
@@ -15404,7 +15881,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 18,
+          "targets": 28,
           "failures": []
         },
         "scrollRow": {
@@ -15419,7 +15896,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "chatAlign": {
@@ -15434,7 +15911,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 36,
+          "targets": 120,
           "failures": []
         },
         "modelPicker": {
@@ -15448,12 +15925,41 @@
           "failures": []
         },
         "pictograph": {
-          "pass": true,
-          "targets": 18,
-          "failures": []
+          "pass": false,
+          "targets": 46,
+          "failures": [
+            {
+              "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(28) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+              "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+              "rect": {
+                "left": 8,
+                "top": 1856.5,
+                "right": 279,
+                "bottom": 1919.8,
+                "width": 271,
+                "height": 63.3
+              },
+              "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+              "char": "⚡"
+            },
+            {
+              "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(30) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+              "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+              "rect": {
+                "left": 8,
+                "top": 1991,
+                "right": 279,
+                "bottom": 2054.3,
+                "width": 271,
+                "height": 63.3
+              },
+              "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+              "char": "⚡"
+            }
+          ]
         }
       },
-      "pass": true
+      "pass": false
     },
     {
       "id": "chat-dark-1440x900-focus-filter",
@@ -15543,7 +16049,7 @@
     },
     {
       "id": "chat-dark-1440x900-source",
-      "route": "/chat?sourceId=4",
+      "route": "/chat?sourceId=1361",
       "theme": "dark",
       "viewport": {
         "width": 1440,
@@ -15560,7 +16066,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 38,
+          "targets": 151,
           "failures": []
         },
         "placeholder": {
@@ -15570,7 +16076,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 20,
+          "targets": 30,
           "failures": []
         },
         "scrollRow": {
@@ -15585,7 +16091,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "chatScope": {
@@ -15595,7 +16101,7 @@
         },
         "terms": {
           "pass": true,
-          "targets": 40,
+          "targets": 124,
           "failures": []
         }
       },
@@ -15620,7 +16126,7 @@
         },
         "clip": {
           "pass": true,
-          "targets": 36,
+          "targets": 149,
           "failures": []
         },
         "placeholder": {
@@ -15630,7 +16136,7 @@
         },
         "occluded": {
           "pass": true,
-          "targets": 19,
+          "targets": 29,
           "failures": []
         },
         "scrollRow": {
@@ -15645,7 +16151,7 @@
         },
         "keepAll": {
           "pass": true,
-          "targets": 6,
+          "targets": 5,
           "failures": []
         },
         "toast": {
@@ -15660,150 +16166,198 @@
         },
         "terms": {
           "pass": true,
-          "targets": 38,
+          "targets": 122,
           "failures": []
         }
       },
       "pass": true
     }
   ],
-  "failures": [],
-  "skipped": [
+  "failures": [
     {
-      "combo": "feed-light-360x780",
-      "check": "R9:trend",
-      "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+      "combo": "chat-light-1024x768",
+      "check": "pictograph",
+      "detail": {
+        "count": 2,
+        "sample": [
+          {
+            "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(28) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+            "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+            "rect": {
+              "left": 8,
+              "top": 1856.5,
+              "right": 279,
+              "bottom": 1919.8,
+              "width": 271,
+              "height": 63.3
+            },
+            "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+            "char": "⚡"
+          },
+          {
+            "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(30) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+            "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+            "rect": {
+              "left": 8,
+              "top": 1991,
+              "right": 279,
+              "bottom": 2054.3,
+              "width": 271,
+              "height": 63.3
+            },
+            "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+            "char": "⚡"
+          }
+        ]
+      }
     },
     {
-      "combo": "feed-light-360x780-radar",
-      "check": "state",
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "combo": "chat-light-1440x900",
+      "check": "pictograph",
+      "detail": {
+        "count": 2,
+        "sample": [
+          {
+            "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(28) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+            "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+            "rect": {
+              "left": 8,
+              "top": 1856.5,
+              "right": 279,
+              "bottom": 1919.8,
+              "width": 271,
+              "height": 63.3
+            },
+            "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+            "char": "⚡"
+          },
+          {
+            "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(30) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+            "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+            "rect": {
+              "left": 8,
+              "top": 1991,
+              "right": 279,
+              "bottom": 2054.3,
+              "width": 271,
+              "height": 63.3
+            },
+            "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+            "char": "⚡"
+          }
+        ]
+      }
     },
     {
-      "combo": "feed-light-390x844",
-      "check": "R9:trend",
-      "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
+      "combo": "chat-dark-1024x768",
+      "check": "pictograph",
+      "detail": {
+        "count": 2,
+        "sample": [
+          {
+            "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(28) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+            "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+            "rect": {
+              "left": 8,
+              "top": 1856.5,
+              "right": 279,
+              "bottom": 1919.8,
+              "width": 271,
+              "height": 63.3
+            },
+            "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+            "char": "⚡"
+          },
+          {
+            "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(30) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+            "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+            "rect": {
+              "left": 8,
+              "top": 1991,
+              "right": 279,
+              "bottom": 2054.3,
+              "width": 271,
+              "height": 63.3
+            },
+            "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+            "char": "⚡"
+          }
+        ]
+      }
     },
     {
-      "combo": "feed-light-390x844-radar",
-      "check": "state",
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
-    },
-    {
-      "combo": "feed-light-768x1024",
-      "check": "R9:trend",
-      "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
-    },
-    {
-      "combo": "feed-light-768x1024-radar",
-      "check": "state",
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
-    },
-    {
-      "combo": "feed-light-1024x768",
-      "check": "R9:trend",
-      "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
-    },
-    {
-      "combo": "feed-light-1024x768-radar",
-      "check": "state",
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
-    },
-    {
-      "combo": "feed-light-1440x900",
-      "check": "R9:trend",
-      "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
-    },
-    {
-      "combo": "feed-light-1440x900-radar",
-      "check": "state",
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
-    },
-    {
-      "combo": "feed-dark-360x780",
-      "check": "R9:trend",
-      "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
-    },
-    {
-      "combo": "feed-dark-360x780-radar",
-      "check": "state",
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
-    },
-    {
-      "combo": "feed-dark-390x844",
-      "check": "R9:trend",
-      "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
-    },
-    {
-      "combo": "feed-dark-390x844-radar",
-      "check": "state",
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
-    },
-    {
-      "combo": "feed-dark-768x1024",
-      "check": "R9:trend",
-      "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
-    },
-    {
-      "combo": "feed-dark-768x1024-radar",
-      "check": "state",
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
-    },
-    {
-      "combo": "feed-dark-1024x768",
-      "check": "R9:trend",
-      "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
-    },
-    {
-      "combo": "feed-dark-1024x768-radar",
-      "check": "state",
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
-    },
-    {
-      "combo": "feed-dark-1440x900",
-      "check": "R9:trend",
-      "reason": "레이더 데이터가 없으면 그리지 않는다 (spec 4.1)"
-    },
-    {
-      "combo": "feed-dark-1440x900-radar",
-      "check": "state",
-      "reason": "트렌드 버튼 없음 (레이더 데이터가 없으면 그리지 않는다, spec 4.1)"
+      "combo": "chat-dark-1440x900",
+      "check": "pictograph",
+      "detail": {
+        "count": 2,
+        "sample": [
+          {
+            "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(28) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+            "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+            "rect": {
+              "left": 8,
+              "top": 1856.5,
+              "right": 279,
+              "bottom": 1919.8,
+              "width": 271,
+              "height": 63.3
+            },
+            "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+            "char": "⚡"
+          },
+          {
+            "path": "main > div > aside#chat-history-sidebar[role=\"navigation\"][aria-label=\"대화 기록 목록\"] > div:nth-of-type(2) > div:nth-of-type(30) > button[aria-label=\"대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 1\"]:nth-of-type(1)",
+            "name": "대화: ⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ..., 10월 19일, 전체 소식 모드",
+            "rect": {
+              "left": 8,
+              "top": 1991,
+              "right": 279,
+              "bottom": 2054.3,
+              "width": 271,
+              "height": 63.3
+            },
+            "reason": "그림 이모지 '⚡' ('⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...전체 소식10')",
+            "char": "⚡"
+          }
+        ]
+      }
     }
   ],
+  "skipped": [],
   "summary": {
     "combos": 160,
-    "passed": 150,
-    "failed": 0,
-    "skipped": 10,
-    "failures": 0,
+    "passed": 156,
+    "failed": 4,
+    "skipped": 0,
+    "failures": 4,
     "byCheck": {
       "clip": {
-        "states": 150,
+        "states": 160,
         "failedStates": 0,
         "failures": 0
       },
       "placeholder": {
-        "states": 150,
+        "states": 160,
         "failedStates": 0,
         "failures": 0
       },
       "occluded": {
-        "states": 150,
+        "states": 160,
         "failedStates": 0,
         "failures": 0
       },
       "scrollRow": {
-        "states": 150,
+        "states": 160,
         "failedStates": 0,
         "failures": 0
       },
       "ariaControls": {
-        "states": 150,
+        "states": 160,
         "failedStates": 0,
         "failures": 0
       },
       "keepAll": {
-        "states": 150,
+        "states": 160,
         "failedStates": 0,
         "failures": 0
       },
@@ -15839,8 +16393,8 @@
       },
       "pictograph": {
         "states": 50,
-        "failedStates": 0,
-        "failures": 0
+        "failedStates": 4,
+        "failures": 8
       },
       "briefing": {
         "states": 10,
@@ -15883,6 +16437,6 @@
         "failures": 0
       }
     },
-    "pass": true
+    "pass": false
   }
 }

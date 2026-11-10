@@ -152,7 +152,8 @@ export default function FocusBottomSheet({
         <section>
           <h3 className={SECTION_TITLE_CLASSES}>신호 품질 필터</h3>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-muted py-1 pr-1 pl-3">
-            <span className="text-sm text-fg">Must-Read 고신호만 (품질 7.8+)</span>
+            {/* 고신호 판정은 backend 의 is_high_signal 이 정한다. 기준 숫자를 여기 박지 않는다. */}
+            <span className="text-sm text-fg">Must-Read 고신호만</span>
             <Switch
               label="Must-Read 고신호 전용 토글"
               hideLabel

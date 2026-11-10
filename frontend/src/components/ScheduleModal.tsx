@@ -6,13 +6,18 @@ import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { useCollector } from '@/hooks/useCollector';
 import ResetConfirmDialog from '@/components/ResetConfirmDialog';
+import { InlineAlert } from '@/components/ui/InlineAlert';
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+/** `[0, 6]` → `00:00 · 06:00` */
+const formatHours = (hours: number[], sep: string) => hours.map((h) => `${pad2(h)}:00`).join(sep);
 
 /**
  * 자동 수집 스케줄 대화상자 (spec 설계 5). 수집 주기·다음 예정, 바닥 `즉시 수집`,
  * '위험 영역' 의 `초기화 & 재수집…` → 확인 창(스택 위에 쌓인다).
  */
 export default function ScheduleModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const { status, isCollecting, collect } = useCollector();
+  const { status, statusError, isCollecting, collect, reloadStatus } = useCollector();
   const [showReset, setShowReset] = useState(false);
 
   const handleClose = () => {
@@ -27,7 +32,7 @@ export default function ScheduleModal({ isOpen, onClose }: { isOpen: boolean; on
         onClose={handleClose}
         size="md"
         title="자동 수집 스케줄"
-        description="매일 4회(0, 6, 12, 18시 UTC) 전세계 소식을 자동 수집합니다."
+        description="정해진 시각마다 전세계 소식을 자동 수집합니다."
         footer={
           <Button
             variant="secondary"
@@ -39,13 +44,38 @@ export default function ScheduleModal({ isOpen, onClose }: { isOpen: boolean; on
           </Button>
         }
       >
+        {/* 상태를 한 번도 받지 못하고 요청이 실패하면 기다림 대신 오류와 다시 시도 (FE-39). */}
+        {!status && statusError ? (
+          <InlineAlert
+            tone="danger"
+            action={
+              <Button variant="secondary" size="sm" leadingIcon={<RefreshCw />} onClick={reloadStatus}>
+                다시 시도
+              </Button>
+            }
+          >
+            스케줄 정보를 불러오지 못했습니다. 백엔드 서버 연결 상태를 확인해주세요.
+          </InlineAlert>
+        ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <section className="rounded-xl border border-border bg-surface-muted p-4">
             <h3 className="mb-1 flex items-center gap-1.5 text-xs font-medium text-fg-muted">
-              <Calendar aria-hidden="true" className="size-4 text-accent" /> 수집 주기 (UTC)
+              <Calendar aria-hidden="true" className="size-4 text-accent" /> 수집 주기
+              {status ? ` (${status.timezone})` : ''}
             </h3>
-            <p className="text-sm font-semibold text-fg">00:00 · 06:00 · 12:00 · 18:00</p>
-            <p className="mt-1 text-xs text-fg-muted">(KST: 09:00, 15:00, 21:00, 03:00)</p>
+            {/* 시각은 backend 스케줄 응답으로 그린다 (FE-25). KST 환산은 UTC 일 때만 보인다. */}
+            <p className="text-sm font-semibold text-fg">
+              {!status
+                ? '불러오는 중...'
+                : status.schedule_hours.length > 0
+                  ? formatHours(status.schedule_hours, ' · ')
+                  : '정해진 수집 시각이 없습니다'}
+            </p>
+            {status?.timezone === 'UTC' && status.schedule_hours.length > 0 ? (
+              <p className="mt-1 text-xs text-fg-muted">
+                (KST: {formatHours(status.schedule_hours.map((h) => (h + 9) % 24), ', ')})
+              </p>
+            ) : null}
           </section>
           <section className="rounded-xl border border-border bg-surface-muted p-4">
             <h3 className="mb-1 flex items-center gap-1.5 text-xs font-medium text-fg-muted">
@@ -59,6 +89,7 @@ export default function ScheduleModal({ isOpen, onClose }: { isOpen: boolean; on
             </p>
           </section>
         </div>
+        )}
 
         <section aria-labelledby="schedule-danger-zone" className="mt-6 rounded-xl border border-border p-4">
           <h3 id="schedule-danger-zone" className="text-sm font-semibold text-danger">

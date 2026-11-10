@@ -54,7 +54,7 @@ describe('Header', () => {
 
   beforeEach(() => {
     vi.mocked(api.fetchScheduleStatus).mockResolvedValue(scheduleStatus as never);
-    vi.mocked(api.triggerManualCollect).mockResolvedValue({ status: 'ok', message: '', total_collected: 0, total_saved: 0 });
+    vi.mocked(api.triggerManualCollect).mockResolvedValue({ status: 'ok', message: '', total_collected: 0, total_saved: 0, source_results: {} });
     vi.mocked(api.fetchCrawlProgress).mockResolvedValue({ is_running: true, items_saved: 0, step_message: '' } as never);
     vi.mocked(api.resetAndRecollect).mockResolvedValue({ status: 'ok', message: '', deleted_count: 3 });
   });
@@ -235,7 +235,7 @@ describe('Header collector state restore (R27)', () => {
       is_running: true,
       last_crawl_status: 'running',
     } as never);
-    vi.mocked(api.triggerManualCollect).mockResolvedValue({ status: 'ok', message: '', total_collected: 0, total_saved: 0 });
+    vi.mocked(api.triggerManualCollect).mockResolvedValue({ status: 'ok', message: '', total_collected: 0, total_saved: 0, source_results: {} });
     vi.mocked(api.fetchCrawlProgress).mockResolvedValue({ is_running: true, items_saved: 0, step_message: '' } as never);
     vi.mocked(api.resetAndRecollect).mockResolvedValue({ status: 'ok', message: '', deleted_count: 3 });
   });
@@ -268,7 +268,7 @@ describe('useCollector polling runs', () => {
 
   it('ignores a progress response from a previous run after a new run starts', async () => {
     vi.mocked(api.fetchScheduleStatus).mockResolvedValue(scheduleStatus as never);
-    vi.mocked(api.triggerManualCollect).mockResolvedValue({ status: 'ok', message: '', total_collected: 0, total_saved: 0 });
+    vi.mocked(api.triggerManualCollect).mockResolvedValue({ status: 'ok', message: '', total_collected: 0, total_saved: 0, source_results: {} });
     vi.mocked(api.resetAndRecollect).mockResolvedValue({ status: 'ok', message: '', deleted_count: 3 });
 
     // 첫 회차의 진행 요청은 늦게 돌아온다 (이전 회차 응답).

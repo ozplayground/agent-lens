@@ -7,6 +7,7 @@ from sqlalchemy import select, func
 from app.config import settings
 from app.database import engine, Base, AsyncSessionLocal, ensure_db_schema
 from app.api.router import api_router
+from app.api.errors import install_error_handlers
 from app.scheduler import start_scheduler, stop_scheduler
 from app.collectors.manager import collector_manager
 from app.models.news import NewsItem
@@ -46,7 +47,9 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
     await engine.dispose()
 
-app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, lifespan=lifespan)
+# redirect_slashes=False: 없는 경로에 끝 슬래시를 붙여 /{source_type}/{item_id:path} 같은 경로로 307 을 주지 않고
+# 바로 404·405 를 준다 (D-54). frontend·scripts 는 끝 슬래시로 부르는 곳이 없다 (grep)
+app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, lifespan=lifespan, redirect_slashes=False)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -55,16 +58,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc: Exception):
-    import traceback
-    print(f"[AgentLens ERROR] Unhandled exception on {request.url.path}: {exc}")
-    traceback.print_exc()
-    from fastapi.responses import JSONResponse
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error occurred. Please check server logs.", "error": str(exc)},
-    )
+# 오류 응답 형식 통일 (error_code, message, details). 예외 문자열은 로그에만 남긴다
+install_error_handlers(app)
 
 app.include_router(api_router)
 

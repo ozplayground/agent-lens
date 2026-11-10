@@ -1,4 +1,5 @@
 import smtplib
+from html import escape
 import asyncio
 import logging
 from email.mime.multipart import MIMEMultipart
@@ -8,6 +9,12 @@ from app.config import settings
 
 logger = logging.getLogger("agentlens.email")
 
+def _safe_href(url: str) -> str:
+    """http(s) 링크만 건다. 그 밖의 스킴(javascript: 등)은 '#'."""
+    url = (url or "").strip()
+    return escape(url) if url.lower().startswith(("http://", "https://")) else "#"
+
+
 class EmailService:
     def _parse_recipients(self, to: str) -> List[str]:
         if not to:
@@ -16,39 +23,40 @@ class EmailService:
         return [p for p in parts if "@" in p and "." in p]
 
     def _build_html(self, briefing: Dict[str, Any]) -> str:
-        date_str = briefing.get("date", "")
-        headline = briefing.get("headline", "오늘의 AI 핵심 동향")
-        overview = briefing.get("overview", "")
+        # 수집·설정 문자열은 모두 HTML 이스케이프해 넣는다 (SEC-07)
+        date_str = escape(briefing.get("date", ""))
+        page_title = escape(settings.BRIEFING_TITLE)  # briefing.title 설정
+        headline = escape(briefing.get("headline", "오늘의 AI 핵심 동향"))
+        overview = escape(briefing.get("overview", ""))
         categories = briefing.get("categories", [])
         action_items = briefing.get("action_items", [])
 
         # Categories HTML
         cats_html = ""
         for cat in categories:
-            cat_name = cat.get("name", "")
-            cat_icon = cat.get("icon", "🎯")
-            cat_summary = cat.get("summary", "")
+            cat_name = escape(cat.get("name", ""))
+            cat_summary = escape(cat.get("summary", ""))
             items = cat.get("items", [])
 
             items_html = ""
             for it in items:
-                title = it.get("title", "소식")
-                url = it.get("url") or "#"
-                why = it.get("why_it_matters", "")
-                summary = it.get("summary", "")
-                source = it.get("source", "")
+                title = escape(it.get("title", "소식"))
+                url = _safe_href(it.get("url", ""))
+                why = escape(it.get("why_it_matters", ""))
+                summary = escape(it.get("summary", ""))
+                source = escape(it.get("source", ""))
 
                 why_block = ""
                 if why:
                     why_block = f"""
                     <div style="margin-top: 5px; padding: 6px 10px; background-color: #f0f6fc; border-left: 3px solid #58a6ff; border-radius: 4px; font-size: 12px; color: #1f2328;">
-                        <strong>💡 시사점:</strong> {why}
+                        <strong>시사점:</strong> {why}
                     </div>
                     """
                 elif summary:
                     why_block = f"""
                     <div style="margin-top: 5px; padding: 6px 10px; background-color: #f6f8fa; border-left: 3px solid #d0d7de; border-radius: 4px; font-size: 12px; color: #656d76;">
-                        <strong>📝 요약:</strong> {summary}
+                        <strong>요약:</strong> {summary}
                     </div>
                     """
 
@@ -67,7 +75,7 @@ class EmailService:
             cats_html += f"""
             <div style="margin-bottom: 24px; padding: 16px; background-color: #ffffff; border: 1px solid #d0d7de; border-radius: 8px;">
                 <h2 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #1f2328; display: flex; align-items: center;">
-                    <span style="margin-right: 8px;">{cat_icon}</span> {cat_name}
+                    {cat_name}
                 </h2>
                 {f'<p style="margin: 0 0 12px 0; font-size: 13px; color: #57606a; font-style: italic; border-bottom: 1px dashed #e1e4e8; padding-bottom: 8px;">동향: {cat_summary}</p>' if cat_summary else ''}
                 <ul style="margin: 0; padding: 0;">
@@ -79,11 +87,11 @@ class EmailService:
         # Action items HTML
         actions_html = ""
         if action_items:
-            list_items = "".join([f"<li style='margin-bottom: 6px; font-size: 13px; color: #1f2328;'>{act}</li>" for act in action_items])
+            list_items = "".join([f"<li style='margin-bottom: 6px; font-size: 13px; color: #1f2328;'>{escape(act)}</li>" for act in action_items])
             actions_html = f"""
             <div style="margin-bottom: 24px; padding: 16px; background-color: #dafbe1; border: 1px solid #aceebb; border-radius: 8px;">
                 <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #1a7f37;">
-                    ✅ 오늘의 추천 Action Items
+                    오늘의 추천 Action Items
                 </h3>
                 <ol style="margin: 0; padding-left: 20px;">
                     {list_items}
@@ -97,7 +105,7 @@ class EmailService:
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>오늘의 AI 브리핑 - {date_str}</title>
+            <title>{page_title} - {date_str}</title>
         </head>
         <body style="margin: 0; padding: 0; background-color: #f6f8fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1f2328;">
             <div style="max-width: 640px; margin: 0 auto; padding: 24px 16px;">
@@ -107,7 +115,7 @@ class EmailService:
                         AgentLens Daily Briefing
                     </div>
                     <h1 style="margin: 0; font-size: 22px; font-weight: 800; color: #1f2328;">
-                        🌅 오늘의 AI 브리핑
+                        {page_title}
                     </h1>
                     <p style="margin: 4px 0 0 0; font-size: 13px; color: #656d76;">
                         발행 일자: {date_str}
@@ -117,7 +125,7 @@ class EmailService:
                 <!-- Callout Headline -->
                 <div style="margin-bottom: 20px; padding: 16px; background-color: #ddf4ff; border: 1px solid #54aeff; border-radius: 8px;">
                     <div style="font-size: 15px; font-weight: 700; color: #0969da; margin-bottom: 6px;">
-                        📌 {headline}
+                        {headline}
                     </div>
                     {f'<div style="font-size: 13px; color: #1f2328; line-height: 1.5;">{overview}</div>' if overview else ''}
                 </div>
@@ -134,7 +142,7 @@ class EmailService:
                         AgentLens • AI & Agent 기술 큐레이션 웹 애플리케이션
                     </p>
                     <p style="margin: 0;">
-                        <a href="http://localhost:3001" style="color: #0969da; text-decoration: none;">대시보드 바로가기</a>
+                        <a href="{_safe_href(settings.PUBLIC_WEB_URL)}" style="color: #0969da; text-decoration: none;">대시보드 바로가기</a>
                     </p>
                 </div>
             </div>
@@ -173,9 +181,9 @@ class EmailService:
             return False, "SMTP 계정 인증 실패: 아이디 또는 비밀번호(앱 비밀번호)를 확인해주세요."
         except smtplib.SMTPConnectError:
             return False, f"SMTP 서버({host}:{port})에 연결할 수 없습니다. 호스트 및 포트를 확인해주세요."
-        except Exception as e:
-            logger.error(f"SMTP error: {e}")
-            return False, f"이메일 전송 중 오류 발생: {str(e)}"
+        except Exception:
+            logger.exception("SMTP error")
+            return False, "이메일 전송 중 오류가 발생했습니다. SMTP 설정을 확인해주세요."
 
     async def test_connection(
         self,
@@ -211,8 +219,8 @@ class EmailService:
         text_content = "AgentLens 이메일 연동이 성공적으로 완료되었습니다.\n앞으로 오늘의 AI 브리핑을 이메일로 받아보실 수 있습니다."
         html_content = f"""
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #d0d7de; border-radius: 8px; max-width: 500px;">
-            <h2 style="color: #0969da; margin-top: 0;">🎉 AgentLens 이메일 연동 성공!</h2>
-            <p>축하합니다! SMTP 서버(<code>{h}:{p}</code>) 연결 및 인증이 완벽하게 확인되었습니다.</p>
+            <h2 style="color: #0969da; margin-top: 0;">AgentLens 이메일 연동 성공</h2>
+            <p>축하합니다! SMTP 서버(<code>{escape(h)}:{p}</code>) 연결 및 인증이 완벽하게 확인되었습니다.</p>
             <p>이제 일일 브리핑 모달에서 원클릭으로 브리핑을 메일로 받아보거나, 설정에 따라 매일 아침 자동으로 전송받을 수 있습니다.</p>
         </div>
         """
@@ -246,7 +254,7 @@ class EmailService:
             return False, "수신자 이메일 주소가 비어있습니다. 수신자를 입력해주세요."
 
         date_str = briefing.get("date", "")
-        subject = custom_subject or f"[AgentLens] 오늘의 AI 브리핑 - {date_str}"
+        subject = custom_subject or f"[AgentLens] {settings.BRIEFING_TITLE} - {date_str}"
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject

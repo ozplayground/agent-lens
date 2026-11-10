@@ -29,7 +29,6 @@ interface NewsDetailModalProps {
   onClose: () => void;
   isBookmarked: boolean;
   onToggleBookmark: (item: NewsItem) => void;
-  onHandoverToChat?: (item: NewsItem, draftQuestion?: string) => void;
 }
 
 export default function NewsDetailModal({
@@ -38,7 +37,6 @@ export default function NewsDetailModal({
   onClose,
   isBookmarked,
   onToggleBookmark,
-  onHandoverToChat,
 }: NewsDetailModalProps) {
   const [activeTab, setActiveTab] = useState<DetailTab>('summary');
   const [question, setQuestion] = useState('');
@@ -140,7 +138,6 @@ export default function NewsDetailModal({
       {
         q,
         a: '',
-        model: 'Gemini 실시간 스트리밍...',
         time: now,
         isStreaming: true,
       },
@@ -189,29 +186,25 @@ export default function NewsDetailModal({
       });
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      const errMessage = err instanceof Error ? err.message : '';
+      // 끊기거나 실패한 답은 완료로 보이지 않는다: 받은 부분 답은 두고 오류와 다시 시도를 함께 보인다.
+      const errMessage = (err instanceof Error && err.message) || 'AI 응답 생성에 실패했습니다. 네트워크 상태를 확인해주세요.';
       setChatHistory((prev) => {
         if (prev.length === 0) return prev;
         const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (!last.a) {
-          updated[updated.length - 1] = {
-            ...last,
-            a: `AI 응답 생성 실패: ${errMessage || '네트워크 상태를 확인해주세요.'}`,
-            model: 'Error',
-            isStreaming: false,
-          };
-        } else {
-          updated[updated.length - 1] = {
-            ...last,
-            isStreaming: false,
-          };
-        }
+        updated[updated.length - 1] = { ...updated[updated.length - 1], isStreaming: false, error: errMessage };
         return updated;
       });
     } finally {
       setAsking(false);
     }
+  };
+
+  // 실패한 답(마지막)을 지우고 같은 질문을 새로 보낸다.
+  const handleRetry = (index: number) => {
+    const failed = chatHistory[index];
+    if (!failed || asking) return;
+    setChatHistory((prev) => prev.filter((_, i) => i !== index));
+    void handleAsk(failed.q);
   };
 
   // 복사 결과(복사됨·복사 실패)를 그 답변에 2,000ms 동안 보인다. 타이머는 닫힘·언마운트 때 정리한다.
@@ -337,15 +330,12 @@ export default function NewsDetailModal({
               item={item}
               variant="modal-banner"
               draftQuestion={question}
-              onHandoverComplete={() => {
-                if (onHandoverToChat) onHandoverToChat(item, question);
-                handleClose();
-              }}
+              onHandoverComplete={handleClose}
             />
 
             {item.tldr_bullets && item.tldr_bullets.length > 0 && (
               <section className="flex flex-col gap-2">
-                <h3 className="text-base font-semibold text-fg">핵심 요약 3줄</h3>
+                <h3 className="text-base font-semibold text-fg">핵심 정리 (규칙 기반 자동 추출)</h3>
                 <ul className="flex flex-col gap-2 rounded-lg border border-border bg-surface-muted p-3 text-sm leading-relaxed text-fg">
                   {item.tldr_bullets.map((bullet, idx) => (
                     <li key={idx} className="flex items-start gap-2">
@@ -394,6 +384,7 @@ export default function NewsDetailModal({
               onAsk={handleAsk}
               onCopy={handleCopy}
               onClearChat={handleClearChat}
+              onRetry={handleRetry}
             />
           </TabPanel>
         )}

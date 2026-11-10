@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime, timezone, timedelta
-from app.collectors.categorizer import classify_and_tag, compute_dedup_hash, calculate_hotness
+from app.services.categorizer import classify_and_tag, compute_dedup_hash, calculate_hotness
 
 def test_harness_classification():
     title = "SWE-bench 2.0: Next-Gen Evaluation Harness for Autonomous Coding Agents"
@@ -35,7 +35,7 @@ def test_hotness_decay():
     assert recent > older
 
 def test_unrelated_noise_rejection():
-    from app.collectors.categorizer import is_strictly_ai_related
+    from app.services.categorizer import is_strictly_ai_related
     noisy_titles = [
         "[GeekNews (긱뉴스)] Capsule - 데이터를 SQLite에 저장하는 단일 파일 웹 앱",
         "[GeekNews (긱뉴스)] CSS-Tricks, 다시 불확실한 상태에 놓이다",

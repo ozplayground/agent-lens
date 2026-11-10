@@ -45,7 +45,7 @@ async def fetch_arxiv() -> List[Dict[str, Any]]:
                         "summary": summary[:350] + ("..." if len(summary) > 350 else ""),
                         "author": "arXiv Researcher",
                         "published_at": pub_date,
-                        "raw_score": 120,
+                        "raw_score": 0,  # arXiv API 는 인기 지표를 주지 않는다 (BUG-18, 예전 고정 120)
                         "comments_count": 0,
                     })
             except Exception:

@@ -13,12 +13,12 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: APP_VERSION,
   },
+  // 개발 서버(next dev)에 붙을 수 있는 출처. 기본은 이 기기뿐이고, 다른 호스트(사설 IP, Tailscale 등)는
+  // ALLOWED_DEV_ORIGINS="*.ts.net,192.168.0.10" 처럼 쉼표로 더한다 (frontend/.env.local 에 둔다).
   allowedDevOrigins: [
-    "macbookpro.tail304081.ts.net",
-    "*.ts.net",
     "localhost",
     "127.0.0.1",
-    "192.168.1.109"
+    ...(process.env.ALLOWED_DEV_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
   ],
   async rewrites() {
     const backendUrl = process.env.INTERNAL_API_URL || "http://127.0.0.1:8000";

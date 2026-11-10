@@ -182,7 +182,10 @@ export default function SourcesListTab({
           </form>
         )}
 
-        {/* md 이상 표, 모바일은 행을 세로 카드로 (같은 요소를 CSS 로 바꾼다) */}
+        {/* md 이상 표, 모바일은 행을 세로 카드로 (같은 요소를 CSS 로 바꾼다). 없으면 빈 표 대신 안내 (FE-30). */}
+        {feeds.length === 0 ? (
+          <EmptyNote loading={!sourcesData}>등록된 RSS 피드가 없습니다.</EmptyNote>
+        ) : (
         <table className="w-full border-separate border-spacing-0 text-sm max-md:block">
           <thead className="max-md:sr-only">
             <tr>
@@ -249,6 +252,7 @@ export default function SourcesListTab({
             })}
           </tbody>
         </table>
+        )}
       </section>
 
       {/* GitHub 저장소 */}
@@ -256,6 +260,9 @@ export default function SourcesListTab({
         <h3 id="sources-github-heading" className="flex items-center gap-1.5 text-sm font-semibold text-fg">
           <GitBranch aria-hidden="true" className="size-4 text-fg-muted" /> 지속 모니터링 GitHub 저장소
         </h3>
+        {repos.length === 0 ? (
+          <EmptyNote loading={!sourcesData}>모니터링 중인 GitHub 저장소가 없습니다.</EmptyNote>
+        ) : (
         <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {repos.map((r) => (
             <li
@@ -280,7 +287,17 @@ export default function SourcesListTab({
             </li>
           ))}
         </ul>
+        )}
       </section>
     </div>
+  );
+}
+
+/** 목록이 비었을 때의 안내. 아직 받지 못했으면(불러오는 중) '없음' 이라고 하지 않는다. */
+function EmptyNote({ loading, children }: { loading: boolean; children: React.ReactNode }) {
+  return (
+    <p className="rounded-xl border border-border bg-surface-muted p-6 text-center text-sm text-fg-muted">
+      {loading ? '불러오는 중...' : children}
+    </p>
   );
 }

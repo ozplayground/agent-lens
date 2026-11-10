@@ -1,4 +1,53 @@
-import { NewsListResponse, ScheduleStatus, StatsResponse, DailyBriefing, AskQuestionResponse, BriefingSettings } from '@/types/news';
+import {
+  NewsListResponseSchema,
+  ScheduleStatusSchema,
+  StatsResponseSchema,
+  DailyBriefingSchema,
+  BriefingSettingsSchema,
+  CrawlProgressSchema,
+  ManualCollectResponseSchema,
+  ResetAndCollectResponseSchema,
+  SourcesResponseSchema,
+  StatusMessageResponseSchema,
+  AddRssSourceResponseSchema,
+  InspectUrlResponseSchema,
+  ResearchStatusSchema,
+  ResearchAuditLogsResponseSchema,
+  RunDeepResearchResponseSchema,
+  NotionExportResponseSchema,
+  SuccessMessageResponseSchema,
+  type NewsListResponse,
+  type ScheduleStatus,
+  type StatsResponse,
+  type DailyBriefing,
+  type BriefingSettings,
+  type CrawlProgress,
+  type ManualCollectResponse,
+  type ResetAndCollectResponse,
+  type SourcesResponse,
+  type StatusMessageResponse,
+  type AddRssSourceResponse,
+  type InspectUrlResponse,
+  type ResearchStatus,
+  type ResearchAuditLogsResponse,
+  type RunDeepResearchResponse,
+  type NotionExportResponse,
+  type SuccessMessageResponse,
+} from '@/types/news';
+import { TechRadarDataSchema, type TechRadarData } from '@/types/trends';
+import { readJson, readErrorMessage, parseNewsAskSsePayload } from '@/lib/contract';
+
+// 응답 타입은 `@/types/news` 의 zod 스키마에서 나온다 (계약 CT-006). 옛 import 경로를 위해 다시 내보낸다.
+export type {
+  CrawlProgress,
+  SourceItem,
+  MonitoredRepo,
+  SourcesResponse,
+  InspectUrlResponse,
+  ResearchStatus,
+  ResearchAuditLog,
+} from '@/types/news';
+import { getClientEnv } from '@/lib/env';
 
 function getApiBase(): string {
   if (typeof window !== 'undefined') {
@@ -9,22 +58,25 @@ function getApiBase(): string {
   return process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 }
 
-export function getDirectApiBase(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  if (typeof window !== 'undefined') {
-    // Connect directly to backend port 8000 for SSE streaming to bypass Next.js rewrites chunk buffering
-    const protocol = window.location.protocol;
-    const hostname = window.location.hostname || 'localhost';
-    return `${protocol}//${hostname}:8000`;
-  }
-  return process.env.INTERNAL_API_URL || 'http://127.0.0.1:8000';
+/**
+ * 기사 질문 스트림의 연결 주소 (QA D-41). `NEXT_PUBLIC_API_URL` 이 있으면 backend 에 직접 붙고,
+ * 없으면 `getApiBase()` 와 같다 (브라우저는 같은 출처 `/api/...` → Next rewrite → `INTERNAL_API_URL`).
+ * backend 포트를 짐작하지 않는다: Docker 처럼 포트를 바꾼 배포에서 다른 backend 로 가지 않게 한다.
+ */
+function getDirectApiBase(): string {
+  return getClientEnv().NEXT_PUBLIC_API_URL || getApiBase();
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
+/**
+ * 응답 머리가 올 때까지 `timeoutMs` 를 기다린다 (본문 읽기는 제한하지 않는다).
+ * `options.signal` 을 주면 그 중단도 함께 따른다 (챗 스트림의 사용자 중단, FE-07).
+ */
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
+  const outer = options.signal;
+  if (outer?.aborted) controller.abort();
+  else outer?.addEventListener('abort', () => controller.abort(), { once: true });
   try {
     const res = await fetch(url, {
       ...options,
@@ -57,34 +109,30 @@ export async function fetchNewsFeed(params: {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/news?${query.toString()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`API 오류 (${res.status}): ${res.statusText}`);
-  return res.json();
+  return readJson(res, NewsListResponseSchema, 'GET /api/news');
 }
 
 export async function fetchDailyBriefing(): Promise<DailyBriefing> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/briefing/today`, { cache: 'no-store' });
   if (!res.ok) throw new Error('일일 브리핑을 불러오지 못했습니다.');
-  return res.json();
+  return readJson(res, DailyBriefingSchema, 'GET /api/briefing/today');
 }
 
-export async function askQuestionAboutNews(newsId: number, question: string): Promise<AskQuestionResponse> {
-  const base = getApiBase();
-  const res = await fetchWithTimeout(`${base}/api/news/${newsId}/ask`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question })
-  }, 30000);
-  if (!res.ok) {
-    let msg = `AI 응답 생성 실패 (${res.status})`;
-    try {
-      const data = await res.json();
-      if (data.detail) msg = data.detail;
-    } catch {}
-    throw new Error(msg);
-  }
-  return res.json();
-}
 
+/** 기사 질문 스트림이 `done` 없이 끝났을 때의 문구 (backend `error` 이벤트의 기본 문구와 같다). */
+export const ASK_STREAM_CUT_MESSAGE = '답변 생성이 중간에 끊겼습니다. 다시 시도해 주세요.';
+/** 기사 질문 스트림의 첫 응답 대기 한도 (챗 스트림 `CHAT_STREAM_FIRST_BYTE_TIMEOUT_MS` 와 같다). 본문(토큰)은 제한하지 않는다. */
+export const ASK_STREAM_FIRST_BYTE_TIMEOUT_MS = 30000;
+const ASK_STREAM_TIMEOUT_MESSAGE = '응답이 늦어 요청을 멈췄습니다. 다시 시도해 주세요.';
+/** 연결 자체가 실패했을 때(fetch TypeError)의 문구. 기사 질문과 챗(`lib/chatApi.ts`)이 함께 쓴다. */
+export const CONNECT_FAILED_MESSAGE = '서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.';
+const ASK_STREAM_CONNECT_FAILED_MESSAGE = CONNECT_FAILED_MESSAGE;
+
+/**
+ * 기사 질문 스트림. `done` 을 받아야 완료다. `error` 이벤트를 받거나 `done` 없이 끝나면 그 문구로 실패한다
+ * (받은 토큰은 이미 `onToken` 으로 넘겼다. 화면은 부분 답과 오류·다시 시도를 함께 보인다).
+ */
 export async function askQuestionAboutNewsStream(
   newsId: number,
   question: string,
@@ -95,50 +143,53 @@ export async function askQuestionAboutNewsStream(
   signal?: AbortSignal
 ): Promise<{ answer: string; model_used: string }> {
   const directBase = getDirectApiBase();
+  const fallbackBase = getApiBase();
+  // 첫 응답(머리)까지만 ASK_STREAM_FIRST_BYTE_TIMEOUT_MS 를 기다린다. 사용자 중단은 AbortError 그대로, 시간 초과는 문구로.
+  const send = async (base: string): Promise<Response> => {
+    try {
+      return await fetchWithTimeout(
+        `${base}/api/news/${newsId}/ask/stream`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }), signal },
+        ASK_STREAM_FIRST_BYTE_TIMEOUT_MS
+      );
+    } catch (err: unknown) {
+      if (signal?.aborted) throw err; // 사용자 중단은 AbortError 그대로
+      if (err instanceof Error && err.name === 'AbortError') throw new Error(ASK_STREAM_TIMEOUT_MESSAGE);
+      // 연결 자체가 실패(브라우저 원문 `Failed to fetch` 등)하면 정한 문구로 바꾼다.
+      throw new Error(ASK_STREAM_CONNECT_FAILED_MESSAGE);
+    }
+  };
   let res: Response;
 
   try {
-    // 1. Direct connection to FastAPI backend (bypasses Next.js proxy chunk buffering)
-    res = await fetch(`${directBase}/api/news/${newsId}/ask/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
-      signal
-    });
+    // 1. NEXT_PUBLIC_API_URL 이 있으면 backend 에 직접, 없으면 같은 출처(rewrite)로 보낸다 (getDirectApiBase).
+    res = await send(directBase);
   } catch (err: unknown) {
-    if (err instanceof Error && err.name === 'AbortError') throw err;
-    // 2. Fallback to relative URL if direct backend port is not reachable
-    const fallbackBase = getApiBase();
-    res = await fetch(`${fallbackBase}/api/news/${newsId}/ask/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
-      signal
-    });
+    if (signal?.aborted || (err instanceof Error && err.message === ASK_STREAM_TIMEOUT_MESSAGE)) throw err;
+    // 2. 직접 주소에 닿지 못하면 같은 출처(rewrite)로 한 번 더 시도한다. 이미 같은 출처였으면 다시 보내지 않는다.
+    if (directBase === fallbackBase) throw err;
+    res = await send(fallbackBase);
   }
 
   if (!res.ok || !res.body) {
-    let msg = `AI 스트리밍 연결 실패 (${res.status})`;
-    try {
-      const errJson = await res.json();
-      if (errJson.detail) msg = errJson.detail;
-    } catch {}
-    throw new Error(msg);
+    throw new Error(await readErrorMessage(res, `AI 스트리밍 연결 실패 (${res.status})`));
   }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let fullAnswer = '';
-  let modelUsed = 'Gemini 3.5 Flash';
+  // meta 이벤트가 알려 준 실제 응답 엔진. 오지 않으면 비워 둔다 (엔진 이름을 지어내지 않는다, FE-23).
+  let modelUsed = '';
   let buffer = '';
+  let receivedDone = false;
+  let streamError: string | null = null;
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
+    // 끝나면 디코더에 남은 바이트와 빈 줄 없이 끝난 마지막 이벤트까지 처리한다 (FE-23).
+    buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
     const parts = buffer.split('\n\n');
-    buffer = parts.pop() || '';
+    buffer = done ? '' : parts.pop() || '';
 
     for (const part of parts) {
       const lines = part.split('\n');
@@ -148,7 +199,9 @@ export async function askQuestionAboutNewsStream(
         const jsonStr = trimmed.substring(6).trim();
         if (!jsonStr) continue;
         try {
-          const payload = JSON.parse(jsonStr);
+          // 줄마다 계약 스키마로 확인한다 (던지지 않는다, 계약 3.2절·2.0절)
+          const payload = parseNewsAskSsePayload(JSON.parse(jsonStr));
+          if (!payload) continue; // 모르는 이벤트는 무시한다 (전과 같음)
           if (payload.event === 'meta' && payload.model) {
             modelUsed = payload.model;
             callbacks?.onMeta?.(payload.model);
@@ -156,15 +209,28 @@ export async function askQuestionAboutNewsStream(
             fullAnswer += payload.text;
             callbacks?.onToken?.(payload.text);
           } else if (payload.event === 'done') {
+            receivedDone = true;
             if (payload.total_text) {
               fullAnswer = payload.total_text;
             }
+          } else if (payload.event === 'error') {
+            streamError = typeof payload.message === 'string' && payload.message ? payload.message : ASK_STREAM_CUT_MESSAGE;
           }
         } catch {}
       }
     }
+    if (streamError !== null) {
+      void reader.cancel().catch(() => {});
+      throw new Error(streamError);
+    }
+    if (done) break;
   }
 
+  if (!receivedDone) {
+    // 사용자가 끊었으면 끊김 오류가 아니라 중단이다.
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    throw new Error(ASK_STREAM_CUT_MESSAGE);
+  }
   return { answer: fullAnswer, model_used: modelUsed };
 }
 
@@ -172,205 +238,72 @@ export async function fetchScheduleStatus(): Promise<ScheduleStatus> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/schedule/status`, { cache: 'no-store' });
   if (!res.ok) throw new Error('스케줄 정보를 불러오지 못했습니다.');
-  return res.json();
-}
-
-export interface CrawlProgress {
-  is_running: boolean;
-  current_source: string;
-  step_message: string;
-  items_collected: number;
-  items_saved: number;
-  items_filtered: number;
-  total_sources: number;
-  completed_sources: number;
-  last_crawl_time?: string;
+  return readJson(res, ScheduleStatusSchema, 'GET /api/schedule/status');
 }
 
 export async function fetchCrawlProgress(): Promise<CrawlProgress> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/schedule/progress`, { cache: 'no-store' });
   if (!res.ok) throw new Error('수집 진행도를 불러오지 못했습니다.');
-  return res.json();
+  return readJson(res, CrawlProgressSchema, 'GET /api/schedule/progress');
 }
 
-export async function triggerManualCollect(): Promise<{ status: string; message: string; total_collected: number; total_saved: number }> {
+export async function triggerManualCollect(): Promise<ManualCollectResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/schedule/trigger`, { method: 'POST' });
-  if (!res.ok) throw new Error('수집 요청에 실패했습니다.');
-  return res.json();
+  if (!res.ok) throw new Error(await readErrorMessage(res, '수집 요청에 실패했습니다.'));
+  return readJson(res, ManualCollectResponseSchema, 'POST /api/schedule/trigger');
 }
 
 export async function fetchStats(): Promise<StatsResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/stats`, { cache: 'no-store' });
   if (!res.ok) throw new Error('통계 데이터를 불러오지 못했습니다.');
-  return res.json();
+  return readJson(res, StatsResponseSchema, 'GET /api/stats');
 }
 
-export async function fetchTechRadar(): Promise<import('@/types/trends').TechRadarData> {
+export async function fetchTechRadar(): Promise<TechRadarData> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/trends/radar`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Tech Radar 데이터를 불러오지 못했습니다.');
-  return res.json();
+  return readJson(res, TechRadarDataSchema, 'GET /api/trends/radar');
 }
 
-export async function testWebhook(webhookUrl: string): Promise<{ success: boolean; message: string }> {
+export async function testWebhook(webhookUrl: string): Promise<SuccessMessageResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/webhook/test`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ webhook_url: webhookUrl })
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: '웹훅 전송에 실패했습니다.' }));
-    throw new Error(err.detail || '웹훅 전송에 실패했습니다.');
-  }
-  return res.json();
+  if (!res.ok) throw new Error(await readErrorMessage(res, '웹훅 전송에 실패했습니다.'));
+  return readJson(res, SuccessMessageResponseSchema, 'POST /api/webhook/test');
 }
 
-export async function sendBriefingToWebhook(webhookUrl: string): Promise<{ success: boolean; message: string }> {
-  const base = getApiBase();
-  const res = await fetchWithTimeout(`${base}/api/webhook/send-briefing`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ webhook_url: webhookUrl })
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: '브리핑 전송에 실패했습니다.' }));
-    throw new Error(err.detail || '브리핑 전송에 실패했습니다.');
-  }
-  return res.json();
-}
-
-export async function resetAndRecollect(): Promise<{ status: string; message: string; deleted_count: number }> {
+export async function resetAndRecollect(): Promise<ResetAndCollectResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/schedule/reset-and-collect`, {
     method: 'POST'
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: '초기화 및 재수집 요청 실패' }));
-    throw new Error(err.detail || '초기화 및 재수집 요청 실패');
-  }
-  return res.json();
+  if (!res.ok) throw new Error(await readErrorMessage(res, '초기화 및 재수집 요청 실패'));
+  return readJson(res, ResetAndCollectResponseSchema, 'POST /api/schedule/reset-and-collect');
 }
 
-export async function deleteAllNews(): Promise<{ status: string; deleted_count: number }> {
-  const base = getApiBase();
-  const res = await fetchWithTimeout(`${base}/api/news/all`, {
-    method: 'DELETE'
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: '데이터 삭제 실패' }));
-    throw new Error(err.detail || '데이터 삭제 실패');
-  }
-  return res.json();
-}
-
-export interface SourceItem {
-  id: string;
-  name: string;
-  url: string;
-  site_url?: string;
-  category_hint: string;
-  country?: string;
-  enabled: boolean;
-  description?: string;
-  added_at?: string;
-}
-
-export interface MonitoredRepo {
-  repo: string;
-  category: string;
-  enabled: boolean;
-  description?: string;
-  stars_hint?: number;
-}
-
-export interface SourcesResponse {
-  status: string;
-  sources_file: string;
-  updated_at: string;
-  stats: {
-    total_rss: number;
-    active_rss: number;
-    total_github_repos: number;
-    active_github_repos: number;
-    github_search_enabled: boolean;
-    reddit_enabled: boolean;
-    hackernews_enabled: boolean;
-    arxiv_enabled: boolean;
-    huggingface_enabled: boolean;
-  };
-  data: {
-    rss_feeds: SourceItem[];
-    github_sources: {
-      enabled: boolean;
-      search_queries: string[];
-      monitored_repos: MonitoredRepo[];
-    };
-    reddit_sources: {
-      enabled: boolean;
-      subreddits: string[];
-      keywords: string[];
-    };
-    hackernews_sources: {
-      enabled: boolean;
-      queries: string[];
-    };
-    arxiv_sources: {
-      enabled: boolean;
-      queries: string[];
-    };
-    huggingface_sources: {
-      enabled: boolean;
-    };
-  };
-}
-
-export interface DiscoveredCandidate {
-  id: string;
-  name: string;
-  site_url: string;
-  feed_url: string;
-  category_hint: string;
-  country: string;
-  description: string;
-  relevance_score: number;
-  tags: string[];
-  already_registered: boolean;
-  why_recommended: string;
-}
-
-export interface InspectUrlResponse {
-  status: 'found' | 'error' | 'not_found' | 'empty';
-  name?: string;
-  feed_url?: string;
-  site_url?: string;
-  description?: string;
-  category_hint?: string;
-  relevance_score?: number;
-  is_high_signal?: boolean;
-  recent_posts?: Array<{ title: string; link: string; published: string; snippet: string }>;
-  already_registered?: boolean;
-  why_recommended?: string;
-  message?: string;
-}
 
 export async function fetchSources(): Promise<SourcesResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/sources`, { cache: 'no-store' });
   if (!res.ok) throw new Error('수집 소스 목록을 불러오지 못했습니다.');
-  return res.json();
+  return readJson(res, SourcesResponseSchema, 'GET /api/sources');
 }
 
-export async function toggleSource(sourceType: string, itemId: string): Promise<{ status: string; message: string }> {
+export async function toggleSource(sourceType: string, itemId: string): Promise<StatusMessageResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/sources/${sourceType}/${encodeURIComponent(itemId)}/toggle`, {
     method: 'PATCH'
   });
-  if (!res.ok) throw new Error('소스 상태 변경에 실패했습니다.');
-  return res.json();
+  if (!res.ok) throw new Error(await readErrorMessage(res, '소스 상태 변경에 실패했습니다.'));
+  return readJson(res, StatusMessageResponseSchema, 'PATCH /api/sources/{type}/{id}/toggle');
 }
 
 export async function addRssSource(payload: {
@@ -380,27 +313,24 @@ export async function addRssSource(payload: {
   category_hint?: string;
   country?: string;
   description?: string;
-}): Promise<{ status: string; message?: string; source: SourceItem }> {
+}): Promise<AddRssSourceResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/sources/rss`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: 'RSS 소스 추가 실패' }));
-    throw new Error(err.detail || 'RSS 소스 추가 실패');
-  }
-  return res.json();
+  if (!res.ok) throw new Error(await readErrorMessage(res, 'RSS 소스 추가 실패'));
+  return readJson(res, AddRssSourceResponseSchema, 'POST /api/sources/rss');
 }
 
-export async function deleteSource(sourceType: string, itemId: string): Promise<{ status: string; message: string }> {
+export async function deleteSource(sourceType: string, itemId: string): Promise<StatusMessageResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/sources/${sourceType}/${encodeURIComponent(itemId)}`, {
     method: 'DELETE'
   });
-  if (!res.ok) throw new Error('소스 삭제 실패');
-  return res.json();
+  if (!res.ok) throw new Error(await readErrorMessage(res, '소스 삭제 실패'));
+  return readJson(res, StatusMessageResponseSchema, 'DELETE /api/sources/{type}/{id}');
 }
 
 export async function inspectUrl(url: string): Promise<InspectUrlResponse> {
@@ -410,96 +340,40 @@ export async function inspectUrl(url: string): Promise<InspectUrlResponse> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url })
   }, 12000);
-  if (!res.ok) throw new Error('URL 피드 분석 실패');
-  return res.json();
+  if (!res.ok) throw new Error(await readErrorMessage(res, 'URL 피드 분석 실패'));
+  return readJson(res, InspectUrlResponseSchema, 'POST /api/research/inspect-url');
 }
 
-export async function discoverSources(query = '', category = '', limit = 8): Promise<{
-  query: string;
-  category: string;
-  total_found: number;
-  candidates: DiscoveredCandidate[];
-}> {
-  const base = getApiBase();
-  const res = await fetchWithTimeout(`${base}/api/research/discover`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, category, limit })
-  }, 12000);
-  if (!res.ok) throw new Error('소스 리서치 탐색 실패');
-  return res.json();
-}
 
-export async function registerCandidate(candidate: {
-  name: string;
-  feed_url: string;
-  site_url?: string;
-  category_hint?: string;
-  country?: string;
-  description?: string;
-}): Promise<{ status: string; message: string; source: SourceItem }> {
-  const base = getApiBase();
-  const res = await fetchWithTimeout(`${base}/api/research/register-candidate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(candidate)
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: '소스 등록 실패' }));
-    throw new Error(err.detail || '소스 등록 실패');
-  }
-  return res.json();
-}
-
-export interface ResearchStatus {
-  is_running: boolean;
-  last_run_time?: string;
-  auto_adopted_count: number;
-  last_run_summary: Record<string, unknown>;
-  cadence: string;
-}
-
-export interface ResearchAuditLog {
-  id: number;
-  source_name: string;
-  site_url: string;
-  feed_url: string;
-  category: string;
-  relevance_score: number;
-  verdict: 'AUTO_ADOPTED' | 'WATCHLIST' | 'REJECTED' | 'ALREADY_MONITORED';
-  verdict_reason: string;
-  analyzed_articles_count: number;
-  created_at: string;
-}
 
 export async function fetchDeepResearchStatus(): Promise<ResearchStatus> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/research/status`, { cache: 'no-store' });
   if (!res.ok) throw new Error('딥 리서치 상태를 불러오지 못했습니다.');
-  return res.json();
+  return readJson(res, ResearchStatusSchema, 'GET /api/research/status');
 }
 
-export async function fetchResearchAuditLogs(limit = 30): Promise<{ status: string; total: number; logs: ResearchAuditLog[] }> {
+export async function fetchResearchAuditLogs(limit = 30): Promise<ResearchAuditLogsResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/research/audit-logs?limit=${limit}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('감사 일지를 불러오지 못했습니다.');
-  return res.json();
+  return readJson(res, ResearchAuditLogsResponseSchema, 'GET /api/research/audit-logs');
 }
 
-export async function triggerDeepResearch(maxCandidates = 6): Promise<{ status: string; message: string }> {
+export async function triggerDeepResearch(maxCandidates = 6): Promise<RunDeepResearchResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/research/run-deep?max_candidates=${maxCandidates}`, {
     method: 'POST'
   });
-  if (!res.ok) throw new Error('딥 리서치 기동 실패');
-  return res.json();
+  if (!res.ok) throw new Error(await readErrorMessage(res, '딥 리서치 기동 실패'));
+  return readJson(res, RunDeepResearchResponseSchema, 'POST /api/research/run-deep');
 }
 
 // ==========================================
 // Daily Briefing Export & Settings APIs
 // ==========================================
 
-export async function exportBriefingToNotion(apiKey?: string, pageId?: string): Promise<{ success: boolean; message: string; url?: string }> {
+export async function exportBriefingToNotion(apiKey?: string, pageId?: string): Promise<NotionExportResponse> {
   const base = getApiBase();
   const body: { api_key?: string; page_id?: string } = {};
   if (apiKey) body.api_key = apiKey;
@@ -511,12 +385,11 @@ export async function exportBriefingToNotion(apiKey?: string, pageId?: string): 
     body: JSON.stringify(body)
   }, 20000);
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'Notion 페이지 생성에 실패했습니다.');
-  return data;
+  if (!res.ok) throw new Error(await readErrorMessage(res, 'Notion 페이지 생성에 실패했습니다.'));
+  return readJson(res, NotionExportResponseSchema, 'POST /api/briefing/export/notion');
 }
 
-export async function sendBriefingByEmail(toEmail?: string, subject?: string): Promise<{ success: boolean; message: string }> {
+export async function sendBriefingByEmail(toEmail?: string, subject?: string): Promise<SuccessMessageResponse> {
   const base = getApiBase();
   const body: { to_email?: string; subject?: string } = {};
   if (toEmail) body.to_email = toEmail;
@@ -528,12 +401,11 @@ export async function sendBriefingByEmail(toEmail?: string, subject?: string): P
     body: JSON.stringify(body)
   }, 20000);
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || '이메일 발송에 실패했습니다.');
-  return data;
+  if (!res.ok) throw new Error(await readErrorMessage(res, '이메일 발송에 실패했습니다.'));
+  return readJson(res, SuccessMessageResponseSchema, 'POST /api/briefing/send/email');
 }
 
-export async function testNotionConnection(apiKey?: string, pageId?: string): Promise<{ success: boolean; message: string }> {
+export async function testNotionConnection(apiKey?: string, pageId?: string): Promise<SuccessMessageResponse> {
   const base = getApiBase();
   const body: { api_key?: string; page_id?: string } = {};
   if (apiKey) body.api_key = apiKey;
@@ -545,9 +417,8 @@ export async function testNotionConnection(apiKey?: string, pageId?: string): Pr
     body: JSON.stringify(body)
   }, 12000);
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'Notion 연결 테스트 실패');
-  return data;
+  if (!res.ok) throw new Error(await readErrorMessage(res, 'Notion 연결 테스트 실패'));
+  return readJson(res, SuccessMessageResponseSchema, 'POST /api/briefing/test/notion');
 }
 
 export async function testEmailConnection(params: {
@@ -557,7 +428,7 @@ export async function testEmailConnection(params: {
   smtp_password?: string;
   use_tls?: boolean;
   to_email?: string;
-}): Promise<{ success: boolean; message: string }> {
+}): Promise<SuccessMessageResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/briefing/test/email`, {
     method: 'POST',
@@ -565,16 +436,15 @@ export async function testEmailConnection(params: {
     body: JSON.stringify(params)
   }, 15000);
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'SMTP 연결 테스트 실패');
-  return data;
+  if (!res.ok) throw new Error(await readErrorMessage(res, 'SMTP 연결 테스트 실패'));
+  return readJson(res, SuccessMessageResponseSchema, 'POST /api/briefing/test/email');
 }
 
 export async function fetchBriefingSettings(): Promise<BriefingSettings> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/briefing/settings`, { cache: 'no-store' });
   if (!res.ok) throw new Error('브리핑 설정을 불러오지 못했습니다.');
-  return res.json();
+  return readJson(res, BriefingSettingsSchema, 'GET /api/briefing/settings');
 }
 
 /** POST /api/briefing/settings 요청 본문 (backend `BriefingSettingsUpdate`). 보낸 필드만 바뀐다. */
@@ -594,7 +464,7 @@ export interface BriefingSettingsUpdate {
   discord_webhook_url?: string;
 }
 
-export async function updateBriefingSettings(update: BriefingSettingsUpdate): Promise<{ success: boolean; message: string }> {
+export async function updateBriefingSettings(update: BriefingSettingsUpdate): Promise<SuccessMessageResponse> {
   const base = getApiBase();
   const res = await fetchWithTimeout(`${base}/api/briefing/settings`, {
     method: 'POST',
@@ -602,9 +472,8 @@ export async function updateBriefingSettings(update: BriefingSettingsUpdate): Pr
     body: JSON.stringify(update)
   }, 10000);
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || '설정 저장에 실패했습니다.');
-  return data;
+  if (!res.ok) throw new Error(await readErrorMessage(res, '설정 저장에 실패했습니다.'));
+  return readJson(res, SuccessMessageResponseSchema, 'POST /api/briefing/settings');
 }
 
 

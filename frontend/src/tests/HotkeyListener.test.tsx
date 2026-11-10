@@ -11,8 +11,6 @@ describe('HotkeyListener Component (Cycle 2 - TDD)', () => {
     onToggleBookmark: vi.fn(),
     onFocusSearch: vi.fn(),
     onToggleTheme: vi.fn(),
-    onCloseOverlays: vi.fn(),
-    onToggleCommandPalette: vi.fn(),
   };
 
   beforeEach(() => {
@@ -57,29 +55,15 @@ describe('HotkeyListener Component (Cycle 2 - TDD)', () => {
     expect(defaultProps.onToggleTheme).toHaveBeenCalledTimes(1);
   });
 
-  it('triggers onCloseOverlays on Escape key', () => {
-    render(<HotkeyListener {...defaultProps} />);
-
-    fireEvent.keyDown(window, { key: 'Escape' });
-    expect(defaultProps.onCloseOverlays).toHaveBeenCalledTimes(1);
-  });
-
-  it('triggers onToggleCommandPalette on Cmd+K or Ctrl+K and prevents default', () => {
+  it('does not handle Cmd+K (Header owns it) and does not call j/k navigation for it', () => {
     render(<HotkeyListener {...defaultProps} />);
 
     const cmdEvent = new KeyboardEvent('keydown', { key: 'k', metaKey: true, cancelable: true });
     const cmdSpy = vi.spyOn(cmdEvent, 'preventDefault');
     window.dispatchEvent(cmdEvent);
 
-    expect(defaultProps.onToggleCommandPalette).toHaveBeenCalledTimes(1);
-    expect(cmdSpy).toHaveBeenCalled();
-
-    const ctrlEvent = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, cancelable: true });
-    const ctrlSpy = vi.spyOn(ctrlEvent, 'preventDefault');
-    window.dispatchEvent(ctrlEvent);
-
-    expect(defaultProps.onToggleCommandPalette).toHaveBeenCalledTimes(2);
-    expect(ctrlSpy).toHaveBeenCalled();
+    expect(cmdSpy).not.toHaveBeenCalled();
+    expect(defaultProps.onNavigateFeed).not.toHaveBeenCalled();
   });
 
   it('enforces Input Isolation Rule: ignores single-key shortcuts when typing in an input element', () => {
@@ -105,13 +89,6 @@ describe('HotkeyListener Component (Cycle 2 - TDD)', () => {
     expect(defaultProps.onToggleBookmark).not.toHaveBeenCalled();
     expect(defaultProps.onHandoverChat).not.toHaveBeenCalled();
     expect(defaultProps.onToggleTheme).not.toHaveBeenCalled();
-
-    // But Cmd+K and Escape should still work inside input!
-    fireEvent.keyDown(input, { key: 'k', metaKey: true });
-    expect(defaultProps.onToggleCommandPalette).toHaveBeenCalledTimes(1);
-
-    fireEvent.keyDown(input, { key: 'Escape' });
-    expect(defaultProps.onCloseOverlays).toHaveBeenCalledTimes(1);
   });
 
   it('ignores hotkeys during IME composition (isComposing = true)', () => {

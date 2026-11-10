@@ -165,6 +165,41 @@ describe('useCollector (수집 상태 복원과 already_running)', () => {
     expect(result.current.message ?? '').not.toContain('삭제 완료');
     unmount();
   });
+
+  it('(d) rejects a second reset while the first is still in flight instead of finishing as if it succeeded (FE-20)', async () => {
+    mockCollectorApi();
+    const gate = deferred();
+    server.use(
+      http.post('*/api/schedule/reset-and-collect', async () => {
+        calls.reset += 1;
+        await gate.promise;
+        return HttpResponse.json({ status: 'started', message: '', deleted_count: 1 });
+      })
+    );
+    const collector = await loadCollector();
+    const { result, unmount } = renderHook(() => collector.useCollector());
+    await vi.waitFor(() => expect(result.current.status).not.toBeNull());
+
+    let first: Promise<void> = Promise.resolve();
+    let secondError: unknown = null;
+    await act(async () => {
+      first = result.current.reset();
+      try {
+        await result.current.reset();
+      } catch (e) {
+        secondError = e;
+      }
+    });
+    expect(secondError).toBeInstanceOf(Error);
+    expect((secondError as Error).message).toBe('이미 초기화 요청을 처리하고 있습니다.');
+
+    gate.release();
+    await act(async () => {
+      await first;
+    });
+    expect(calls.reset).toBe(1);
+    unmount();
+  });
 });
 
 /** 붙잡아 두었다가 나중에 풀 수 있는 약속 (상태 응답 도착 순서를 정한다). */

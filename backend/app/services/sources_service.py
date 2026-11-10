@@ -1,9 +1,11 @@
 import os
+import copy
 import json
 import logging
 import re
+import hashlib
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 
 logger = logging.getLogger("agentlens.sources")
@@ -23,10 +25,27 @@ def find_sources_file() -> Path:
     default_path.parent.mkdir(parents=True, exist_ok=True)
     return default_path
 
+TYPE_TOGGLE_ID = "all"
+
+
+class SourcesWriteError(Exception):
+    """sources.json 저장 실패. 라우터는 500 으로 바꾼다."""
+
+
+def _new_rss_id(name: str, url: str, taken: set) -> str:
+    """이름 슬러그. 영숫자가 없거나(한글 이름) 이미 쓰인 슬러그면 URL 해시를 붙여 겹치지 않게 한다 (BUG-20)."""
+    slug = re.sub(r'[^a-z0-9_]', '_', (name or "").lower())
+    if slug.strip("_") and slug not in taken:
+        return slug
+    digest = hashlib.sha1(url.rstrip("/").encode("utf-8")).hexdigest()[:8]
+    return f"{slug.strip('_') or 'feed'}_{digest}"
+
+
 class SourcesService:
     def __init__(self):
         self._file_path = find_sources_file()
         self._mirror_path = Path(__file__).resolve().parent.parent / "config" / "sources.json"
+        self._cache: Optional[Tuple[Tuple[str, int, int], Dict[str, Any]]] = None
 
     def get_file_path(self) -> Path:
         if not self._file_path.exists():
@@ -34,12 +53,16 @@ class SourcesService:
         return self._file_path
 
     def load_sources(self) -> Dict[str, Any]:
+        """sources.json 의 사본. 파일 (mtime, size) 가 그대로면 다시 열지 않는다 (PERF-04). 호출자가 고쳐도 캐시는 그대로다."""
         p = self.get_file_path()
         if p.exists():
             try:
-                with open(p, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    return self._normalize_sources(data)
+                st = p.stat()
+                stamp = (str(p), st.st_mtime_ns, st.st_size)
+                if self._cache is None or self._cache[0] != stamp:
+                    with open(p, "r", encoding="utf-8") as f:
+                        self._cache = (stamp, self._normalize_sources(json.load(f)))
+                return copy.deepcopy(self._cache[1])
             except Exception as e:
                 logger.error(f"Failed to read sources file from {p}: {e}")
         return self._default_sources()
@@ -100,6 +123,7 @@ class SourcesService:
         }
 
     def save_sources(self, data: Dict[str, Any]) -> bool:
+        """sources.json 을 쓴다. 실패하면 SourcesWriteError (예전에는 False 를 돌려주고 아무도 보지 않았다, BUG-20)."""
         data["updated_at"] = datetime.now(timezone.utc).isoformat()
         p = self.get_file_path()
         try:
@@ -129,7 +153,7 @@ class SourcesService:
             return True
         except Exception as e:
             logger.error(f"Failed to write sources to {p}: {e}")
-            return False
+            raise SourcesWriteError(p.name) from e
 
     def get_all_sources(self) -> Dict[str, Any]:
         return self.load_sources()
@@ -182,7 +206,8 @@ class SourcesService:
                     r["enabled"] = not r.get("enabled", True)
                     modified = True
                     break
-        elif source_type in ["github", "reddit", "hackernews", "arxiv", "huggingface"]:
+        elif source_type in ["github", "reddit", "hackernews", "arxiv", "huggingface"] and item_id == TYPE_TOGGLE_ID:
+            # 유형 전체 토글은 item_id 가 'all' 일 때만 한다. 다른 값은 없는 대상이다 (D-53)
             key = f"{source_type}_sources"
             if key in sources:
                 sources[key]["enabled"] = not sources[key].get("enabled", True)
@@ -203,9 +228,8 @@ class SourcesService:
                 self.save_sources(sources)
                 return f
 
-        item_id = re.sub(r'[^a-zA-Z0-9_]', '_', name.lower()) if name else f"feed_{int(datetime.now().timestamp())}"
         new_feed = {
-            "id": item_id,
+            "id": _new_rss_id(name, url, {f.get("id") for f in sources.get("rss_feeds", [])}),
             "name": name,
             "url": url,
             "site_url": site_url or url,
@@ -218,29 +242,6 @@ class SourcesService:
         sources.setdefault("rss_feeds", []).append(new_feed)
         self.save_sources(sources)
         return new_feed
-
-    def add_github_repo(self, repo: str, category: str = "agent_tech", description: str = "", stars_hint: int = 0) -> Dict[str, Any]:
-        sources = self.load_sources()
-        gh = sources.setdefault("github_sources", {"enabled": True, "search_queries": [], "monitored_repos": []})
-        repos = gh.setdefault("monitored_repos", [])
-        for r in repos:
-            if r.get("repo").lower() == repo.lower():
-                r["enabled"] = True
-                r["category"] = category
-                self.save_sources(sources)
-                return r
-
-        new_repo = {
-            "repo": repo,
-            "category": category,
-            "enabled": True,
-            "description": description,
-            "stars_hint": stars_hint,
-            "added_at": datetime.now(timezone.utc).isoformat()
-        }
-        repos.append(new_repo)
-        self.save_sources(sources)
-        return new_repo
 
     def delete_source(self, source_type: str, item_id: str) -> bool:
         sources = self.load_sources()

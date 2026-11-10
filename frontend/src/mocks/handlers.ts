@@ -1,46 +1,15 @@
 import { http, HttpResponse, delay } from 'msw';
-import {
-  mockArticles,
-  mockSearchChunks,
-  mockSupplementarySources,
-  initialMockSessions,
-} from './fixtures/chat';
-import {
-  ChatStreamRequest,
-  ChatQueryRequest,
-  ChatQueryResponse,
-  ChatSearchResponse,
-  ChatFocusFilter,
-  ChatSearchChunk,
-  ChatSourceItem,
-  ErrorResponse,
-  LlmErrorResponse,
-  ChatSessionSummary,
-  ChatSessionDetail,
-  ChatSessionCreateRequest,
-  ChatMessageItem,
-  GenericSuccessResponse,
-  generateAutoTitle,
-  ModelTier,
-  ChatModel,
-  TokenUsageMeta,
-} from '@/types/chat';
-import {
-  NewsItem,
-  NewsListResponse,
-  DailyBriefing,
-  SourcesResponse,
-  StatsResponse,
-  AskQuestionResponse,
-  ScheduleStatus,
-} from '@/types/news';
+import { mockArticles } from './fixtures/chat';
+import { apiError } from './api-error';
+import type { NewsItem, NewsListResponse, DailyBriefing, SourcesResponse, StatsResponse, ManualCollectResponse } from '@/types/news';
 import { chatHandlers, resetMockSessionStore, getMockSessionStore, resolveModelAndUsage } from './handlers/chat';
+import { opsHandlers } from './handlers/ops';
 
 export { resetMockSessionStore, getMockSessionStore, chatHandlers, resolveModelAndUsage };
 
-/**
- * 모의 기사 아이템 컬렉션 (NewsItem 변환)
- */
+// MSW 는 backend 동작을 흉내 낸다 (계약 4.7절). 오류는 모두 `{error_code, message, details}` 다.
+
+/** 모의 기사 (backend `NewsItemResponse` 모양) */
 export const mockNewsItems: NewsItem[] = Object.values(mockArticles).map((art) => ({
   id: art.id,
   title: art.title,
@@ -61,81 +30,84 @@ export const mockNewsItems: NewsItem[] = Object.values(mockArticles).map((art) =
   published_at: art.published_at,
   created_at: art.created_at ?? art.published_at,
   dedup_hash: `hash_${art.id}`,
-  full_content: 'full_content' in art && typeof art.full_content === 'string' ? art.full_content : null,
-  scraped_at: 'scraped_at' in art && typeof art.scraped_at === 'string' ? art.scraped_at : null,
 }));
 
-/**
- * 모의 일일 브리핑 픽스처
- */
+/** backend 브리핑 날짜 형식 `"%Y년 %m월 %d일"` */
+function koreanDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}년 ${pad(d.getMonth() + 1)}월 ${pad(d.getDate())}일`;
+}
+
+/** backend 브리핑 분야 (briefing_service 의 분야 목록과 같은 순서·이름). icon 은 이모지가 아니라 분야 id 다 */
+const BRIEFING_SECTIONS = [
+  { id: 'harness', name: '하네스 & 벤치마크', summary: '에이전트 평가 하네스와 벤치마크 결과가 갱신됐습니다.' },
+  { id: 'mcp_plugins_skills', name: 'MCP & 생태계', summary: 'FastMCP 프레임워크 릴리즈 및 클라이언트 연동 규격 고도화' },
+  { id: 'agent_tech', name: '에이전트 아키텍처', summary: 'LangGraph v0.2 분산 상태 머신 및 체크포인트 복원력 확보' },
+  { id: 'ai_news', name: '최신 AI 동향', summary: '하이브리드 추론 모델 출시가 이어졌습니다.' },
+] as const;
+
+const briefingCategories = BRIEFING_SECTIONS.map((section) => ({
+  id: section.id,
+  name: section.name,
+  icon: section.id,
+  summary: section.summary,
+  items: Object.values(mockArticles)
+    .filter((art) => art.category === section.id)
+    .slice(0, 3)
+    .map((art) => ({
+      id: art.id,
+      title: art.title,
+      url: art.url,
+      source: art.source,
+      why_it_matters: art.why_it_matters,
+      summary: art.summary,
+      tags: art.tags,
+      category: art.category,
+      category_name: section.name,
+      hotness_score: art.hotness_score,
+    })),
+}));
+
+const briefingDate = koreanDate(new Date());
+
+/** 모의 일일 브리핑 (backend `DailyBriefingResponse`, 마크다운에 이모지 없음) */
 export const mockDailyBriefing: DailyBriefing = {
-  title: '오늘의 AI 엔지니어링 브리핑',
-  date: new Date().toISOString().split('T')[0],
+  title: '오늘의 AI 브리핑',
+  date: briefingDate,
   headline: 'Anthropic Claude 3.7 & Model Context Protocol (MCP) 생태계 급부상',
-  overview: 'SWE-bench 70% 돌파 및 FastMCP를 중심으로 한 에이전틱 인터페이스 표준화 가속',
-  categories: [
-    {
-      id: 'mcp_plugins_skills',
-      name: 'MCP & 플러그인 생태계',
-      icon: '🔌',
-      summary: 'FastMCP 프레임워크 릴리즈 및 클라이언트 연동 규격 고도화',
-      items: [
-        {
-          id: 101,
-          title: mockArticles[101].title,
-          url: mockArticles[101].url,
-          source: mockArticles[101].source,
-          why_it_matters: mockArticles[101].why_it_matters,
-          summary: mockArticles[101].summary,
-          tags: mockArticles[101].tags,
-          category: mockArticles[101].category,
-          category_name: 'MCP 플러그인',
-          hotness_score: mockArticles[101].hotness_score,
-        },
-      ],
-    },
-    {
-      id: 'agent_tech',
-      name: '에이전트 아키텍처',
-      icon: '🤖',
-      summary: 'LangGraph v0.2 분산 상태 머신 및 체크포인트 복원력 확보',
-      items: [
-        {
-          id: 102,
-          title: mockArticles[102].title,
-          url: mockArticles[102].url,
-          source: mockArticles[102].source,
-          why_it_matters: mockArticles[102].why_it_matters,
-          summary: mockArticles[102].summary,
-          tags: mockArticles[102].tags,
-          category: mockArticles[102].category,
-          category_name: '에이전트 기술',
-          hotness_score: mockArticles[102].hotness_score,
-        },
-      ],
-    },
-  ],
+  overview: briefingCategories.map((c) => `• **${c.name}**: ${c.summary}`).join('\n'),
+  categories: briefingCategories,
   action_items: [
-    'FastMCP 데코레이터 기반 사내 도구 표준화 검토',
-    'LangGraph 멀티턴 세션 체크포인터 튜닝 적용',
+    '사내 에이전트 워크플로우에 단위 평가 및 샌드박스 격리 테스트베드 도입 검토',
+    '사내 API 및 외부 연동 도구 인터페이스를 FastMCP 규격으로 표준화',
   ],
-  markdown_report: `# 오늘의 AI 엔지니어링 브리핑\n\n## 1. 핵심 헤드라인\n- Anthropic Claude 3.7 및 하이브리드 추론 모델 출시\n- FastMCP 파이썬 프레임워크 오픈소스 릴리즈`,
-  featured_items_count: 2,
+  markdown_report: [
+    '# 오늘의 AI 브리핑',
+    `**발행 일자**: ${briefingDate} (UTC) | **핵심 토픽**: Anthropic Claude 3.7 & Model Context Protocol (MCP) 생태계 급부상\n`,
+    '## 오늘의 핵심 테이크어웨이 (Overview)',
+    ...briefingCategories.map((c) => `• **${c.name}**: ${c.summary}`),
+    '',
+    ...briefingCategories.flatMap((c) => [
+      `## ${c.name}`,
+      `> **동향 요약**: ${c.summary}\n`,
+      ...c.items.map((it) => `- **[${it.title}](${it.url})** \`[${it.source}]\``),
+      '',
+    ]),
+  ].join('\n'),
+  featured_items_count: briefingCategories.reduce((n, c) => n + c.items.length, 0),
   generated_at: new Date().toISOString(),
 };
 
-/**
- * 모의 수집 소스 설정 픽스처
- */
+/** 모의 수집 소스 (GET /api/sources) */
 export const mockSourcesResponse: SourcesResponse = {
   status: 'success',
   sources_file: 'sources.json',
   updated_at: new Date().toISOString(),
   stats: {
-    total_rss: 6,
-    active_rss: 6,
-    total_github_repos: 4,
-    active_github_repos: 4,
+    total_rss: 2,
+    active_rss: 2,
+    total_github_repos: 2,
+    active_github_repos: 2,
     github_search_enabled: true,
     reddit_enabled: true,
     hackernews_enabled: true,
@@ -143,6 +115,7 @@ export const mockSourcesResponse: SourcesResponse = {
     huggingface_enabled: true,
   },
   data: {
+    version: '1.0',
     rss_feeds: [
       {
         id: 'geeknews',
@@ -185,12 +158,14 @@ export const mockSourcesResponse: SourcesResponse = {
         },
       ],
     },
+    reddit_sources: { enabled: true, subreddits: ['LocalLLaMA'], keywords: ['agent'] },
+    hackernews_sources: { enabled: true, queries: ['MCP'] },
+    arxiv_sources: { enabled: true, queries: ['LLM agent'] },
+    huggingface_sources: { enabled: true },
   },
 };
 
-/**
- * 모의 통계 픽스처
- */
+/** 모의 통계 */
 export const mockStatsResponse: StatsResponse = {
   total_news: 216,
   category_counts: {
@@ -209,64 +184,69 @@ export const mockStatsResponse: StatsResponse = {
 };
 
 /**
- * 뉴스 피드 및 브리핑/소스 모의 핸들러 정의
+ * POST /api/schedule/trigger 응답 (backend schedule.trigger_manual_crawl). 기본 핸들러는 started 를 준다.
+ * 수집 중 응답은 테스트가 `server.use` 로 고른다. other_process 는 already_running 일 때만 있다.
  */
+export const mockTriggerResponses: Record<'started' | 'alreadyRunning' | 'otherProcess', ManualCollectResponse> = {
+  started: {
+    status: 'started',
+    message: '실시간 점진적 수집이 시작되었습니다. 소식이 화면에 순차적으로 반영됩니다.',
+    total_collected: 0,
+    total_saved: 0,
+    source_results: {},
+  },
+  alreadyRunning: {
+    status: 'already_running',
+    message: '이미 수집이 진행 중입니다.',
+    other_process: false,
+    total_collected: 12,
+    total_saved: 5,
+    source_results: {},
+  },
+  otherProcess: {
+    status: 'already_running',
+    message: '다른 프로세스(MCP 서버·make collect)가 같은 DB 에 수집 중입니다.',
+    other_process: true,
+    total_collected: 0,
+    total_saved: 0,
+    source_results: {},
+  },
+};
+
+/** 정수 쿼리·경로 값 검사 (FastAPI 바인딩 실패는 backend 공통 처리로 400 ERR_INVALID_PAYLOAD) */
+function invalidParam(where: 'query' | 'path', name: string, msg: string) {
+  return apiError(400, 'ERR_INVALID_PAYLOAD', '요청 값 형식이 올바르지 않습니다.', [{ loc: [where, name], msg }]);
+}
+
 export const newsHandlers = [
   // ==========================================================================
-  // 1. 뉴스 피드 다차원 필터링 및 페이징 조회 모의 핸들러 (GET /api/news)
+  // 1. GET /api/news — 필터·검색·정렬·페이지 (backend news.get_news_feed)
   // ==========================================================================
   http.get('*/api/news', async ({ request }) => {
     const url = new URL(request.url);
-    const category = url.searchParams.get('category') || 'all';
-    const source = url.searchParams.get('source') || 'all';
-    const search = url.searchParams.get('search') || '';
+    const category = (url.searchParams.get('category') || 'all').toLowerCase();
+    const source = (url.searchParams.get('source') || 'all').toLowerCase();
+    const search = (url.searchParams.get('search') || '').trim();
     const sort = url.searchParams.get('sort') || 'hot';
     const highSignalOnly = url.searchParams.get('high_signal_only') === 'true';
     const page = Number(url.searchParams.get('page') || '1');
     const size = Number(url.searchParams.get('size') || '20');
-    const triggerError = url.searchParams.get('trigger_error');
 
-    // 1) 400 Bad Request Fallback
-    if (page < 1 || size < 1) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_INVALID_PAGE_PARAM', message: '페이지 번호 및 사이즈는 1 이상이어야 합니다.' },
-        { status: 400 }
-      );
-    }
+    if (!Number.isInteger(page) || page < 1) return invalidParam('query', 'page', 'Input should be greater than or equal to 1');
+    if (!Number.isInteger(size) || size < 1 || size > 100) return invalidParam('query', 'size', 'Input should be between 1 and 100');
 
-    // 2) 500 Server Internal Error Fallback
-    if (triggerError === '500' || search.includes('[TRIGGER_500]')) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_FEED_FETCH_FAILED', message: '뉴스 피드 데이터베이스 조회 중 서버 내부 오류가 발생했습니다.' },
-        { status: 500 }
-      );
-    }
-
-    // 3) 503 LLM/Upstream Service Unavailable Fallback
-    if (search.includes('[TRIGGER_503]')) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_LLM_PROVIDER_UNAVAILABLE', message: '뉴스 큐레이션 및 AI 서비스가 일시 점검 중입니다.' },
-        { status: 503 }
-      );
+    // 처리하지 못한 예외 흉내 (DB 장애 등)
+    if (url.searchParams.get('trigger_error') === '500' || search.includes('[TRIGGER_500]')) {
+      return apiError(500, 'ERR_SERVER_INTERNAL', '서버 내부 오류가 발생했습니다.');
     }
 
     await delay(30);
 
     let filtered = [...mockNewsItems];
-
-    if (category !== 'all') {
-      filtered = filtered.filter((item) => item.category === category);
-    }
-
-    if (source !== 'all' && source !== 'bookmarks') {
-      filtered = filtered.filter((item) => item.source === source);
-    }
-
-    if (highSignalOnly) {
-      filtered = filtered.filter((item) => item.quality_score >= 7.8 || item.is_high_signal);
-    }
-
-    if (search.trim()) {
+    if (category !== 'all') filtered = filtered.filter((item) => item.category === category);
+    if (source !== 'all') filtered = filtered.filter((item) => item.source === source);
+    if (highSignalOnly) filtered = filtered.filter((item) => item.is_high_signal);
+    if (search) {
       const q = search.toLowerCase();
       filtered = filtered.filter(
         (item) =>
@@ -279,120 +259,53 @@ export const newsHandlers = [
     }
 
     filtered.sort((a, b) => {
-      if (sort === 'latest') {
-        return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
-      }
-      if (sort === 'quality') {
-        return b.quality_score - a.quality_score;
-      }
-      if (sort === 'top') {
-        return b.raw_score - a.raw_score;
-      }
-      return b.hotness_score - a.hotness_score;
+      if (sort === 'latest') return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
+      if (sort === 'quality') return b.quality_score - a.quality_score || b.hotness_score - a.hotness_score;
+      if (sort === 'top') return b.raw_score - a.raw_score;
+      return b.hotness_score - a.hotness_score || new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
     });
 
     const total = filtered.length;
-    const totalPages = Math.ceil(total / size) || 1;
-    const offset = (page - 1) * size;
-    const items = filtered.slice(offset, offset + size);
-
     const response: NewsListResponse = {
-      items,
+      items: filtered.slice((page - 1) * size, page * size),
       total,
       page,
       size,
-      total_pages: totalPages,
+      total_pages: total > 0 ? Math.ceil(total / size) : 1,
     };
-
     return HttpResponse.json(response, { status: 200 });
   }),
 
   // ==========================================================================
-  // 2. 특정 뉴스 아이템 단건 상세 조회 모의 핸들러 (GET /api/news/:news_id)
-  // ==========================================================================
-  http.get('*/api/news/:news_id', async ({ params }) => {
-    const newsId = Number(params.news_id);
-    const item = mockNewsItems.find((n) => n.id === newsId);
-
-    if (!item) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_FEED_CARD_NOT_FOUND', message: `ID ${newsId}에 해당하는 뉴스를 찾을 수 없습니다.` },
-        { status: 404 }
-      );
-    }
-
-    return HttpResponse.json(item, { status: 200 });
-  }),
-
-  // ==========================================================================
-  // 3. 인라인 Ask AI 질의응답 모의 핸들러 (POST /api/news/:news_id/ask)
-  // ==========================================================================
-  http.post('*/api/news/:news_id/ask', async ({ request, params }) => {
-    const newsId = Number(params.news_id);
-    let body: { question: string };
-    try {
-      body = (await request.json()) as { question: string };
-    } catch {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_CHAT_PAYLOAD_EMPTY', message: '유효한 JSON 페이로드를 전달해주세요.' },
-        { status: 400 }
-      );
-    }
-
-    if (!body.question || body.question.trim().length === 0) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_CHAT_PAYLOAD_EMPTY', message: '질문 본문을 입력해주세요.' },
-        { status: 400 }
-      );
-    }
-
-    if (body.question.includes('[TRIGGER_503]')) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_LLM_PROVIDER_UNAVAILABLE', message: '가용한 LLM 엔진이 설정되지 않았습니다.' },
-        { status: 503 }
-      );
-    }
-
-    const item = mockNewsItems.find((n) => n.id === newsId);
-    if (!item) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_FEED_CARD_NOT_FOUND', message: '해당 뉴스를 찾을 수 없습니다.' },
-        { status: 404 }
-      );
-    }
-
-    await delay(100);
-
-    const response: AskQuestionResponse = {
-      news_id: newsId,
-      question: body.question,
-      answer: `[AI 분석 결과]: "${item.title}" 관련 질의("${body.question}")에 대해 FastMCP 및 고신호 아키텍처 관점에서 분석한 답변입니다.`,
-      model_used: 'claude-sonnet-5-5',
-    };
-
-    return HttpResponse.json(response, { status: 200 });
-  }),
-
-  // ==========================================================================
-  // 4. 인라인 Ask AI SSE 스트리밍 모의 핸들러 (POST /api/news/:news_id/ask/stream)
+  // 2. POST /api/news/:news_id/ask/stream — `data:` 줄만 있는 SSE
+  //    meta → token* → done. 토큰 뒤 실패·잘림([TRIGGER_STREAM_ERROR])은 meta → token → error (done 없음)
+  //    질문은 1~2000자 (backend `AskQuestionRequest`). 위반은 400 ERR_INVALID_PAYLOAD
   // ==========================================================================
   http.post('*/api/news/:news_id/ask/stream', async ({ request, params }) => {
     const newsId = Number(params.news_id);
-    const item = mockNewsItems.find((n) => n.id === newsId);
-
-    if (!item) {
-      return HttpResponse.json<ErrorResponse>(
-        { error_code: 'ERR_FEED_CARD_NOT_FOUND', message: '해당 뉴스를 찾을 수 없습니다.' },
-        { status: 404 }
-      );
+    if (!Number.isInteger(newsId)) return invalidParam('path', 'news_id', 'Input should be a valid integer');
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return apiError(400, 'ERR_INVALID_PAYLOAD', '요청 형식이 올바르지 않습니다.', [
+        { loc: ['body'], msg: 'JSON decode error' },
+      ]);
     }
+    const question = (body as { question?: unknown } | null)?.question;
+    if (typeof question !== 'string' || question.length < 1 || question.length > 2000) {
+      return apiError(400, 'ERR_INVALID_PAYLOAD', '요청 형식이 올바르지 않습니다.', [
+        { loc: ['body', 'question'], msg: 'String should have 1 to 2000 characters' },
+      ]);
+    }
+    const item = mockNewsItems.find((n) => n.id === newsId);
+    if (!item) return apiError(404, 'ERR_NOT_FOUND', '기사를 찾을 수 없습니다.');
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ event: 'meta', model: 'claude-sonnet-5-5' })}\n\n`)
-        );
+        const emit = (data: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        emit({ event: 'meta', model: 'claude-sonnet-5-5' });
         await delay(30);
 
         const chunks = [
@@ -400,35 +313,37 @@ export const newsHandlers = [
           `본 기사("${item.title}")는 차세대 AI 하네스 및 에이전트 시스템 도입에 중대한 지표를 제공합니다.\n\n`,
           '특히 비동기 처리와 분산 상태 관리 측면에서 실무 도입 시 높은 생산성 향상이 기대됩니다.',
         ];
-
-        for (const chunk of chunks) {
+        if (question.includes('[TRIGGER_STREAM_ERROR]')) {
           await delay(25);
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ event: 'token', text: chunk })}\n\n`)
-          );
+          emit({ event: 'token', text: chunks[0] });
+          emit({
+            event: 'error',
+            error_code: 'ERR_LLM_STREAM_FAILED',
+            message: '답변 생성이 중간에 끊겼습니다. 다시 시도해 주세요.',
+            retryable: true,
+          });
+          controller.close();
+          return;
+        }
+        for (const text of chunks) {
+          await delay(25);
+          emit({ event: 'token', text });
         }
 
         await delay(30);
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ event: 'done', total_text: chunks.join('') })}\n\n`
-          )
-        );
+        emit({ event: 'done', total_text: chunks.join('') });
         controller.close();
       },
     });
 
     return new HttpResponse(stream, {
       status: 200,
-      headers: {
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache',
-      },
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
     });
   }),
 
   // ==========================================================================
-  // 5. 일일 브리핑 조회 모의 핸들러 (GET /api/briefing/today)
+  // 3. GET /api/briefing/today
   // ==========================================================================
   http.get('*/api/briefing/today', async () => {
     await delay(20);
@@ -436,18 +351,7 @@ export const newsHandlers = [
   }),
 
   // ==========================================================================
-  // 6. 일일 브리핑 강제 재생성 모의 핸들러 (POST /api/briefing/generate)
-  // ==========================================================================
-  http.post('*/api/briefing/generate', async () => {
-    await delay(60);
-    return HttpResponse.json(
-      { ...mockDailyBriefing, generated_at: new Date().toISOString() },
-      { status: 200 }
-    );
-  }),
-
-  // ==========================================================================
-  // 7. 수집 소스 설정 목록 조회 모의 핸들러 (GET /api/sources)
+  // 4. GET /api/sources, GET /api/stats
   // ==========================================================================
   http.get('*/api/sources', async () => {
     await delay(20);
@@ -455,116 +359,20 @@ export const newsHandlers = [
   }),
 
   // ==========================================================================
-  // 8. 누적 통계 조회 모의 핸들러 (GET /api/stats)
+  // 5. POST /api/schedule/trigger — 기본은 started (수집 중 응답은 mockTriggerResponses 로 server.use)
   // ==========================================================================
+  http.post('*/api/schedule/trigger', async () => {
+    await delay(15);
+    return HttpResponse.json(mockTriggerResponses.started, { status: 200 });
+  }),
+
   http.get('*/api/stats', async () => {
     await delay(15);
     return HttpResponse.json(mockStatsResponse, { status: 200 });
   }),
-
-  // ==========================================================================
-  // 9. 뉴스 전체 삭제 모의 핸들러 (DELETE /api/news/all)
-  // ==========================================================================
-  http.delete('*/api/news/all', async () => {
-    await delay(30);
-    return HttpResponse.json<GenericSuccessResponse>(
-      { status: 'success', message: '모든 뉴스 데이터가 성공적으로 삭제되었습니다.', deleted_count: mockNewsItems.length },
-      { status: 200 }
-    );
-  }),
 ];
 
-/**
- * EventSource 표준 호환 전용 AI 챗 SSE GET 스트리밍 모의 핸들러 (GET /api/chat/stream)
- */
-export const sseGetChatStreamHandler = http.get('*/api/chat/stream', async ({ request }) => {
-  const url = new URL(request.url);
-  const question = url.searchParams.get('question') || url.searchParams.get('q') || '';
-  const scope = (url.searchParams.get('scope') as 'scoped' | 'global') || 'global';
-  const sourceId = url.searchParams.get('source_id') ? Number(url.searchParams.get('source_id')) : undefined;
-
-  const rawModel = (url.searchParams.get('model') as ChatModel) || undefined;
-  const rawTier = (url.searchParams.get('model_tier') as ModelTier) || undefined;
-  const { tier: selectedTier, model: selectedModel, latencyMs, usage: tokenUsage } =
-    resolveModelAndUsage(rawModel, rawTier);
-
-  if (!question || question.trim().length === 0) {
-    return HttpResponse.json<ErrorResponse>(
-      { error_code: 'ERR_CHAT_PAYLOAD_EMPTY', message: '질문 본문이 비어있습니다.' },
-      { status: 400 }
-    );
-  }
-
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      await delay(20);
-      controller.enqueue(
-        encoder.encode(
-          `event: status\ndata: ${JSON.stringify({
-            step: 'extracting_source',
-            label: '🌐 원본 소스 본문 추출 중 (SSE GET)...',
-            timestamp: new Date().toISOString(),
-            progress: 25,
-          })}\n\n`
-        )
-      );
-
-      await delay(30);
-      controller.enqueue(
-        encoder.encode(
-          `event: sources\ndata: ${JSON.stringify({
-            sources: [mockSupplementarySources[0]],
-            is_relaxed: false,
-            primary_count: 0,
-            supplementary_count: 1,
-          })}\n\n`
-        )
-      );
-
-      await delay(25);
-      controller.enqueue(
-        encoder.encode(
-          `event: token\ndata: ${JSON.stringify({
-            token: `## 1. 핵심 아키텍처 및 동작 원리\n\n질문: "${question}"에 대한 SSE 스트리밍 응답입니다.`,
-          })}\n\n`
-        )
-      );
-
-      await delay(30);
-      controller.enqueue(
-        encoder.encode(
-          `event: done\ndata: ${JSON.stringify({
-            done: true,
-            session_id: '7b6a48f2-2973-45f6-8c46-9562725b821a',
-            model: selectedModel,
-            model_tier: selectedTier,
-            sources_count: 1,
-            latency_ms: latencyMs,
-            usage: tokenUsage,
-          })}\n\n`
-        )
-      );
-      controller.close();
-    },
-  });
-
-  return new HttpResponse(stream, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache',
-    },
-  });
-});
-
-/**
- * 프론트엔드 전체 통합 MSW 핸들러 배열 (All Mock Handlers SSOT)
- */
-export const handlers = [
-  sseGetChatStreamHandler,
-  ...chatHandlers,
-  ...newsHandlers,
-];
+/** 전체 MSW 핸들러 */
+export const handlers = [...chatHandlers, ...newsHandlers, ...opsHandlers];
 
 export default handlers;

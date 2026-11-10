@@ -31,6 +31,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { ThemeMenu } from '@/components/ui/ThemeMenu';
 import CommandPalette from '@/components/CommandPalette';
 import ResetConfirmDialog from '@/components/ResetConfirmDialog';
+import { getClientEnv } from '@/lib/env';
 
 export const RSS_FEED_URL = '/api/news/feed/rss.xml';
 
@@ -63,7 +64,7 @@ export default function Header({ onRefresh, onOpenSchedule, onOpenMcp, onOpenWeb
   const [showPalette, setShowPalette] = useState(false);
   const [showReset, setShowReset] = useState(false);
   // 빌드 때 next.config.ts 의 env 로 들어온다 (패키지 버전). 값이 없으면 배지를 그리지 않는다.
-  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION;
+  const appVersion = getClientEnv().NEXT_PUBLIC_APP_VERSION;
 
   // ⌘K / Ctrl+K: 팔레트가 맨 위면 닫고, 다른 레이어가 열려 있으면 무시, 아니면 연다. 입력창 안에서도 동작.
   useHotkey(

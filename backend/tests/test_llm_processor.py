@@ -30,18 +30,6 @@ def test_generate_synthesis():
     assert "why_it_matters" in synth
     assert "Model Context Protocol" in synth["tech_stack"]
 
-@pytest.mark.asyncio
-async def test_answer_question():
-    ans = await llm_processor.answer_question(
-        item_title="SWE-bench Evaluation Harness",
-        item_summary="Benchmark for software engineering agents in Docker sandboxes.",
-        category="harness",
-        tech_stack=["SWE-bench", "Docker Sandbox"],
-        question="이걸 어떻게 우리 프로젝트에 적용할 수 있나요?"
-    )
-    assert isinstance(ans, str)
-    assert len(ans) > 20
-
 # ==============================================================================
 # ADR-008: Pluggable LLM Providers & Mock Fallback Chain (Zero 503 Guarantee)
 # ==============================================================================
@@ -91,11 +79,12 @@ async def test_unit_test_mock_provider():
     assert "핵심 아키텍처" in text
     assert model == "TestMockLLM"
 
-def test_check_provider_available_production_gate():
+@pytest.mark.asyncio
+async def test_check_provider_available_production_gate():
     """Verify check_provider_available raises 503 when no live provider configured (no fake mock fallback)."""
     with patch.object(llm_processor, "has_live_provider", return_value=False):
         with pytest.raises(LLMProviderUnavailableException):
-            llm_processor.check_provider_available()
+            await llm_processor.check_provider_available()
 
 @pytest.mark.asyncio
 async def test_generate_live_answer_fails_fast_without_mock_fallback():
@@ -142,30 +131,11 @@ async def test_chat_stream_end_to_end_with_mocked_llm():
         assert "claude-sonnet-5-5" in body
 
 @pytest.mark.asyncio
-async def test_chat_query_end_to_end_with_mocked_llm():
-    """Verify POST /api/chat/query completes 200 OK with mocked live LLM answer."""
-    from httpx import AsyncClient, ASGITransport
-    from app.main import app
-
-    async def mock_answer(prompt, **kwargs):
-        return "## 1. 핵심 아키텍처\nMCP 프로토콜 분석 보고서", "claude-sonnet-5-5"
-
-    with patch.object(llm_processor, "generate_live_answer", side_effect=mock_answer):
-        payload = {
-            "question": "MCP 프로토콜 도구 연동",
-            "scope": "global"
-        }
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-            res = await ac.post("/api/chat/query", json=payload)
-        assert res.status_code == 200
-        data = res.json()
-        assert "answer" in data
-        assert "## 1. 핵심 아키텍처" in data["answer"]
-        assert data["model"] == "claude-sonnet-5-5"
-
-@pytest.mark.asyncio
-async def test_scoped_chat_stream_end_to_end_with_mocked_llm():
+async def test_scoped_chat_stream_end_to_end_with_mocked_llm(fake_llm):
     """Verify Scoped mode POST /api/chat/stream emits all 4 status events + sources + Claude tokens + done."""
+    import llm_fakes
+    # 스크래퍼가 여는 기사 페이지는 흉내가 답한다 (실제 네트워크로 나가지 않는다, TEST-03)
+    fake_llm.register_web("https://example.com/isolated-scoped-benchmark", text=llm_fakes.FAKE_ARTICLE_HTML)
     from httpx import AsyncClient, ASGITransport
     from app.main import app
     from app.database import AsyncSessionLocal

@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import CitationBadge from '@/components/chat/CitationBadge';
 import { mockArticles } from '@/mocks/fixtures/chat';
 import { SourceReference } from '@/types/chat';
@@ -39,14 +40,7 @@ describe('CitationBadge and CitationPopover Component', () => {
   });
 
   it('opens CitationPopover dialog on click or hover and displays source details', () => {
-    const handleOpenDetail = vi.fn();
-    render(
-      <CitationBadge
-        index={1}
-        source={mockSource}
-        onOpenSourceDetail={handleOpenDetail}
-      />
-    );
+    render(<CitationBadge index={1} source={mockSource} />);
 
     const badge = screen.getByRole('button', { name: /출처 1번/i });
     fireEvent.click(badge);
@@ -61,10 +55,82 @@ describe('CitationBadge and CitationPopover Component', () => {
     expect(externalLink).toHaveAttribute('href', mockSource.url);
     expect(externalLink).toHaveAttribute('target', '_blank');
 
-    // Detail button
-    const detailBtn = screen.getByRole('button', { name: /기사 상세|상세 보기/i });
-    fireEvent.click(detailBtn);
-    expect(handleOpenDetail).toHaveBeenCalledWith(101);
+  });
+
+  it('FE-13: 답변 문단 안의 배지가 연 팝오버는 문단(<p>) 밖 body 에 그려져 HTML 중첩 규칙을 지킨다', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <div data-testid="scroller" style={{ overflow: 'hidden' }}>
+        <p>
+          본문 <CitationBadge index={1} source={mockSource} />
+        </p>
+      </div>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /출처 1번/i }));
+
+    const dialog = screen.getByRole('dialog', { name: /출처 기사 상세 프리뷰/ });
+    expect(dialog.closest('p')).toBeNull();
+    expect(screen.getByTestId('scroller').contains(dialog)).toBe(false);
+    expect(dialog.parentElement).toBe(document.body);
+    expect(errorSpy.mock.calls.flat().join(' ')).not.toMatch(/cannot be a descendant of <p>|validateDOMNesting/);
+    errorSpy.mockRestore();
+  });
+
+  it('FE-13: body 로 옮긴 팝오버도 바깥을 누르면 닫히고, Escape 로 닫으면 배지로 포커스를 돌려준다', () => {
+    render(
+      <p>
+        본문 <CitationBadge index={1} source={mockSource} />
+      </p>
+    );
+    const badge = screen.getByRole('button', { name: /출처 1번/i });
+
+    fireEvent.click(badge);
+    fireEvent.pointerDown(screen.getByRole('dialog'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(badge);
+    screen.getByRole('button', { name: '팝오버 닫기' }).focus();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(badge).toHaveFocus();
+  });
+
+  it('FE-16: 팝오버 닫기 버튼은 공통 IconButton 이다 (접근 이름·title·아이콘 장식)', () => {
+    render(<CitationBadge index={1} source={mockSource} />);
+    fireEvent.click(screen.getByRole('button', { name: /출처 1번/i }));
+
+    const close = screen.getByRole('button', { name: '팝오버 닫기' });
+    expect(close).toHaveAttribute('title', '팝오버 닫기');
+    // IconButton 은 아이콘을 aria-hidden 감싸개(span) 안에 둔다
+    expect(close.querySelector(':scope > span[aria-hidden="true"] > svg')).not.toBeNull();
+    fireEvent.click(close);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('FE-37: 키보드로 연 인용 팝오버는 포커스를 안으로 옮기고 Tab 이 팝오버 안을 돌며, Escape 로 닫으면 배지로 돌려준다', async () => {
+    const user = userEvent.setup();
+    render(
+      <p>
+        <CitationBadge index={1} source={mockSource} /> 그리고 <CitationBadge index={2} source={{ ...mockSource, index: 2 }} />
+      </p>
+    );
+    const badge = screen.getByRole('button', { name: /출처 1번/i });
+    badge.focus();
+
+    await user.keyboard('{Enter}');
+    const dialog = screen.getByRole('dialog', { name: /출처 기사 상세 프리뷰/ });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    await user.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(screen.getByRole('button', { name: /출처 2번/i })).not.toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(badge).toHaveFocus();
   });
 
   it('closes CitationPopover when Escape key is pressed', () => {

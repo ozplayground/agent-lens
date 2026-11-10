@@ -10,7 +10,7 @@ AI 에이전트·하네스·MCP 기술 소식을 모아 요약하고, AI 챗 질
 - Docker 실행: `make docker-up` (healthy 까지 기다린다) / `make docker-down` / `make docker-logs` (따라가기, Ctrl-C 로 끝낸다) · 이미지: `make docker-build`
 - 수집: `make collect` (backend 가 떠 있으면 그 backend 에 수집시키고, 없으면 `backend/agentlens.db` 에 직접 수집한다. 외부 소스·LLM 을 실제로 호출한다)
 - 초기화: `make reset` (수집 데이터를 모두 지우고 재수집한다. 대상 `AGENTLENS_API_URL`, 기본 `http://localhost:8000`)
-- `make check` 의 pytest 는 LLM 호출을 흉내 내고 `config.json`·`sources.json` 은 임시 사본에 쓴다. 스크래퍼·Notion·SMTP 호출은 실제로 나간다 (`docs/qa-engineer/01_QA_TEST_PLAN.md`). 돌린 뒤 `git status` 로 추적 파일이 바뀌지 않았는지 확인한다.
+- `make check` 의 pytest 는 LLM·스크래퍼·Notion·SMTP 호출을 모두 흉내 내고(루프백 밖 외부 요청은 테스트를 실패시킨다), DB 는 실행마다 임시 폴더에, `config.json`·`sources.json` 은 임시 사본에 쓴다 (`docs/qa-engineer/01_QA_TEST_PLAN.md`). 돌린 뒤 `git status` 로 추적 파일이 바뀌지 않았는지 확인한다.
 
 ## 최우선 규칙
 1. **사용자의 직접 지시가 최우선이다.** 사용자가 지시한 작업은 원본·사본, 위험 여부와 상관없이 그대로 실행한다. 파이프라인·단계·게이트를 이유로 미루거나 사용자에게 떠넘기지 않는다. Claude Code 권한처럼 Claude 가 풀 수 없는 것에 막히면 사용자가 붙여 넣을 `!` 명령 한 줄과 그 명령이 하는 일 한 줄만 준다.

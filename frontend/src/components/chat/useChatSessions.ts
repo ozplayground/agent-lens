@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ChatSessionMeta,
-  ChatSessionSummary,
   ChatSessionDetail,
   ChatMessage,
   ScopeMode,
@@ -11,14 +10,58 @@ import {
   generateAutoTitle,
   summaryToSessionMeta,
   toChatFocusFilter,
-  fromChatFocusFilter,
   uiMessageToChatMessageItem,
-  chatMessageItemToUiMessage,
 } from '@/types/chat';
+import { deleteChatSession, fetchChatSessionDetail, fetchChatSessions, saveChatSession } from '@/lib/chatApi';
 
 const STORAGE_INDEX_KEY = 'agentlens_chat_sessions_index';
 const STORAGE_SESSION_PREFIX = 'agentlens_chat_session_';
 const MAX_SESSIONS = 30;
+
+/**
+ * 저장된 세션 목록을 읽는다. 배열이 아니거나 깨졌으면 빈 목록, id·제목이 문자열이 아닌 항목은 버린다 (FE-18).
+ * 다른 탭·수동 편집·이전 형식의 값으로 화면이 죽지 않게 한다.
+ */
+function readStoredIndex(): ChatSessionMeta[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_INDEX_KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (s): s is ChatSessionMeta =>
+        typeof s === 'object' && s !== null && typeof s.id === 'string' && typeof s.title === 'string'
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** 저장된 세션 상세. 객체에 문자열 id 와 메시지 배열이 없으면 null (FE-18). */
+function readStoredDetail(sessionId: string): ChatSessionDetail | null {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(`${STORAGE_SESSION_PREFIX}${sessionId}`) || 'null');
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'id' in parsed &&
+      typeof parsed.id === 'string' &&
+      'messages' in parsed &&
+      Array.isArray(parsed.messages)
+    ) {
+      return parsed as ChatSessionDetail;
+    }
+  } catch {}
+  return null;
+}
+
+/** 세션 상세 캐시 키를 모두 지운다 (FE-26). */
+function removeAllStoredDetails() {
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(STORAGE_SESSION_PREFIX)) keys.push(key);
+  }
+  keys.forEach((key) => localStorage.removeItem(key));
+}
 
 export interface UseChatSessionsReturn {
   sessions: ChatSessionMeta[];
@@ -42,16 +85,9 @@ export interface UseChatSessionsReturn {
 }
 
 export function useChatSessions(): UseChatSessionsReturn {
-  const [sessions, setSessions] = useState<ChatSessionMeta[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const cached = localStorage.getItem(STORAGE_INDEX_KEY);
-      if (cached) {
-        return JSON.parse(cached);
-      }
-    } catch {}
-    return [];
-  });
+  const [sessions, setSessions] = useState<ChatSessionMeta[]>(() =>
+    typeof window === 'undefined' ? [] : readStoredIndex()
+  );
 
   // 마운트하자마자 목록을 불러오므로 첫 상태는 로딩 중이다.
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -64,13 +100,8 @@ export function useChatSessions(): UseChatSessionsReturn {
   // 상태 초기화 없이 요청과 결과 반영만 한다 (마운트 시 바로 부른다).
   const loadSessions = useCallback((): Promise<void> => {
     // 상태 반영은 모두 응답 콜백 안에서 한다.
-    return fetch(`/api/chat/sessions?limit=${MAX_SESSIONS}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error(`세션 목록 조회 실패 (${res.status})`);
-        }
-
-        const summaries: ChatSessionSummary[] = await res.json();
+    return fetchChatSessions(MAX_SESSIONS)
+      .then((summaries) => {
         const metas = summaries.map(summaryToSessionMeta);
 
         if (isMountedRef.current) {
@@ -82,18 +113,13 @@ export function useChatSessions(): UseChatSessionsReturn {
       })
       .catch((err: unknown) => {
         if (isMountedRef.current) {
-          // Fall back to local storage if available
-          try {
-            const cached = localStorage.getItem(STORAGE_INDEX_KEY);
-            if (cached) {
-              setSessions(JSON.parse(cached));
-            } else {
-              setError(
-                err instanceof Error ? err.message : '세션 목록을 불러오지 못했습니다.'
-              );
-            }
-          } catch {
-            setError('세션 목록을 불러오지 못했습니다.');
+          // 저장된 목록이 있으면 그것으로 보이고, 없거나 깨졌으면 오류를 보인다.
+          const cached = readStoredIndex();
+          if (cached.length > 0) {
+            setSessions(cached);
+          } else {
+            setSessions([]);
+            setError(err instanceof Error ? err.message : '세션 목록을 불러오지 못했습니다.');
           }
         }
       })
@@ -123,34 +149,17 @@ export function useChatSessions(): UseChatSessionsReturn {
   // 2. Load Session Detail (with L1 Local Cache + L2 Server Fetch)
   const loadSessionDetail = useCallback(
     async (sessionId: string): Promise<ChatSessionDetail | null> => {
-      // Check L1 cache first
-      let cachedDetail: ChatSessionDetail | null = null;
+      // 서버 값이 먼저다. 서버에 없거나(404) 실패하면 저장된 상세를 쓴다.
       try {
-        const cachedStr = localStorage.getItem(`${STORAGE_SESSION_PREFIX}${sessionId}`);
-        if (cachedStr) {
-          cachedDetail = JSON.parse(cachedStr);
-        }
-      } catch {}
-
-      try {
-        const res = await fetch(`/api/chat/sessions/${sessionId}`);
-        if (res.ok) {
-          const detail: ChatSessionDetail = await res.json();
+        const detail = await fetchChatSessionDetail(sessionId);
+        if (detail) {
           try {
-            localStorage.setItem(
-              `${STORAGE_SESSION_PREFIX}${sessionId}`,
-              JSON.stringify(detail)
-            );
+            localStorage.setItem(`${STORAGE_SESSION_PREFIX}${sessionId}`, JSON.stringify(detail));
           } catch {}
           return detail;
-        } else if (res.status === 404) {
-          return cachedDetail;
         }
-      } catch {
-        return cachedDetail;
-      }
-
-      return cachedDetail;
+      } catch {}
+      return readStoredDetail(sessionId);
     },
     []
   );
@@ -204,10 +213,15 @@ export function useChatSessions(): UseChatSessionsReturn {
 
         // Prepend and enforce FIFO limit of 30
         const filtered = prev.filter((s) => s.id !== sessionId);
-        const nextList = [updatedMeta, ...filtered].slice(0, MAX_SESSIONS);
+        const ordered = [updatedMeta, ...filtered];
+        const nextList = ordered.slice(0, MAX_SESSIONS);
 
         try {
           localStorage.setItem(STORAGE_INDEX_KEY, JSON.stringify(nextList));
+          // 목록에서 밀려난 세션의 상세 캐시도 지운다 (FE-26)
+          for (const evicted of ordered.slice(MAX_SESSIONS)) {
+            localStorage.removeItem(`${STORAGE_SESSION_PREFIX}${evicted.id}`);
+          }
 
           // Also save detailed session
           const detailToSave: ChatSessionDetail = {
@@ -230,18 +244,15 @@ export function useChatSessions(): UseChatSessionsReturn {
       });
 
       // Background sync to server API
+      // 서버 저장이 실패해도 로컬 저장으로 이어 쓴다 (다음 성공 때 서버가 따라온다).
       try {
-        await fetch('/api/chat/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: sessionId,
-            title: resolvedTitle,
-            scope_mode: scopeMode,
-            active_source_id: activeSourceId || null,
-            active_filters: focusFilters ? toChatFocusFilter(focusFilters) : null,
-            messages: messages.map((m) => uiMessageToChatMessageItem(m, sessionId)),
-          }),
+        await saveChatSession({
+          id: sessionId,
+          title: resolvedTitle,
+          scope_mode: scopeMode,
+          active_source_id: activeSourceId || null,
+          active_filters: focusFilters ? toChatFocusFilter(focusFilters) : null,
+          messages: messages.map((m) => uiMessageToChatMessageItem(m, sessionId)),
         });
       } catch {}
     },
@@ -262,12 +273,7 @@ export function useChatSessions(): UseChatSessionsReturn {
 
     // 2. Server API deletion
     try {
-      const res = await fetch(`/api/chat/sessions/${sessionId}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) {
-        throw new Error(`대화 삭제 실패 (${res.status})`);
-      }
+      await deleteChatSession(sessionId);
     } catch (err: unknown) {
       // Re-fetch on failure to sync
       fetchSessions();
@@ -279,6 +285,7 @@ export function useChatSessions(): UseChatSessionsReturn {
     setSessions([]);
     try {
       localStorage.removeItem(STORAGE_INDEX_KEY);
+      removeAllStoredDetails();
     } catch {}
   }, []);
 

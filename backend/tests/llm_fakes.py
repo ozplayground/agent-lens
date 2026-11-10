@@ -8,6 +8,9 @@ openai SDK 는 `httpx2` 의 전송을 쓰므로 `httpx2` 가 있으면 같은 �
   포트 11434 인 모든 호스트, `register_ollama` 로 등록한 주소.
 - 흉내가 등록되지 않은 LLM 호스트 요청은 실제로 보내지 않고 `ConnectError` 를 내며
   `unmocked` 목록에 남긴다 (가드).
+- LLM 이 아닌 외부 호스트(스크래퍼·Notion·웹훅·피드 탐침 대상)는 `register_web` 으로 등록한 URL 만
+  흉내가 답한다. 등록되지 않은 외부 요청은 보내지 않고 `ConnectError` 를 내며 `blocked_external` 에 남긴다
+  (네트워크 가드, TEST-03). 루프백(127.0.0.1, localhost, ::1)은 실제 전송으로 넘긴다.
 - `ASGITransport` 와 `httpx.AsyncClient.post`·`.stream` 을 직접 patch 하는 테스트는
   이 계층을 거치지 않는다.
 """
@@ -29,6 +32,7 @@ ANTHROPIC_HOST = "api.anthropic.com"
 OPENAI_HOST = "api.openai.com"
 GEMINI_HOST = "generativelanguage.googleapis.com"
 OLLAMA_DEFAULT_PORT = 11434
+LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1", "[::1]")
 
 # 흉내 고정 답 (한국어 마크다운, 중괄호 없음). 기존 단언에 맞춰 고르지 않는다.
 FAKE_CLAUDE_ANSWER = (
@@ -37,6 +41,42 @@ FAKE_CLAUDE_ANSWER = (
 )
 FAKE_OPENAI_ANSWER = "흉내 OpenAI 답변입니다. 실제 OpenAI API 는 호출하지 않았습니다."
 FAKE_OLLAMA_ANSWER = "흉내 Ollama 답변입니다. 실제 Ollama 서버는 호출하지 않았습니다."
+
+# 흉내 기사 페이지 (스크래퍼 본문 추출이 500자 이상을 얻는 HTML)
+FAKE_ARTICLE_TEXT = " ".join(
+    f"Paragraph {i}: this fake article explains the agent harness architecture, tool calling protocol, "
+    "and evaluation workflow in enough detail for the scraper to extract real body text."
+    for i in range(1, 9)
+)
+FAKE_ARTICLE_HTML = (
+    "<html><head><title>Fake Article</title></head><body><article><h1>Fake Article</h1>"
+    + "".join(f"<p>{part}.</p>" for part in FAKE_ARTICLE_TEXT.split(". "))
+    + "</article></body></html>"
+)
+
+# 흉내 Atom 피드 (feedparser 가 항목 2개를 읽는다)
+FAKE_ATOM_FEED = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Fake Releases</title>
+  <link href="https://github.com/example/repo/releases"/>
+  <updated>2026-11-01T00:00:00Z</updated>
+  <id>tag:github.com,2008:fake</id>
+  <entry>
+    <id>tag:github.com,2008:fake/1</id>
+    <title>v1.0.0 agent harness evaluation release</title>
+    <link href="https://github.com/example/repo/releases/tag/v1.0.0"/>
+    <updated>2026-11-01T00:00:00Z</updated>
+    <content type="html">Adds agent benchmark harness, MCP tool server and LLM evaluation sandbox.</content>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:fake/2</id>
+    <title>v0.9.0 MCP tool calling improvements</title>
+    <link href="https://github.com/example/repo/releases/tag/v0.9.0"/>
+    <updated>2026-10-20T00:00:00Z</updated>
+    <content type="html">Improves agent tool calling and model context protocol support.</content>
+  </entry>
+</feed>
+"""
 
 
 def _chunks(text: str, n: int = 3) -> List[str]:
@@ -74,10 +114,15 @@ class FakeLLM:
         # 흉내 Claude 스트림 끝 모양: stop_reason 값, 또는 첫 조각 뒤에 보낼 SSE error 이벤트의 error 객체
         self.claude_stream_stop_reason = "end_turn"
         self.claude_stream_error: Optional[Dict[str, Any]] = None
+        # 흉내 Claude 비스트림 응답의 stop_reason (N-05)
+        self.claude_message_stop_reason = "end_turn"
         self.openai_enabled = False
         self._ollama: Dict[Tuple[str, int], _OllamaServer] = {}
         self._requests: List[RecordedRequest] = []
         self.unmocked: List[str] = []
+        # 외부(LLM 아닌) 흉내: URL(쿼리 제외) → (status, text, content_type)
+        self._web: Dict[str, Tuple[int, str, str]] = {}
+        self.blocked_external: List[str] = []
 
     # ---- 등록 ----
     def register_claude(self) -> None:
@@ -88,6 +133,10 @@ class FakeLLM:
 
     def register_openai(self) -> None:
         self.openai_enabled = True
+
+    def register_web(self, url: str, status: int = 200, text: str = "", content_type: str = "text/html") -> None:
+        """LLM 이 아닌 외부 URL 의 흉내 응답을 등록한다 (메서드 무관, 쿼리 문자열은 보지 않는다)."""
+        self._web[_web_key(httpx.URL(url))] = (status, text, content_type)
 
     def register_ollama(self, base_url: str, state: str = "up", models: Optional[List[str]] = None) -> None:
         if state not in ("up", "down"):
@@ -112,6 +161,33 @@ class FakeLLM:
     def take_unmocked(self) -> List[str]:
         taken, self.unmocked = self.unmocked, []
         return taken
+
+    def assert_no_blocked_external(self) -> None:
+        if self.blocked_external:
+            raise AssertionError(
+                "흉내가 등록되지 않은 외부 네트워크 요청이 있었다 (network test guard, register_web 으로 흉내 낸다): "
+                + ", ".join(self.blocked_external)
+            )
+
+    def take_blocked_external(self) -> List[str]:
+        taken, self.blocked_external = self.blocked_external, []
+        return taken
+
+    # ---- 외부(LLM 아닌) 요청 ----
+    @staticmethod
+    def is_loopback(request: Any) -> bool:
+        return request.url.host in LOOPBACK_HOSTS
+
+    def handle_web(self, request: Any, mod: Any) -> Any:
+        desc = f"{request.method.upper()} {request.url}"
+        found = self._web.get(_web_key(request.url))
+        if found is None:
+            self.blocked_external.append(desc)
+            raise mod.ConnectError(f"blocked by network test guard: {desc}", request=request)
+        status, text, content_type = found
+        self._requests.append(RecordedRequest("web", request.method.upper(), str(request.url),
+                                              request.url.path, None, None))
+        return self._text(mod, request, status, text, content_type)
 
     # ---- 분류 ----
     def _classify(self, url: Any) -> Optional[str]:
@@ -227,7 +303,7 @@ class FakeLLM:
             "role": "assistant",
             "content": [{"type": "text", "text": FAKE_CLAUDE_ANSWER}],
             "model": model,
-            "stop_reason": "end_turn",
+            "stop_reason": self.claude_message_stop_reason,
             "usage": {"input_tokens": 10, "output_tokens": 20},
         })
 
@@ -285,6 +361,10 @@ class FakeLLM:
         return self._json(mod, request, 404, {"error": "not found"})
 
 
+def _web_key(url: Any) -> str:
+    return f"{url.scheme}://{url.host}{url.path}"
+
+
 def _transport_targets() -> List[Any]:
     """감쌀 전송 계층을 가진 모듈 목록 (httpx, 있으면 httpx2)."""
     mods = [httpx]
@@ -303,13 +383,17 @@ def install(fake: FakeLLM, monkeypatch: Any) -> None:
             if fake.is_llm_request(request):
                 request.read()
                 return fake.handle(request, _mod)
-            return _orig(self, request)
+            if fake.is_loopback(request):
+                return _orig(self, request)
+            return fake.handle_web(request, _mod)
 
         async def handle_async_request(self, request, _orig=orig_async, _mod=mod):
             if fake.is_llm_request(request):
                 await request.aread()
                 return fake.handle(request, _mod)
-            return await _orig(self, request)
+            if fake.is_loopback(request):
+                return await _orig(self, request)
+            return fake.handle_web(request, _mod)
 
         monkeypatch.setattr(mod.HTTPTransport, "handle_request", handle_request)
         monkeypatch.setattr(mod.AsyncHTTPTransport, "handle_async_request", handle_async_request)

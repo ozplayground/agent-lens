@@ -23,7 +23,6 @@ interface NewsCardProps {
   onSelect: (item: NewsItem) => void;
   isBookmarked: boolean;
   onToggleBookmark: (item: NewsItem, e: React.MouseEvent) => void;
-  onHandoverToChat?: (item: NewsItem, e?: React.MouseEvent) => void;
   isFocused?: boolean;
   /** 목록에서 시사점이 반복되는 카드면 `true`: 요약이 있으면 시사점 대신 요약을 보인다 (R18). */
   preferSummary?: boolean;
@@ -82,7 +81,6 @@ export default function NewsCard({
   onSelect,
   isBookmarked,
   onToggleBookmark,
-  onHandoverToChat,
   isFocused = false,
   preferSummary = false,
 }: NewsCardProps) {
@@ -138,11 +136,11 @@ export default function NewsCard({
         />
       </div>
 
-      {/* ② 제목: 2줄 높이 고정 */}
+      {/* ② 제목: 2줄 높이 고정. 버튼도 같은 높이(48px)라 한 줄 제목에서도 터치 영역이 44px 이상이다 (ui-audit R6). */}
       <h3 className="line-clamp-2 min-h-12 text-base leading-6 font-semibold text-fg">
         <button
           type="button"
-          className="line-clamp-2 w-full cursor-pointer rounded text-left break-keep [overflow-wrap:anywhere] transition-colors duration-150 ease-standard hover:text-accent"
+          className="line-clamp-2 min-h-12 w-full cursor-pointer rounded text-left break-keep [overflow-wrap:anywhere] transition-colors duration-150 ease-standard hover:text-accent"
         >
           {item.title}
         </button>
@@ -215,11 +213,7 @@ export default function NewsCard({
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          <HandoverCtaButton
-            item={item}
-            variant="card-compact"
-            onHandoverComplete={onHandoverToChat ? () => onHandoverToChat(item) : undefined}
-          />
+          <HandoverCtaButton item={item} variant="card-compact" />
           <a
             href={item.url}
             target="_blank"

@@ -1,7 +1,8 @@
+import math
 import re
 import hashlib
 from datetime import datetime, timezone
-from typing import Tuple, List, Dict, Set
+from typing import Tuple, List, Dict, Set, Optional
 
 CATEGORIES = {
     "harness": "Agent Harness & Evaluation",
@@ -136,12 +137,14 @@ def classify_and_tag(title: str, summary: str = "") -> Tuple[str, List[str], flo
 
     return best_cat, sorted(list(found_tags)), max_score
 
-def calculate_hotness(raw_score: int, comments: int, published_at: datetime) -> float:
-    now = datetime.now(timezone.utc)
+def calculate_hotness(raw_score: int, comments: int, published_at: datetime, now: Optional[datetime] = None) -> float:
+    """인기 점수 0~100. now 는 기준 시각(기본 지금). 마이그레이션은 수집 시각으로 다시 계산한다."""
+    now = now or datetime.now(timezone.utc)
     if published_at.tzinfo is None:
         published_at = published_at.replace(tzinfo=timezone.utc)
 
     hours_ago = max(0.1, (now - published_at).total_seconds() / 3600.0)
     engagement = (raw_score or 0) + (comments or 0) * 2.5 + 5.0
     hotness = engagement / ((hours_ago + 2.0) ** 1.3)
-    return round(float(min(100.0, hotness * 8.0)), 2)
+    # 로그 척도: 시간당 참여도가 10배 늘 때 20점 오른다. 100 은 hotness 10^5 (BUG-18, 예전 `× 8` 은 대부분 100 으로 포화)
+    return round(float(min(100.0, 20.0 * math.log10(1.0 + hotness))), 2)

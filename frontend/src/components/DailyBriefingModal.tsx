@@ -95,7 +95,7 @@ export default function DailyBriefingModal({
     setNotionResult(null);
     try {
       const res = await exportBriefingToNotion();
-      setNotionResult({ success: true, url: res.url, message: 'Notion 페이지 생성 완료!' });
+      setNotionResult({ success: true, url: res.url ?? undefined, message: 'Notion 페이지 생성 완료!' });
     } catch (e: unknown) {
       setNotionResult({ success: false, message: errorMessage(e, 'Notion 페이지 생성 실패') });
     } finally {

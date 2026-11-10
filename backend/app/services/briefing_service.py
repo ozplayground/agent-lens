@@ -7,39 +7,56 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionLocal
 from app.models.news import NewsItem
 from app.config import settings
+from app.services.news_service import split_csv
 
 logger = logging.getLogger("agentlens.briefing")
 
+# 분야 이름은 프론트 긴 라벨(frontend/src/lib/labels.ts CATEGORY_LABELS)과 같다.
+# icon 은 그림 이모지가 아니라 아이콘 키(분야 id)다. 그리기는 프론트(lucide)가 한다.
 CATEGORY_DEFS = [
     {
         "id": "harness",
         "name": "하네스 & 벤치마크",
-        "icon": "🎯",
+        "icon": "harness",
         "description": "에이전트 평가, 샌드박스, SWE-bench 계열 테스트베드",
         "default_summary": "에이전트 평가 신뢰도 향상을 위한 샌드박스 격리 런타임 및 회귀 테스트베드 소식이 주목받고 있습니다."
     },
     {
         "id": "mcp_plugins_skills",
-        "name": "MCP & 도구·스킬 생태계",
-        "icon": "🔌",
+        "name": "MCP & 생태계",
+        "icon": "mcp_plugins_skills",
         "description": "Model Context Protocol, 도구 호출, 스킬 플러그인",
         "default_summary": "Model Context Protocol(MCP) 기반 표준 도구 연동과 오픈소스 서버 생태계 확장이 가속화되고 있습니다."
     },
     {
         "id": "agent_tech",
-        "name": "에이전트 아키텍처 & 런타임",
-        "icon": "🤖",
+        "name": "에이전트 아키텍처",
+        "icon": "agent_tech",
         "description": "멀티에이전트 오케스트레이션, 장기 기억, 스캐폴딩",
         "default_summary": "단일 LLM 호출을 넘어 지속적 상태 영속성과 메모리를 갖춘 복합 멀티에이전트 아키텍처가 발전하고 있습니다."
     },
     {
         "id": "ai_news",
-        "name": "최신 AI 소식 & 프론티어 모델",
-        "icon": "💡",
+        "name": "최신 AI 동향",
+        "icon": "ai_news",
         "description": "최신 추론 모델, 연구 논문, 프론티어 LLM 브레이크스루",
         "default_summary": "프론티어 모델 발표와 최신 추론(Reasoning) 기법 연구 및 오픈소스 모델 릴리즈가 활발히 이어지고 있습니다."
     }
 ]
+
+def clip_words(text: str, limit: int) -> str:
+    """한도 안이면 그대로, 넘으면 단어(공백) 경계에서 잘라 `…` 를 붙인다.
+
+    한도 안에 공백이 없으면(한 단어가 한도보다 길면) 한도에서 자른다.
+    """
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    if text[limit] != " " and " " in head:
+        head = head.rsplit(" ", 1)[0]
+    return head.rstrip() + "…"
+
 
 class BriefingService:
     async def _fetch_category_items(self, session: AsyncSession, category_id: str, limit: int = 3) -> List[NewsItem]:
@@ -83,9 +100,9 @@ class BriefingService:
 
         top = items[0]
         if top.why_it_matters:
-            return f"'{top.title[:45]}...' 등이 주목받으며, {top.why_it_matters}"
+            return f"'{clip_words(top.title, 45)}' 등이 주목받으며, {top.why_it_matters}"
         elif top.summary:
-            return f"'{top.title[:45]}...' 관련 소식으로, {top.summary[:90]}..."
+            return f"'{clip_words(top.title, 45)}' 관련 소식으로, {clip_words(top.summary, 90)}"
         return cat_def["default_summary"]
 
     def _generate_headline(self, categories_data: List[Dict[str, Any]]) -> str:
@@ -96,10 +113,7 @@ class BriefingService:
 
         if all_items:
             first = all_items[0]
-            title = first.get("title", "")
-            cat_name = first.get("category_name", "")
-            if len(title) > 40:
-                title = title[:40] + "..."
+            title = clip_words(first.get("title", ""), 40)
             return f"{title} 및 분야별 핵심 에이전트 기술 동향"
         return "SWE-bench 평가 하네스 및 Model Context Protocol 생태계 동향"
 
@@ -129,7 +143,7 @@ class BriefingService:
                         "source": it.source,
                         "why_it_matters": it.why_it_matters or "",
                         "summary": it.summary or "",
-                        "tags": [t.strip() for t in it.tags.split(",") if t.strip()] if isinstance(it.tags, str) else (it.tags or []),
+                        "tags": split_csv(it.tags) if isinstance(it.tags, str) else (it.tags or []),
                         "category": it.category,
                         "category_name": cat["name"],
                         "hotness_score": it.hotness_score
@@ -160,38 +174,38 @@ class BriefingService:
 
             # Build comprehensive Markdown Report
             lines = [
-                f"# 🌅 오늘의 AI 브리핑",
+                f"# {settings.BRIEFING_TITLE}",
                 f"**발행 일자**: {today_str} (UTC) | **핵심 토픽**: {headline}\n",
-                "## 📌 오늘의 핵심 테이크어웨이 (Overview)",
+                "## 오늘의 핵심 테이크어웨이 (Overview)",
                 overview_text,
                 ""
             ]
 
             for cat in categories_result:
-                lines.append(f"## {cat['icon']} {cat['name']}")
+                lines.append(f"## {cat['name']}")
                 if cat["summary"]:
-                    lines.append(f"> 💡 **동향 요약**: {cat['summary']}\n")
+                    lines.append(f"> **동향 요약**: {cat['summary']}\n")
 
                 if cat["items"]:
                     for it in cat["items"]:
                         src_label = f" `[{it['source']}]`" if it["source"] else ""
                         lines.append(f"- **[{it['title']}]({it['url']})**{src_label}")
                         if it["why_it_matters"]:
-                            lines.append(f"  *↳ 💡 시사점: {it['why_it_matters']}*")
+                            lines.append(f"  *↳ 시사점: {it['why_it_matters']}*")
                         elif it["summary"]:
-                            lines.append(f"  *↳ 📝 요약: {it['summary']}*")
+                            lines.append(f"  *↳ 요약: {it['summary']}*")
                 else:
                     lines.append("- 현재 해당 카테고리의 새로운 주요 소식을 수집 분석 중입니다.")
                 lines.append("")
 
-            lines.append("## ✅ 오늘의 추천 Action Items")
+            lines.append("## 오늘의 추천 Action Items")
             for idx, act in enumerate(action_items, 1):
                 lines.append(f"{idx}. {act}")
 
             markdown_report = "\n".join(lines)
 
             briefing_payload = {
-                "title": "오늘의 AI 브리핑",
+                "title": settings.BRIEFING_TITLE,
                 "date": today_str,
                 "headline": headline,
                 "overview": overview_text,
@@ -240,7 +254,7 @@ class BriefingService:
         try:
             from app.services.webhook_service import webhook_service
             webhook_payload = {
-                "title": f"🌅 오늘의 AI 브리핑 ({briefing_payload['date']})",
+                "title": f"{settings.BRIEFING_TITLE} ({briefing_payload['date']})",
                 "executive_summary": f"{briefing_payload['headline']}\n\n{briefing_payload['overview']}",
                 "date": briefing_payload["date"],
                 "top_highlights": [
@@ -249,9 +263,11 @@ class BriefingService:
                     for item in cat.get("items", [])[:1]
                 ]
             }
-            if settings.SLACK_WEBHOOK_URL:
+            # webhooks.auto_dispatch_daily_briefing 이 false 면 자동 웹훅 발송을 끈다 (CFG-02)
+            auto_webhook = settings.get_custom_json_value("webhooks", "auto_dispatch_daily_briefing", True)
+            if auto_webhook and settings.SLACK_WEBHOOK_URL:
                 await webhook_service.dispatch_briefing(settings.SLACK_WEBHOOK_URL, webhook_payload)
-            if settings.DISCORD_WEBHOOK_URL:
+            if auto_webhook and settings.DISCORD_WEBHOOK_URL:
                 await webhook_service.dispatch_briefing(settings.DISCORD_WEBHOOK_URL, webhook_payload)
         except Exception as e:
             logger.error(f"[Briefing] Webhook auto-dispatch exception: {e}")

@@ -63,10 +63,11 @@ class Stub:
     trigger 전 progress 는 `initial`, trigger 뒤에는 `sequence` 를 차례로 내주고 마지막 것을 되풀이한다.
     """
 
-    def __init__(self, initial, sequence, trigger_status="started"):
+    def __init__(self, initial, sequence, trigger_status="started", trigger_extra=None):
         self.initial = initial
         self.sequence = list(sequence)
         self.trigger_status = trigger_status
+        self.trigger_extra = trigger_extra or {}
         self.triggered = False
         self.index = 0
         self.paths = []
@@ -113,7 +114,7 @@ def stub_server():
                 if self.path == "/api/schedule/trigger":
                     with stub.lock:
                         stub.triggered = True
-                    self._send(200, {"status": stub.trigger_status, "message": "test"})
+                    self._send(200, {"status": stub.trigger_status, "message": "test", **stub.trigger_extra})
                 else:
                     self._send(404, {"detail": "Not Found"})
 
@@ -232,3 +233,41 @@ def test_api_mode_without_backend(mod, monkeypatch, capsys):
     assert code == 1, out
     assert "backend 가 없다" in out.err
     assert collect.await_count == 0
+
+
+# (N-12) 다른 프로세스가 수집 잠금을 쥐어 trigger 가 already_running + other_process → 기다리지 않고 1
+def test_api_mode_other_process_running_exits_without_waiting(mod, stub_server, capsys):
+    stub = stub_server(Stub(
+        initial=progress(False, OLD_TIME, "대기 중"),
+        sequence=[progress(False, OLD_TIME, "대기 중")],
+        trigger_status="already_running",
+        trigger_extra={"other_process": True,
+                       "message": "다른 프로세스(MCP 서버·make collect)가 같은 DB 에 수집 중입니다."},
+    ))
+    code, elapsed = run_main(mod, {"AGENTLENS_API_URL": stub.url, "COLLECT_MODE": "api", "COLLECT_TIMEOUT": "20"})
+    out = capsys.readouterr()
+
+    assert code == 1, out
+    assert elapsed < 5, elapsed
+    assert "다른 프로세스" in out.err
+    assert not any(p == "GET /api/schedule/progress" for p in stub.paths[stub.paths.index("POST /api/schedule/trigger"):])
+    assert_no_reset(stub)
+
+
+# 직접 모드 + backend 가 떠 있음 → 경고가 지금 동작(같은 DB 면 잠금으로 막힘)을 말하고,
+# 잠금을 못 쥐면 already_running 으로 1
+def test_direct_mode_with_backend_up_reports_lock(mod, stub_server, monkeypatch, capsys):
+    from app.collectors.manager import collector_manager
+
+    stub = stub_server(Stub(initial=progress(False, OLD_TIME, "대기 중"), sequence=[]))
+    monkeypatch.setattr("app.database.ensure_db_schema", AsyncMock(return_value=None))
+    monkeypatch.setattr(collector_manager, "collect_all", AsyncMock(return_value={
+        "status": "already_running", "message": "다른 프로세스가 같은 DB 에 수집 중입니다."}))
+
+    code, _ = run_main(mod, {"AGENTLENS_API_URL": stub.url, "COLLECT_MODE": "direct"})
+    out = capsys.readouterr()
+
+    assert code == 1, out
+    assert "동시에 수집할 수 있다" not in out.out
+    assert "잠금" in out.out
+    assert "already_running" in out.err and "다른 프로세스" in out.err

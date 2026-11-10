@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeAll, afterEach, afterAll, vi } from 'vitest';
-import { server } from '@/mocks/server';
+import { server, unhandledRequests, recordUnhandledRequest } from '@/mocks/server';
 
 if (typeof window !== 'undefined') {
   window.HTMLElement.prototype.scrollIntoView = function () {};
@@ -67,6 +67,17 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '',
 }));
 
-beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
-afterEach(() => server.resetHandlers());
+/**
+ * 목 없는 요청은 실제 네트워크(개발 서버 등)로 내보내지 않는다.
+ * MSW 'error' 처리로 그 요청을 실패시키고, 이 테스트도 afterEach 에서 실패시킨다
+ * (앱 코드가 fetch 오류를 잡아 삼켜도 드러나게).
+ */
+beforeAll(() => server.listen({ onUnhandledRequest: recordUnhandledRequest }));
+afterEach(() => {
+  server.resetHandlers();
+  if (unhandledRequests.length > 0) {
+    const list = unhandledRequests.splice(0).join(', ');
+    throw new Error(`MSW 목이 없는 요청: ${list}. src/mocks 에 핸들러를 넣거나 테스트에서 server.use 로 정하세요.`);
+  }
+});
 afterAll(() => server.close());

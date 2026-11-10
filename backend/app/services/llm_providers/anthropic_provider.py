@@ -1,6 +1,5 @@
 import os
 import json
-import re
 import logging
 from typing import AsyncGenerator, Tuple, Optional, Any, Dict, List
 import httpx
@@ -27,7 +26,7 @@ class AnthropicOverloadedException(Exception):
 
 
 class AnthropicStreamError(Exception):
-    """Raised when an Anthropic SSE stream sends an `error` event or ends truncated (stop_reason max_tokens)."""
+    """Raised when an Anthropic SSE stream sends an `error` event, or a stream/non-stream answer ends truncated (stop_reason max_tokens)."""
     pass
 
 
@@ -143,12 +142,6 @@ class AnthropicLLMProvider(BaseLLMProvider):
 
     def __init__(self, api_key: Optional[str] = None):
         self._explicit_key = api_key
-        self.last_usage: Dict[str, Any] = {
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cache_read_input_tokens": None,
-            "cache_creation_input_tokens": None,
-        }
 
     @property
     def provider_name(self) -> str:
@@ -185,15 +178,14 @@ class AnthropicLLMProvider(BaseLLMProvider):
             }
         ]
 
-    def _extract_usage(self, raw_usage: Dict[str, Any]) -> Dict[str, Any]:
-        extracted = {
+    @staticmethod
+    def _extract_usage(raw_usage: Dict[str, Any]) -> Dict[str, Any]:
+        return {
             "input_tokens": int(raw_usage.get("input_tokens", 0)),
             "output_tokens": int(raw_usage.get("output_tokens", 0)),
             "cache_read_input_tokens": raw_usage.get("cache_read_input_tokens"),
             "cache_creation_input_tokens": raw_usage.get("cache_creation_input_tokens"),
         }
-        self.last_usage = extracted
-        return extracted
 
     def _check_error_status(self, status_code: int, error_text: str):
         if status_code == 401:
@@ -241,6 +233,9 @@ class AnthropicLLMProvider(BaseLLMProvider):
                 self._check_error_status(resp.status_code, resp.text)
 
             data = resp.json()
+            if data.get("stop_reason") == "max_tokens":
+                # 잘린 답을 성공으로 넘기지 않는다 (N-05). 호출자는 다음 공급자·폴백으로 간다
+                raise AnthropicStreamError("Anthropic 답이 max_tokens 에서 잘렸습니다 (비스트림).")
             content_blocks = data.get("content", [])
             text_parts = [b.get("text", "") for b in content_blocks if b.get("type") == "text"]
             full_text = "".join(text_parts).strip()
@@ -255,9 +250,13 @@ class AnthropicLLMProvider(BaseLLMProvider):
         system_blocks: Optional[List[Dict[str, Any]]] = None,
         max_tokens: int = 4096,
         temperature: Optional[float] = None,
+        usage_out: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> AsyncGenerator[Tuple[str, str], None]:
-        """Yields (token_text, model_identifier) chunks via SSE streaming."""
+        """Yields (token_text, model_identifier) chunks via SSE streaming.
+
+        usage_out 을 주면 스트림이 끝난 뒤 이 스트림의 토큰 사용량을 채운다 (인스턴스 상태를 쓰지 않는다, BUG-09).
+        """
         if not self.is_available():
             raise AnthropicKeyMissingException("Anthropic API 키가 설정되지 않았습니다.")
 
@@ -329,88 +328,7 @@ class AnthropicLLMProvider(BaseLLMProvider):
                     except json.JSONDecodeError:
                         continue
 
-        self.last_usage = self._extract_usage(accumulated_usage)
+        if usage_out is not None:
+            usage_out.update(self._extract_usage(accumulated_usage))
         if stop_reason == "max_tokens":
             raise AnthropicStreamError("Anthropic 답이 max_tokens 에서 잘렸습니다 (stop_reason=max_tokens).")
-
-    async def generate_structured_summary(
-        self,
-        title: str,
-        summary: str,
-        source: str = "web",
-        full_content: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Executes dedicated Claude Sonnet 5.5 ingestion analysis with 2,500 token Prompt Caching (ADR-011).
-        Reduces input token cost by up to 90% via ephemeral prompt cache hits.
-        """
-        system_blocks = self.build_cached_system_block(SONNET_SYSTEM_PROMPT_CACHED)
-        user_prompt = (
-            f"Analyze the following technical article for AgentLens:\n\n"
-            f"[Article Metadata]\n"
-            f"- Title: {title}\n"
-            f"- Source: {source}\n"
-            f"- Abstract/Summary: {summary}\n"
-        )
-        if full_content:
-            user_prompt += f"- Extracted Clean Text:\n{full_content[:4000]}\n"
-
-        text, model, usage = await self.generate_text_with_usage(
-            prompt=user_prompt,
-            model=getattr(settings, "ANTHROPIC_COLLECTION_MODEL", None) or "claude-sonnet-5-5",
-            system_blocks=system_blocks,
-            max_tokens=1500,
-        )
-
-        cleaned = re.sub(r'^```(?:json)?\s*', '', text.strip(), flags=re.IGNORECASE)
-        cleaned = re.sub(r'\s*```$', '', cleaned.strip())
-        m = re.search(r'\{.*\}', cleaned, re.DOTALL)
-        if m:
-            data = json.loads(m.group(0))
-            data["usage"] = usage
-            data["evaluated_by"] = model
-            return data
-
-        return {
-            "is_relevant_to_ai_agent": True,
-            "category": "ai_news",
-            "relevance_score": 7.0,
-            "quality_score": 6.5,
-            "is_worthwhile": True,
-            "is_high_signal": False,
-            "why_it_matters": summary[:200] if summary else title,
-            "evaluated_by": model,
-            "usage": usage,
-        }
-
-
-SONNET_SYSTEM_PROMPT_CACHED = (
-    "You are a Senior Staff Architect and Principal Technical Curator at AgentLens.\n"
-    "AgentLens is a high-signal intelligence platform focused strictly on autonomous AI agents, "
-    "engineering harnesses, benchmarks (SWE-bench, GAIA, WebArena), Model Context Protocol (MCP), "
-    "tool calling, and frontier reasoning models.\n\n"
-    "### Evaluation Rubric & Categories:\n"
-    "1. 'harness': Agent harnesses, regression suites, Docker sandboxes, evaluation protocols, SWE-bench.\n"
-    "2. 'mcp_plugins_skills': FastMCP, JSON-RPC MCP servers/clients, tool calling, function calling interfaces.\n"
-    "3. 'agent_tech': Multi-agent architectures (LangGraph, CrewAI, AutoGen), coding agents, browser-use.\n"
-    "4. 'ai_news': Frontier LLM breakthroughs, reasoning foundations, prompt caching, distillation, quantization.\n\n"
-    "### Quality Scoring Guidelines:\n"
-    "- Score < 5.0: Non-AI topics, generic software development, marketing spam (rejected: is_worthwhile=false).\n"
-    "- 5.0 <= Score < 7.8: Valid AI news or tool updates with standard utility.\n"
-    "- Score >= 7.8: High-signal architectural breakthroughs, deep benchmarks, production post-mortems ('⭐️ Must Read').\n\n"
-    "### Output Requirements:\n"
-    "Respond with STRICT JSON format only (no markdown enclosing, raw JSON object):\n"
-    "{\n"
-    '  "is_relevant_to_ai_agent": boolean,\n'
-    '  "category": "harness" | "mcp_plugins_skills" | "agent_tech" | "ai_news" | "irrelevant",\n'
-    '  "relevance_score": float (0.0 to 10.0),\n'
-    '  "quality_score": float (0.0 to 10.0),\n'
-    '  "is_worthwhile": boolean,\n'
-    '  "is_high_signal": boolean,\n'
-    '  "rejection_reason": string or null,\n'
-    '  "why_it_matters": string (>= 150 Korean characters explaining architectural implications),\n'
-    '  "tldr_bullets": [string, string, string],\n'
-    '  "tech_stack": [string]\n'
-    "}"
-)
-

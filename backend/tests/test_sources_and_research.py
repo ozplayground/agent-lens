@@ -41,19 +41,14 @@ def test_sources_toggle_and_crud():
     assert len(rem) == 0
 
 @pytest.mark.asyncio
-async def test_source_researcher_discover():
-    res = await source_researcher.discover_sources(query="harness", limit=5)
-    assert res["total_found"] > 0
-    assert len(res["candidates"]) > 0
-    c = res["candidates"][0]
-    assert "feed_url" in c
-    assert c["relevance_score"] >= 7.0
-
-@pytest.mark.asyncio
-async def test_source_researcher_inspect_url():
+async def test_source_researcher_inspect_url(fake_llm):
+    import llm_fakes
+    fake_llm.register_web("https://github.com/princeton-nlp/SWE-bench/releases.atom",
+                          text=llm_fakes.FAKE_ATOM_FEED, content_type="application/atom+xml")
     res = await source_researcher.inspect_url("https://github.com/princeton-nlp/SWE-bench")
     assert res.get("status") == "found"
-    assert "swe-bench" in res.get("feed_url", "").lower()
+    assert res["feed_url"] == "https://github.com/princeton-nlp/SWE-bench/releases.atom"
+    assert len(res["recent_posts"]) == 2
 
 @pytest.mark.asyncio
 async def test_sources_and_research_api_endpoints():
@@ -66,25 +61,4 @@ async def test_sources_and_research_api_endpoints():
         assert "stats" in data
         assert data["stats"]["total_rss"] >= 10
 
-        # 2. POST /api/research/discover
-        disc_res = await ac.post("/api/research/discover", json={"query": "agent", "limit": 4})
-        assert disc_res.status_code == 200
-        disc_data = disc_res.json()
-        assert "candidates" in disc_data
-
-        # 3. POST /api/research/register-candidate
-        candidate_payload = {
-            "name": "Test Autogen Blog",
-            "feed_url": "https://example.org/autogen_test/feed.xml",
-            "site_url": "https://example.org/autogen_test",
-            "category_hint": "agent_tech",
-            "country": "GLOBAL",
-            "description": "Candidate registered via API"
-        }
-        reg_res = await ac.post("/api/research/register-candidate", json=candidate_payload)
-        assert reg_res.status_code == 200
-        reg_data = reg_res.json()
-        assert reg_data["status"] == "success"
-
-        # Cleanup created test feed
-        sources_service.delete_source("rss", "test_autogen_blog")
+        # discover·register-candidate 는 v0.4.2 에서 지웠다 (CC-02). 회귀는 tests/test_b_sources_research.py

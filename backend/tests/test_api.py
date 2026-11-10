@@ -30,13 +30,6 @@ async def test_stats():
     assert res.status_code == 200
 
 @pytest.mark.asyncio
-async def test_mcp_info():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.get("/api/mcp/info")
-    assert res.status_code == 200
-    assert len(res.json()["tools"]) >= 4
-
-@pytest.mark.asyncio
 async def test_rss():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         res = await ac.get("/api/news/feed/rss.xml")
@@ -51,18 +44,6 @@ async def test_daily_briefing_endpoint():
     data = res.json()
     assert "headline" in data
     assert "markdown_report" in data
-
-@pytest.mark.asyncio
-async def test_ask_ai_endpoint():
-    # First fetch a news item
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        news_res = await ac.get("/api/news?size=1")
-        items = news_res.json()["items"]
-        if items:
-            item_id = items[0]["id"]
-            ask_res = await ac.post(f"/api/news/{item_id}/ask", json={"question": "핵심 기술이 뭐야?"})
-            assert ask_res.status_code == 200
-            assert "answer" in ask_res.json()
 
 @pytest.mark.asyncio
 async def test_ask_ai_stream_endpoint():

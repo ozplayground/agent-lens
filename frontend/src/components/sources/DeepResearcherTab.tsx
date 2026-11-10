@@ -107,8 +107,8 @@ export default function DeepResearcherTab({
               자율 소스 발굴·선별
             </h3>
             <p className="max-w-2xl text-sm leading-relaxed text-fg-muted">
-              글로벌 및 국내 AI 에이전트 소스(GitHub, ArXiv, 기술 블로그)를 자율 탐색하고, LLM 기술 적합도 분석을
-              거쳐 고품질 피드를 자동으로 수집 대상에 편입합니다.
+              글로벌 및 국내 AI 에이전트 소스(GitHub, ArXiv, 기술 블로그)를 자율 탐색하고, 키워드 규칙 기반 적합도 점수가
+              기준을 넘는 피드를 자동으로 수집 대상에 편입합니다.
             </p>
           </div>
           <Button
@@ -132,7 +132,7 @@ export default function DeepResearcherTab({
             <span className="font-normal" suppressHydrationWarning>
               {researchStatus?.last_run_time
                 ? new Date(researchStatus.last_run_time).toLocaleTimeString()
-                : '최근 가동됨'}
+                : '실행 기록 없음'}
             </span>
           </Metric>
           <Metric label="정기 스케줄">
@@ -189,7 +189,7 @@ export default function DeepResearcherTab({
                     </div>
                   </div>
                   <p className="rounded-lg bg-surface-muted p-2.5 text-sm leading-relaxed text-fg">
-                    <span className="mr-1.5 font-medium text-fg-muted">AI 판정 사유:</span>
+                    <span className="mr-1.5 font-medium text-fg-muted">판정 사유:</span>
                     {log.verdict_reason}
                   </p>
                 </li>

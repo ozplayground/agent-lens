@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useRef, type RefObject } from 'react';
-import { ExternalLink, BookOpen, X, Globe, FileText } from 'lucide-react';
+import { ExternalLink, X, Globe, FileText } from 'lucide-react';
 import { SourceReference } from '@/types/chat';
 import { Popover } from '@/components/ui/Popover';
 import { Badge } from '@/components/ui/Badge';
+import { IconButton } from '@/components/ui/IconButton';
 import { categoryShortLabel } from '@/lib/labels';
 
 export interface CitationPopoverProps {
@@ -13,8 +14,6 @@ export interface CitationPopoverProps {
   onClose: () => void;
   /** 팝오버를 연 인용 배지. 바깥 클릭 판정에서 빼고, Escape 로 닫으면 포커스를 돌려준다. */
   anchorRef?: RefObject<HTMLElement | null>;
-  anchorRect?: DOMRect | null;
-  onOpenSourceDetail?: (sourceId: number) => void;
 }
 
 export default function CitationPopover({
@@ -22,7 +21,6 @@ export default function CitationPopover({
   isOpen,
   onClose,
   anchorRef,
-  onOpenSourceDetail,
 }: CitationPopoverProps) {
   const fallbackAnchorRef = useRef<HTMLElement | null>(null);
   const isSupplementary = source.type === 'supplementary' || String(source.index).startsWith('S');
@@ -42,6 +40,11 @@ export default function CitationPopover({
       label={isSupplementary ? '보충 검색 출처 상세 프리뷰' : '출처 기사 상세 프리뷰'}
       role="dialog"
       side="top"
+      // 답변 문단(<p>) 안에서 열리므로 body 로 옮겨 그린다. 스크롤 상자에 잘리지도 않는다 (FE-13).
+      portal
+      // 포털은 문서 끝에 붙어 Tab 순서가 배지 다음이 아니다. 열 때 안으로 포커스를 옮기고,
+      // Escape·닫기는 Popover 가 배지로 돌려준다 (FE-37).
+      focusOnOpen
       className="w-80 p-3 text-left font-sans not-italic whitespace-normal"
     >
       {/* Top row: badge & close button */}
@@ -61,15 +64,7 @@ export default function CitationPopover({
 
           {!isSupplementary && source.category && <Badge>{categoryShortLabel(source.category)}</Badge>}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="팝오버 닫기"
-          title="팝오버 닫기"
-          className="-mt-1 -mr-1 inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg md:size-8"
-        >
-          <X aria-hidden="true" className="size-4" />
-        </button>
+        <IconButton label="팝오버 닫기" icon={<X />} size="sm" onClick={onClose} className="-mt-1 -mr-1" />
       </div>
 
       {/* Title */}
@@ -83,23 +78,8 @@ export default function CitationPopover({
       )}
 
       {/* Actions */}
+      {/* 워크스페이스가 연결하지 않던 '기사 상세' 버튼은 지웠다 (FE-08). 원문 링크는 오른쪽 끝 그대로 */}
       <div className="flex items-center justify-between gap-2 border-t border-border pt-1 text-sm">
-        {!isSupplementary && onOpenSourceDetail && source.id ? (
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onOpenSourceDetail(source.id!);
-            }}
-            className="inline-flex h-11 items-center gap-1.5 rounded-lg px-2 font-medium text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg md:h-8"
-          >
-            <BookOpen aria-hidden="true" className="size-4" />
-            <span>기사 상세</span>
-          </button>
-        ) : (
-          <span />
-        )}
-
         <a
           href={source.url}
           target="_blank"

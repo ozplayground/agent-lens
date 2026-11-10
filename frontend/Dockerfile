@@ -8,7 +8,8 @@ FROM node:20-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# pnpm 버전은 package.json 의 packageManager 와 같게 고정한다 (바꿀 때 둘 다 고친다)
+RUN corepack enable && corepack prepare pnpm@12.3.4 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
 RUN pnpm install --frozen-lockfile
@@ -18,7 +19,7 @@ FROM node:20-alpine AS builder
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@12.3.4 --activate
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

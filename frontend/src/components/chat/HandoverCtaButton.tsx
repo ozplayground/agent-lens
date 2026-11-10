@@ -9,7 +9,7 @@ import { cn } from '@/lib/cn';
 
 export interface HandoverCtaButtonProps {
   item: NewsItem;
-  variant?: 'card-compact' | 'modal-banner' | 'modal-icon';
+  variant?: 'card-compact' | 'modal-banner';
   draftQuestion?: string;
   className?: string;
   onHandoverComplete?: () => void;

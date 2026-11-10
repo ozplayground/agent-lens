@@ -2,7 +2,7 @@
 
 - **작성일자**: 2026-11-09
 - **Updated**: 2026-11-09
-- **기준**: v0.4.1 (main)
+- **기준**: v0.4.2 (main)
 - **작성자**: 백엔드 TDD 엔지니어 (`backend-tdd-engineer`)
 - **문서 버전**: v1.0 (as-built: 지금 `backend/tests/` 를 그대로 기록한다)
 - **상태**: Draft
@@ -281,6 +281,322 @@ null_or_36           assert 'c4c40fec-6c3…' == 'uuuu…'   (서버 UUID 로 �
 - 없음.
 - **회귀 검증**: `make check` 종료 0: backend `244 passed in 14.11s`, frontend `Test Files 54 passed (54)`·`Tests 664 passed (664)`, eslint `✖ 40 problems (0 errors, 40 warnings)`, `tsc --noEmit` 출력 없음. 실행 뒤 `git status` 에 `config.json`·`sources.json` 변경 없음.
 - **남은 것**: 클라이언트 id 가 다른 세션에 이미 있으면 이 세션에는 저장되지 않는다 (계약 8.1절이 오류로 다루지 않기로 함). `done` 이 저장 시간만큼 늦어진다 (측정하지 않음).
+
+### [Cycle v0.4.2-A] v0.4.2 사이클 — A 조 (LLM·챗·기사 Ask AI 권장 결함)
+
+근거: `docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md` (BUG-09·10·13·14·16 중 챗 진행 라벨·17, CFG-04, PERF-01, PERF-05 LLM·챗 쪽, ARCH-05, TEST-06, CC-02 중 4건, N-01·03·05·06·07), `docs/qa-engineer/02_QA_TEST_REPORT.md` 3절 (D-16·17·19·35·36·43·47·49·51·52), 계약 CT-004. 오류 형식은 오케스트레이터 결정(`{"error_code","message","details"}`, 검증 실패 400 `ERR_INVALID_PAYLOAD`)을 따랐다. 커밋하지 않았다.
+
+#### 1. RED Phase
+- **작성된 테스트**: 새 파일 `backend/tests/test_v042_llm_chat.py` (42개, parametrize 펼친 수. 아래 첫 실행은 41개, CC-02 후속 1개는 B 조가 `POST /api/news/{id}/ask` 를 지운 뒤 더했다). 공용 흉내에 `llm_fakes.FakeLLM.claude_message_stop_reason`(비스트림 `stop_reason`, 기본 `end_turn`)을 더했다.
+- **실행**: `run_backend_tdd.py --phase red -- tests/test_v042_llm_chat.py` → `36 failed, 5 passed`, `✅ RED 확인`. 통과 5개는 지금 동작을 지키는 회귀 단언이다 (`test_bug09_done_usage_comes_from_this_stream`, `test_bug14_explicit_model_wins_over_tier`, `test_bug17_synthesis_keeps_llm_insight`, `test_ct004_session_post_skips_ids_already_saved_by_stream`, `test_session_post_bad_uuid_keeps_invalid_uuid_code`). 처음 실행은 `MessageIdConflictException` 을 모듈 머리에서 import 해 수집 오류였으므로 테스트 안 import 로 바꿔 다시 Red 를 냈다. N-05 는 흉내에 비스트림 `stop_reason` 이 없어 엉뚱한 이유로 실패했으므로 흉내를 고친 뒤 `DID NOT RAISE AnthropicStreamError` 로 다시 확인했다.
+
+| 항목 | Red 테스트 | 실패 이유 (Red 출력 요지) | 바꾼 파일 |
+|---|---|---|---|
+| CC-02 / D-43 / N-03 | `test_cc02_chat_query_and_search_endpoints_are_removed`, `test_cc02_unused_services_are_removed` | `assert 500 in (404, 405)` (`/query` 가 살아 있음), `find_spec('app.services.agentic_search')` 가 None 아님 | `app/api/chat.py`, `app/services/chat_service.py`, `app/services/agentic_search.py`(삭제), `app/services/llm_providers/anthropic_provider.py`, `app/schemas/chat.py` |
+| CC-02 후속 | `test_cc02_non_stream_ask_helpers_are_removed` | `hasattr(llm_processor, 'answer_question_with_meta')` (B 조가 `/ask` 를 지운 뒤 호출처 없음). Red `1 failed` | `app/services/llm_processor.py` (`answer_question_with_meta`·`answer_question` 삭제) |
+| BUG-09 / D-16 | `test_bug09_done_usage_is_not_left_over_from_previous_request`, `test_bug09_no_shared_last_usage_attribute` | `assert {'input_tokens': 10, 'output_tokens': 20, …} is None` (앞 요청 사용량이 OpenAI 답의 `done.usage` 에 남음), `hasattr(llm_processor, 'last_usage')` | `app/services/llm_processor.py`, `app/services/llm_providers/anthropic_provider.py`, `app/services/chat_service.py` |
+| BUG-10 / D-17 | `test_bug10_fallback_evaluation_is_not_cached`, `test_bug10_reset_and_collect_clears_llm_caches` | `'heuristic_fallback' == 'claude-sonnet-5-5'` (폴백 거부가 캐시돼 LLM 재평가 안 함), `assert 2 == 0` (초기화 뒤 캐시 남음) | `app/services/llm_processor.py`, `app/api/schedule.py` |
+| PERF-05 | `test_perf05_llm_caches_are_bounded_and_expire`, `test_perf05_scraper_url_locks_do_not_accumulate` | `'dict' object has no attribute 'maxsize'`, 쓴 뒤에도 `_url_locks` 에 URL 이 남음 | `app/services/llm_processor.py` (`TTLCache`), `app/services/scraper.py` |
+| BUG-13 | `test_bug13_planner_failure_ends_stream_with_error_event`, `test_bug13_retriever_failure_ends_stream_with_error_event` | `RuntimeError: planner boom` / `fts boom` 이 스트림 밖으로 터짐 (`error` 이벤트 없음) | `app/services/chat_service.py` |
+| BUG-14 | `test_bug14_model_tier_only_request_uses_that_tier` | `'claude-sonnet-5-5' == 'claude-opus-5-5'` | `app/schemas/chat.py` |
+| BUG-16 / D-35 | `test_d35_chat_status_labels_have_no_pictographs` | 라벨 7개에 `🧠`·`🛠️`·`✍️`·`📄`·`📝` | `app/services/chat_service.py` |
+| D-36 | `test_d36_heuristic_answer_has_no_pictographs` ×5 | `### 🛠️`, `### ⚖️`, `### 💡`, `### 🔒`, `### 🤖` | `app/services/llm_processor.py` |
+| BUG-17 / D-19 | `test_bug17_synthesis_without_llm_insight_leaves_why_it_matters_empty` | 카테고리 고정 문장이 `why_it_matters` 로 나옴 | `app/services/llm_processor.py` |
+| CFG-04 | `test_cfg04_rule_based_paths_are_not_described_as_llm` | `/api/research/run-deep` 설명에 `LLM 4축 평가` | `app/api/research.py`, `app/services/llm_processor.py`(docstring), `app/services/deep_researcher.py`(docstring) |
+| PERF-01 | `test_perf01_ollama_probe_is_async_and_cached` | `iscoroutinefunction(_ollama_status)` False | `app/services/llm_processor.py`, `app/api/chat.py` |
+| ARCH-05 | `test_arch05_no_test_environment_detection`, `test_arch05_planner_runs_even_when_ci_env_is_set`, `test_arch05_planner_type_error_is_not_retried_without_model` | `is_test_environment` 있음, pytest 에서 planner 건너뜀(`await_count 0`) | `app/services/llm_processor.py`, `app/services/chat_service.py` |
+| TEST-06 | `test_test06_planner_json_none`, `…_action_search_line`, `…_action_none_line`, `…_invalid_json_falls_back_to_keywords` | planner 가 테스트에서 실행되지 않아 JSON·`ACTION:` 분기 미도달 (`'FastMCP 릴리즈' == 'FastMCP 서버'`, `0 == 1`) | 위와 같음, `backend/requirements.txt` (`pytest-cov>=5.0.0`) |
+| N-01 / D-47 | `test_n01_ask_stream_truncated_answer_ends_with_error_event`, `test_n01_ask_stream_error_event_after_tokens_ends_with_error_event` | 마지막 이벤트가 `token` (`error` 없음) | `app/services/llm_processor.py` |
+| N-05 / D-51 | `test_n05_non_stream_max_tokens_raises` | `DID NOT RAISE AnthropicStreamError` | `app/services/llm_providers/anthropic_provider.py` |
+| N-06 / D-52 | `test_n06_foreign_message_id_is_rejected_not_dropped` | `MessageIdConflictException` 없음 (다른 세션 id 를 조용히 건너뜀) | `app/services/chat_session_service.py`, `app/api/chat.py` |
+| N-07 | `test_n07_turn_messages_have_increasing_created_at` | user·assistant `created_at` 같음 | `app/services/chat_session_service.py` |
+| CT-004 | `test_ct004_session_post_keeps_model_tier_usage_and_created_at` | `assert None == 'opus'` (세션 POST 의 `model_tier`·`usage`·`created_at` 버림) | `app/services/chat_session_service.py` |
+| 세션 POST 오류 코드 | `test_session_post_payload_errors_are_invalid_payload` ×3 | `'ERR_SESSION_INVALID_UUID' == 'ERR_INVALID_PAYLOAD'` | `app/api/chat.py` |
+
+#### 2. GREEN Phase
+- **구현** (요지):
+  - 사용량: `generate_live_answer`·`stream_tokens`·`AnthropicLLMProvider.stream_chat` 이 `usage_out: dict` 를 받아 이 호출의 사용량만 채운다. `llm_processor.last_usage`·provider `last_usage` 삭제. 챗 `done.usage` 는 이 스트림 값, 없으면 `null`.
+  - 캐시: `llm_processor.TTLCache`(크기 한도 + 만료). 평가 5000개·24시간, 기사 질문 1000개·6시간, Ollama 판정 8개·30초. 휴리스틱 폴백 평가는 캐시하지 않는다. `clear_caches()` 를 `POST /api/schedule/reset-and-collect` 와 테스트 `llm_isolation` fixture 가 부른다. 스크래퍼 URL 잠금은 `weakref.WeakValueDictionary`.
+  - Ollama 판정 `_ollama_status` 를 `httpx.AsyncClient` 로 바꾸고 30초 기억. `has_live_provider`·`check_provider_available` 은 async.
+  - planner: `is_test_environment()` 삭제, 라이브 공급자가 있으면 항상 LLM planner. `except TypeError` 재호출 두 곳 삭제.
+  - 챗 스트림: planner 예외 → `event: error` `ERR_LLM_UPSTREAM_FAILED`(502, `step: thinking`), 검색 예외 → `ERR_RETRIEVER_INDEX_ERROR`(500, `step: tool_calling`). 예외 문자열은 싣지 않는다. 진행 라벨 이모지 삭제.
+  - `ChatStreamRequest.model` 기본값 `None` (명시 model > model_tier > 기본 모델).
+  - 기사 Ask AI 스트림: 토큰 뒤 실패·`max_tokens` → `{"event":"error","error_code":"ERR_LLM_STREAM_FAILED","message":"답변 생성이 중간에 끊겼습니다. 다시 시도해 주세요.","retryable":true}` 로 끝낸다. 휴리스틱 답 제목·인용 이모지 삭제.
+  - 비스트림 Anthropic `stop_reason == "max_tokens"` → `AnthropicStreamError` (다음 공급자 → 없으면 `LLMUpstreamException`, 수집 평가는 폴백).
+  - `generate_synthesis` 는 LLM 시사점이 없으면 `why_it_matters = ""`.
+  - 세션: 다른 세션 id → `MessageIdConflictException` (세션 POST 400 `ERR_INVALID_PAYLOAD`, `details.message_ids`; 스트림 서버 저장은 로그). 세션 POST 의 `model_tier`·`usage`·`created_at`(ISO, UTC 로) 저장. 서버 시각 배치는 메시지마다 1µs 씩 더한다. 세션 POST 의 JSON·필드 오류는 400 `ERR_INVALID_PAYLOAD`(`details` `[{loc,msg}]`), UUID 형식만 `ERR_SESSION_INVALID_UUID`, 저장 예외 메시지에서 예외 문자열을 뺐다.
+  - 삭제: `GET /api/chat/search`, `POST /api/chat/query`, `ChatService.search_corpus`·`query_chat`, `SearchQueryTooShortException`, `AgenticSearchService`(파일), `AnthropicLLMProvider.generate_structured_summary`·`SONNET_SYSTEM_PROMPT_CACHED`, 스키마 `ChatQueryRequest`·`ChatQueryResponse`·`ChatSearchResponse`.
+- **실행 결과**: `run_backend_tdd.py --phase green -- tests/test_v042_llm_chat.py` → `41 passed in 1.07s`, `✅ GREEN 확인`.
+
+#### 3. REFACTOR Phase
+- 챗 스트림 `error` 프레임 조립을 `ChatService._sse_error` 하나로 모았다 (토큰 단계·planner·검색). 세션 메시지 id 검사를 `ChatSessionService._existing_message_ids` 하나로 모아 세션 POST(변경 전)와 배치 저장이 같이 쓴다.
+- **의도한 동작 변경으로 고친 기존 테스트**:
+  - 삭제(지운 코드·엔드포인트만 검증): `test_agentic_workflow.py` 6개(`test_agentic_search_*` 5, `test_chat_query_scoped_with_agentic_workflow_success`), `test_chat.py` 13개(`/search`·`/query`), `test_anthropic_provider.py` 2개(`generate_structured_summary`, `/query` 3티어), `test_llm_processor.py` 1개(`/query` e2e), `test_llm_provider_isolation.py` 1개(`/query` 503 — 같은 경고 로그 단언을 `/stream` 503 테스트로 옮겼다), `test_llm_processor.py::test_answer_question`·`test_config_and_live_llm.py::test_llm_processor_fallback_and_answer`(지운 `answer_question`. 휴리스틱 답은 `/ask/stream` 테스트가 덮는다).
+  - 테스트 대역 시그니처(ARCH-05): `stream_tokens` 대역 7곳에 `**kwargs` (`test_agentic_workflow.py`, `test_chat.py`, `test_chat_sessions.py`). `has_live_provider()`·`check_provider_available()` 직접 호출 13곳에 `await` (`test_llm_provider_isolation.py`, `test_anthropic_provider.py`, `test_llm_processor.py`, `test_scoped_chat_grounding.py`). `is_test_environment` patch 1곳 삭제.
+  - `test_anthropic_config_and_schema_defaults`: `ChatStreamRequest().model` 기대값 `claude-sonnet-5-5` → `None` (BUG-14), 지운 스키마 단언 삭제, B 조가 지운 `ANTHROPIC_COLLECTION_MODEL` 단언 삭제 (유일한 사용처 `generate_structured_summary` 를 이번에 지웠다).
+  - `conftest.py` `llm_isolation` 이 테스트마다 `llm_processor.clear_caches()` 를 부른다.
+- **커버리지 (pytest-cov 7.1.0, 2026-11-10, 다른 조 작업 중 트리)**: `chat_service.py` 76%, `chat_session_service.py` 93%, `llm_processor.py` 84%, `anthropic_provider.py` 86%. 명령 `cd backend && ../.venv/bin/pytest --cov=app.services.chat_service --cov=app.services.llm_processor --cov=app.services.chat_session_service --cov=app.services.llm_providers.anthropic_provider --cov-report=term tests/`.
+
+#### 4. 2차 사이클 (재리뷰 11절·ADR 열린 질문)
+근거: `docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md` 11절(ARCH-03R, CFG-02R, N-08, N-09), `docs/fullstack-architect/01_ARCHITECTURE_ADR.md` Q4·Q11·Q13, system-designer 지적(스트림 `session_id` 형식). 새 파일 `backend/tests/test_v042_a_round2.py` (14개, parametrize 펼친 수).
+
+- **RED**: `run_backend_tdd.py --phase red -- tests/test_v042_a_round2.py` → 10개 모두 실패, 스트림 `session_id` 4개는 따로 `3 failed, 1 passed`(통과 1개는 UUID·생략을 지금처럼 받는 회귀 단언), `✅ RED 확인`. N-08 은 처음에 막힌 Anthropic 호출 기록을 단언 실패 뒤에 비워 teardown ERROR 가 겹쳤으므로, 기록을 첫 질문 바로 뒤에 비우도록 고쳐 단언 실패만 남게 했다.
+
+| 항목 | Red 테스트 | 실패 이유 (Red 출력 요지) | 바꾼 파일 |
+|---|---|---|---|
+| N-09 / Q11 | `test_n09_chat_session_times_have_utc_offset`, `test_n09_server_saved_turn_times_have_utc_offset`, `test_n09_chat_stream_source_times_have_utc_offset`, `test_n09_crawl_and_research_log_times_have_utc_offset` | `'$.created_at=2026-11-10T04:53:11.446203'` 등 오프셋 없는 시각, 전역 출처는 `'2026-11-10 04:53:11.438713'`(공백 구분), `last_crawl_time`·`recent_logs[]`·감사 로그 `created_at` | `app/time_utils.py`(새 `iso_utc`), `app/services/chat_session_service.py`, `app/services/chat_service.py`, `app/services/retriever.py`, `app/services/news_service.py`, `app/services/deep_researcher.py` |
+| ARCH-03R | `test_arch03r_failed_upsert_over_http_keeps_previous_title`, `test_arch03r_failed_delete_over_http_keeps_session` | HTTP 500 뒤 `'바뀐 제목' == '원래 제목'` 실패, 삭제 500 뒤 상세 `404` (flush 한 삭제가 커밋됨) | `app/api/chat.py` (세션 POST·DELETE 오류 분기에서 `await db.rollback()`) |
+| CFG-02R | `test_cfg02r_testing_setting_is_removed` | `'TESTING' in Settings.model_fields` | `app/config.py`, `tests/test_anthropic_provider.py`(`patch.object(settings, "TESTING", …)` 2곳 삭제) |
+| N-08 | `test_n08_heuristic_fallback_answer_is_not_cached` | 폴백 답 뒤 `len(_qa_cache) == 1` | `app/services/llm_processor.py` (`used_fallback` 이면 캐시 안 함) |
+| Q13 | `test_q13_runtime_openapi_shows_400_error_response_not_422` | `/api/news` 등 여러 경로에 `422`, `HTTPValidationError` 스키마 | `app/api/errors.py` (`_install_openapi`: 422 → 400 `ErrorResponse`, `HTTPValidationError`·`ValidationError` 제거) |
+| Q4 | `test_q4_unused_google_genai_dependency_is_removed` | `requirements.txt` 에 `google-genai` (import 0건) | `backend/requirements.txt` |
+| 스트림 `session_id` | `test_stream_rejects_non_uuid_session_id` ×3 | `assert 200 == 400` | `app/api/chat.py` (UUID 아니면 400 `ERR_SESSION_INVALID_UUID`) |
+
+- **GREEN**: `run_backend_tdd.py --phase green -- tests/test_v042_a_round2.py tests/test_code_review_fixes.py` → `41 passed in 1.80s`, `✅ GREEN 확인`.
+- **REFACTOR**: 시각 변환을 `iso_utc` 하나로 모았다 (곳곳의 `x.isoformat() if hasattr(...) else str(x)` 대체). 문자열(원시 SQL)·naive(UTC 로 봄)·aware 를 모두 받는다.
+- **의도한 동작 변경으로 고친 기존 테스트**: `test_code_review_fixes.py::test_ask_stream_failure_before_tokens_still_falls_back` 의 `len(_qa_cache) == 1` → `== 0` (N-08).
+- **결정**: 스트림 `session_id` 는 세션 POST 와 같은 규칙(`uuid.UUID()` 로 해석되지 않으면 400 `ERR_SESSION_INVALID_UUID`)으로 거절한다. 생략·`null` 은 지금처럼 서버가 UUID 를 만든다. 프론트는 UUID 만 보내므로 하위 호환 문제가 없다.
+- **응답 시각 형식이 바뀐 필드** (오프셋 없음 → `YYYY-MM-DDTHH:MM:SS[.ffffff]+00:00`): `GET /api/chat/sessions` `[].created_at`·`[].updated_at`; `GET·POST /api/chat/sessions/{id}` `created_at`·`updated_at`·`messages[].created_at`·`active_source.published_at`·`active_source.created_at`·`active_source.scraped_at`; `GET /api/chat/sources/{id}` `published_at`·`created_at`·`scraped_at`; SSE `sources` `sources[].published_at` (전역은 공백 구분 `YYYY-MM-DD HH:MM:SS` 에서 바뀜); `GET /api/schedule/status` `last_crawl_time`·`recent_logs[].started_at`·`recent_logs[].completed_at`; `GET /api/research/audit-logs` `logs[].created_at`. 뉴스 응답(`Z`)과 원래 aware 였던 값(`/api/stats` `last_updated`, `/api/schedule/status` `current_time`·`next_run`, SSE `status.timestamp` 등)은 그대로다.
+
+- **모델 정리 (계약 담당 지적)**: 같은 파일에 4개를 더했다.
+  - Red: `test_chat_status_step_has_only_sent_values`(`ChatStatusStep` 에 `observing`·`evaluating_sufficiency`·`agentic_searching` 가 남음), `test_trigger_uses_manual_collect_response_model`(`/api/schedule/trigger` 200 스키마가 `{}`) → `2 failed, 2 passed`, `✅ RED 확인`. 통과 2개(`test_chat_stream_status_events_fit_status_payload`, `test_trigger_response_bodies_are_unchanged`)는 실제 SSE `status` 가 모델에 맞고 trigger 응답 본문이 그대로인지 지키는 회귀 단언이다.
+  - Green: `backend/app/schemas/chat.py` `ChatStatusStep` 을 실제로 보내는 `thinking`·`tool_calling`·`extracting_source`·`synthesizing` 4값으로 줄였다. `backend/app/schemas/news.py` `ManualCollectResponse` 에 `status`(`started`|`already_running`)·`other_process`(선택)를 더하고 `backend/app/api/schedule.py` 의 `POST /api/schedule/trigger` 가 `response_model=ManualCollectResponse, response_model_exclude_unset=True` 로 쓴다 (started 응답에 `other_process` 가 붙지 않아 본문이 그대로다). `--phase green -- tests/test_v042_a_round2.py` → `18 passed in 1.02s`, `✅ GREEN 확인`. 전체 `410 passed in 11.91s`.
+
+### [Cycle v0.4.2-B] v0.4.2 사이클 — B 조 (수집·스케줄·설정·DB·소스·딥 리서치·뉴스 API)
+
+근거: `docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md` (BUG-11·12·18·19·20, CFG-01·02·03, CC-02 중 6건·CC-03·04·06·07, ARCH-02·04, ARCH-03 중 retriever, PERF-02·03·04·06, N-02·04), `docs/qa-engineer/02_QA_TEST_REPORT.md` 3절 (D-18·20·22·23·24·26·38·39·40·41(backend)·43·48·50·53). 오류는 C 조 `app/api/errors.py`(`ApiError`, `{"error_code","message","details"}`)로 낸다. 커밋하지 않았다.
+
+#### 1. RED Phase
+- **작성된 테스트**: 새 파일 4개, 59개 (parametrize 펼친 수).
+  - `backend/tests/test_b_collection.py` (21): 크롤 로그·잠금·배치·수집기 지표·UTC·PERF-03·진행 문구
+  - `backend/tests/test_b_config_schedule_db.py` (20): 스케줄·설정·DB 경로·설정 캐시·FTS·인덱스·마이그레이션
+  - `backend/tests/test_b_news_api.py` (4): RSS·시각 직렬화·스트림 헤더·엔드포인트 삭제
+  - `backend/tests/test_b_sources_research.py` (14): 저장 실패·id·입력 검증·유형 토글·엔드포인트 삭제·딥 리서치
+- **실행**: `run_backend_tdd.py --phase red -- tests/<파일>`. 파일별 결과와 Red 출력 요지는 아래 표에 적었다.
+  - `test_b_collection.py` 첫 실행: `15 failed, 1 passed`. 통과한 1개 `test_crawl_log_success_has_no_error_message` 는 회귀 단언이다.
+  - `test_b_config_schedule_db.py`: `17 failed, 3 passed`.
+  - `test_b_news_api.py`: `4 failed`.
+  - `test_b_sources_research.py`: `13 failed, 1 passed`. 통과한 1개 `payload3`(빈 이름)은 기존 400 을 지키는 단언이다.
+- **순서를 지키지 못한 것 (그대로 적는다)**:
+  - CFG-03·ARCH-04(DB 경로)·PERF-04(`load_json_config` 캐시)는 config.py 를 먼저 고친 뒤 테스트를 썼다. 그래서 Red 에서 3개가 통과했다. 옛 코드에는 `resolve_database_url`·`DEFAULT_DATABASE_URL` 이 없고, `json.load` 를 두 번 부르므로 이 테스트들은 옛 코드에서 실패한다.
+  - PERF-03 의 스크래퍼·딥 리서치·소스 리서치 부분과 CFG-02 `category_hint` 단언도 구현 뒤에 썼다. 대신 `asyncio.to_thread` 를 같은 스레드에서 바로 부르는 대역으로 바꿔 돌려 실패를 확인했다 (`4 failed`, `assert [True] == [False]`). 확인에 쓴 임시 파일은 지웠다.
+- 첫 실행에서 `test_mcp_server_creates_schema_before_tools` 는 엉뚱한 이유로 실패했다: venv 의 `mcp` 2.3.0 에 `mcp.server.fastmcp` 가 없어 import 오류. 이것은 새 결함이다. 운영에서도 `python -m app.mcp.server` 가 시작하지 못했다. 아래 표에 넣었다.
+
+| 항목 | Red 테스트 | 실패 이유 (Red 출력 요지) | 바꾼 파일 |
+|---|---|---|---|
+| BUG-11 / D-18 | `test_crawl_log_records_source_failure`, `test_crawl_log_records_batch_save_failure` | `'success' == 'partial_failure'`, 배치 예외가 `source_results` 에 없음 (`KeyError: 'error'`) | `app/collectors/manager.py` |
+| PERF-02 | `test_llm_evaluation_runs_outside_db_lock` | 평가 때 `_db_lock.locked()` 가 `[True]` | `app/collectors/manager.py` (`_prepare_row` 를 잠금 밖에서, 저장만 잠금 안 한 트랜잭션) |
+| ARCH-04 / D-40 | `test_collect_all_refuses_when_other_process_holds_lock`, `test_crawl_lock_path_sits_next_to_database` | `module 'app.collectors.manager' has no attribute 'crawl_lock_path'` | `app/collectors/manager.py` (DB 파일 옆 `*.crawl.lock` 에 `fcntl.flock` 비차단 잠금), `.gitignore` |
+| ARCH-04 / D-39 (MCP) | `test_mcp_server_creates_schema_before_tools` | `ModuleNotFoundError: mcp.server.fastmcp` (mcp 2.x) → 고친 뒤 `ensure_db_schema` 미호출 | `app/mcp/server.py` (mcp 2.x `MCPServer`, 1.x 면 `FastMCP`; 도구마다 처음 한 번 `ensure_db_schema`) |
+| ARCH-04 / D-39 (DB 경로) | `test_relative_sqlite_path_resolves_against_backend_dir` | 테스트를 구현 뒤에 썼다 (위 참고) | `app/config.py` (`BACKEND_DIR`, `DEFAULT_DATABASE_URL`, `resolve_database_url`) |
+| BUG-18 / D-20 (포화) | `test_hotness_does_not_saturate_for_popular_items` | `No module named 'app.services.categorizer'` → 옮긴 뒤 `100 < 100` | `app/services/categorizer.py` (`20·log10(1+h)`, 100 은 h=10^5) |
+| BUG-18 / D-20 (합성 지표) | `test_rss_items_have_no_synthetic_score_and_utc_dates`, `test_arxiv_items_have_no_synthetic_score`, `test_huggingface_uses_real_upvotes`, `test_github_monitored_repo_uses_real_metrics_or_is_skipped`, `test_seed_items_carry_no_synthetic_metrics` | `180 == 0`, `120 == 0`, `43 == 17`, `5000`·포크 600 합성, 시드 2400/3950 | `app/collectors/sources/rss.py`·`arxiv.py`·`huggingface.py`·`github.py`, `app/collectors/manager.py` |
+| BUG-18 / D-20 (시각) | `test_collector_stores_published_at_in_utc`, `test_news_feed_datetimes_carry_utc_offset` | `+09:00` 벽시계 그대로 저장(미래 시각), 응답 `'2026-11-10T04:16:48.845593'` 에 오프셋 없음 | `app/collectors/manager.py`, `app/collectors/sources/rss.py`, `app/schemas/news.py` |
+| ARCH-02 | `test_categorizer_lives_in_services_not_collectors` | `['source_researcher.py', 'llm_processor.py', 'deep_researcher.py']` 가 `app.collectors` import | `app/collectors/categorizer.py` → `app/services/categorizer.py` (git mv, import 5곳) |
+| PERF-03 | `test_rss_feed_is_parsed_off_the_event_loop`, `test_scraper_extraction_runs_off_the_event_loop`, `test_research_feed_parsing_runs_off_the_event_loop` ×2 | `assert [True] == [False]` (메인 스레드에서 파싱) | `rss.py`, `app/services/scraper.py` (`_extract_text` + `asyncio.to_thread`), `deep_researcher.py`, `source_researcher.py` |
+| CFG-01 / D-22, CC-07 | `test_scheduler_jobs_use_configured_hours_and_timezone`, `test_scheduler_disabled_does_not_start`, `test_next_run_fallback_uses_configured_timezone`, `test_crawl_job_log_shows_configured_hours` | `no attribute 'add_jobs'`, `RuntimeError: no running event loop`, `'Job' object has no attribute 'next_run_time'`, 로그 `0,6,12,18` 고정 | `app/scheduler.py` |
+| CFG-02 / D-23 | `test_dead_settings_are_removed`, `test_dead_config_json_keys_are_removed`, `test_scraper_uses_configured_timeout`, `test_chat_session_retention_uses_configured_limit`, `test_auto_dispatch_respects_webhook_flag`, `test_briefing_settings_response_has_no_dead_alert_flag`, `test_collection_evaluation_has_no_unused_category_hint` | `CORS_ORIGINS` 등 남음, `'crawler' in config.json`, `KeyError: 'timeout'`, `max_limit=30)` 고정, 플래그 false 인데 웹훅 1회 발송, 응답에 `auto_alert_high_signal` | `app/config.py`, `config.json`, `.env.example`, `backend/.env.example`, `docker-compose.yml`, `app/services/scraper.py`, `app/services/chat_session_service.py`, `app/services/briefing_service.py`, `app/api/briefing.py`, `app/services/llm_processor.py` |
+| CFG-03 / D-24 | `test_high_signal_threshold_has_single_default` | 구현 뒤에 썼다 | `app/config.py` (7.0), `app/services/llm_processor.py` (`getattr` 폴백 2곳 삭제) |
+| PERF-04 | `test_load_json_config_rereads_only_when_file_changes`, `test_sources_file_rereads_only_when_file_changes` | 앞 것은 구현 뒤에 썼다. 뒤 것은 `assert 3 == 1` (`json.load` 3회) | `app/config.py`, `app/services/sources_service.py` ((mtime_ns, size) 캐시 + 깊은 사본) |
+| CC-03 / PERF-06 / ARCH-03(retriever) | `test_retriever_does_not_create_fts_or_commit`, `test_ensure_db_schema_rebuilds_missing_fts_rows` | `hasattr(SqliteFtsRetriever, '_ensure_fts_table')`, `0 == 1` (색인 행이 빠져도 rebuild 안 함. 외부 콘텐츠 FTS 의 `count(*)` 는 `news_items` 를 세서 옛 비교가 늘 같았다) | `app/services/retriever.py`, `app/database.py` (`_ensure_fts`, `news_fts_docsize` 로 비교) |
+| CC-04 | `test_no_duplicate_indexes_after_schema` | `ix_chat_sessions_updated_at` 남음 | `app/models/chat_session.py`, `app/models/news.py`, `app/database.py` (`_m002_drop_duplicate_indexes`) |
+| CC-06 / D-38 | `test_schema_migrations_are_versioned`, `test_failed_migration_is_logged_and_raised` | `module 'app.database' has no attribute 'MIGRATIONS'` | `app/database.py` (`MIGRATIONS` + `PRAGMA user_version`, 실패는 로그 후 raise) |
+| CC-07 | `test_verdict_comment_lists_all_values` | 주석에 `ALREADY_MONITORED` 없음 | `app/models/news.py`, `app/services/llm_processor.py` (docstring) |
+| BUG-12 / D-26 | `test_rss_feed_survives_null_columns_and_escapes` | `'NoneType' object has no attribute 'replace'` | `app/api/news.py`, `app/config.py` (`PUBLIC_WEB_URL`) |
+| D-41 (backend) | `test_ask_stream_sets_no_transform_cache_header` | `'no-cache' == 'no-cache, no-transform'` | `app/api/news.py` |
+| CC-02 / D-43 (뉴스) | `test_unused_news_endpoints_are_removed` | `GET /api/news/1` 200 | `app/api/news.py`, `app/schemas/news.py` (`AskQuestionResponse` 삭제) |
+| CC-02 / D-43 (소스·리서치) | `test_unused_source_and_research_endpoints_are_removed` | `POST /api/sources/github` 200 | `app/api/sources.py`, `app/api/research.py`, `app/services/sources_service.py` (`add_github_repo`), `app/services/source_researcher.py` (`discover_sources`·`register_candidate`·`CURATED_ECOSYSTEM_CATALOG`) |
+| BUG-20 | `test_save_sources_raises_on_write_failure`, `test_add_rss_reports_write_failure_as_500`, `test_toggle_reports_write_failure_as_500`, `test_rss_ids_do_not_collide_for_non_ascii_names`, `test_rss_id_gets_suffix_when_slug_already_used`, `test_add_rss_validates_fields` ×4 | `no attribute 'SourcesWriteError'`, `200 == 500`, `'_____' != '_____'`, `'same_name' != 'same_name'`, `200 == 400` | `app/services/sources_service.py`, `app/api/sources.py` |
+| D-53 | `test_type_toggle_requires_all_and_unknown_id_is_404` | `PATCH /api/sources/github/owner/repo/toggle` 200 | `app/services/sources_service.py` (유형 토글은 `item_id == "all"` 일 때만) |
+| N-02 / D-48 | `test_deep_research_failure_is_recorded_in_summary`, `test_run_deep_keeps_task_reference_until_done` | `KeyError: 'status'`, `no attribute '_background_tasks'` | `app/services/deep_researcher.py`, `app/api/research.py` |
+| N-04 / D-50 | `test_deep_research_interleaves_seeds_and_skips_monitored` | 등록된 `https://news.hada.io/rss/news` 를 탐침, 시드 0개 | `app/services/deep_researcher.py` (등록 url·site_url 제외, 발굴·시드 번갈아) |
+| D-40 남은 것 (trigger·reset) | `test_trigger_reports_already_running_when_other_process_collects`, `test_reset_does_not_delete_while_other_process_collects`, `test_trigger_starts_when_lock_is_free`(회귀) | 다른 프로세스가 잠금을 쥐어도 `'started' == 'already_running'` (Red `2 failed, 1 passed`) | `app/collectors/manager.py` (`is_busy`, `acquire_crawl_lock`·`release_crawl_lock` 공개), `app/api/schedule.py` (trigger 는 `is_busy()`, reset 은 잠금을 쥔 채 삭제·커밋한 뒤 풀고 재수집) |
+| 진행 문구 (C 조 지적) | `test_progress_messages_have_no_pictographs` | `⚡️ … 수집 중...` 등 13개 | `app/collectors/manager.py` |
+
+#### 2. GREEN Phase
+- **구현** (요지):
+  - **크롤 로그**: 소스 예외와 배치 저장 예외(`_process_and_save_batch` 가 롤백 뒤 다시 올린다)를 `source_results[name].error` 에 남긴다. `crawl_logs.status` 는 실패 없음 `success`, 일부 실패 `partial_failure`, 소스 6개 모두 실패 `failed`. `error_message` 는 `{"소스 이름": "오류"}` JSON. 오류가 없으면 NULL.
+  - **잠금**: `collect_all` 이 `crawl_lock_path()` 에 비차단 `flock` 을 건다. 경로는 SQLite 파일 옆 `<db>.crawl.lock`, SQLite 가 아니면 `backend/agentlens.crawl.lock`. backend·MCP 서버·`make collect` 직접 모드가 같은 DB 를 쓰면 같은 잠금을 본다. 다른 프로세스가 쥐고 있으면 `{"status": "already_running", "message": "다른 프로세스가 같은 DB 에 수집 중입니다."}`. 프로세스가 죽으면 OS 가 잠금을 푼다.
+  - **DB 경로**: 기본값 `sqlite+aiosqlite:///<backend>/agentlens.db`. 상대 SQLite 경로(`config.json` `./agentlens.db`, Docker `./data/agentlens.db`)는 cwd 가 아니라 `backend/` 기준으로 풀어 절대 경로로 둔다. Docker 는 cwd 가 `/app`(= backend)라 결과가 같다.
+  - **지표·시각**: RSS·arXiv `raw_score` 0. HF 는 `paper.upvotes`. GitHub 감시 저장소 폴백은 `GET https://api.github.com/repos/{repo}` 의 별·포크·`pushed_at` 을 쓰고, 못 받으면 건너뛴다(`stars_hint` 를 읽지 않는다). 시드 2건 지표 0. 인기 점수 `min(100, 20·log10(1+hotness))`. 저장 시각은 UTC, 응답의 `published_at`·`created_at` 에 UTC 오프셋(`Z`)을 붙인다.
+  - **스케줄**: `add_jobs` 가 수집 `crawl_hours`·`timezone`, 브리핑 자동 발송 `briefing.auto_dispatch_hour`:15 (같은 timezone)으로 job 을 건다. 딥 리서치는 설정이 없어 03·15 UTC 고정. `scheduler.enabled`(`SCHEDULER_ENABLED`)가 false 면 스케줄러를 띄우지 않는다. 다음 실행 시각 폴백도 설정 timezone 으로 계산한다.
+  - **설정 정리**:
+    - 지운 설정: `CORS_ORIGINS`, `USER_AGENT`(`crawler.*`), `LLM_PROVIDER`(`llm.provider`), `ANTHROPIC_COLLECTION_MODEL`, `CHAT_HISTORY_MAX_TURNS`, `CHAT_HISTORY_MAX_TOKENS`, `AGENTIC_SEARCH_MAX_QUERIES`, `scheduler.auto_briefing_hour`(브리핑 job 은 하나라 `briefing.auto_dispatch_hour` 와 중복), `webhooks.auto_alert_high_signal`(하이시그널 알림 기능 없음).
+    - 연결한 설정: `CHAT_SESSION_MAX_LIMIT`, `SCRAPER_TIMEOUT_SECONDS`, `SCHEDULER_ENABLED`, `webhooks.auto_dispatch_daily_briefing`(false 면 자동 웹훅 발송 안 함).
+    - 새 설정: `PUBLIC_WEB_URL`(`app.public_web_url`, 기본 `http://localhost:3000`).
+    - 평가 함수의 쓰이지 않던 `category_hint` 인자를 지웠다. CORS 동작(전체 허용)은 그대로다.
+  - **스키마**: `ensure_db_schema` = `create_all` → `MIGRATIONS`(`_m001` 열 추가, `_m002` 중복 인덱스 DROP)를 `PRAGMA user_version` 이후 것만 한 트랜잭션으로 → `_ensure_fts`(FTS DDL 한 벌, 색인 행 수가 다르면 rebuild). 실패는 `agentlens.database` 로그 후 raise.
+  - **RSS 피드**: NULL summary → 빈 값, NULL published_at → created_at, category 이스케이프, channel link `settings.PUBLIC_WEB_URL`.
+  - **소스**: `save_sources` 실패 → `SourcesWriteError` → 라우터 `ApiError(500)` (`ERR_SERVER_INTERNAL`, "소스 파일(sources.json)을 저장하지 못했습니다…"). RSS id 는 이름 슬러그이고, 영숫자가 없거나 이미 쓰인 슬러그면 `_<sha1(url)[:8]>` 을 붙인다(기존 항목 id 는 그대로). `AddRssRequest` 는 `name` 1~200자, `url` `^https?://`, `category_hint` 4종, `country` `KR`·`GLOBAL`.
+  - **딥 리서치**: 예외는 `last_run_summary = {"status": "error", "error": <예외 클래스>, "completed_at"}` 로 남기고 다시 올린다. `run-deep` 태스크 참조는 `_background_tasks` 가 끝날 때까지 쥔다.
+- **실행 결과**: `run_backend_tdd.py --phase green -- tests/test_b_collection.py tests/test_b_config_schedule_db.py tests/test_b_news_api.py tests/test_b_sources_research.py` → `58 passed in 1.36s`, `✅ GREEN 확인`. 그 뒤 진행 문구 테스트 1개를 더해 `test_b_collection.py` 21 passed.
+
+#### 3. REFACTOR Phase
+- 수집 배치를 `_prepare_row`(평가·분류·요약, 잠금 밖)와 저장(잠금 안)으로 나눴다. 스크래퍼 본문 추출을 모듈 함수 `_extract_text` 로 뺐다. FTS DDL 을 `database.FTS_DDL` 한 곳으로 모았다.
+- **의도한 동작 변경으로 고친 기존 테스트**:
+  - 삭제(지운 엔드포인트만 검증): `test_reset_and_delete.py::test_delete_all_news_endpoint`, `test_api.py::test_ask_ai_endpoint`, `test_sources_and_research.py::test_source_researcher_discover` 와 `test_sources_and_research_api_endpoints` 의 discover·register 단계.
+  - `test_code_review_fixes.py::test_toggle_and_delete_github_repo_with_slash`: 지운 `add_github_repo` 대신 사본 `sources.json` 에 저장소를 직접 넣는다.
+  - `test_dynamic_rag_retrieval.py`: 지운 `retriever._ensure_fts_table()` 호출을 뺐다. `test_ensure_fts_table_creates_table_and_indexes_items` 는 `ensure_db_schema` 를 부르고 색인 행을 `news_fts_docsize` 로 센다.
+  - `test_collectors.py`: import 경로 `app.services.categorizer`.
+  - `test_config_and_live_llm.py::test_get_custom_json_value`: 지운 `crawler.user_agent` 대신 `app.project_name`.
+- **커버리지 (pytest-cov, 2026-11-10, 다른 조 작업 중 트리)**:
+  - 수치: `collectors/manager.py` 83%, `rss.py` 79%, `github.py` 60%, `config.py` 88%, `database.py` 69%, `scheduler.py` 74%, `sources_service.py` 78%, `deep_researcher.py` 71%, `api/sources.py` 93%, `api/research.py` 83%, `api/news.py` 73%.
+  - 명령: `cd backend && ../.venv/bin/pytest --cov=app.collectors --cov=app.services.sources_service --cov=app.database --cov=app.scheduler --cov=app.config --cov=app.api.sources --cov=app.api.research --cov=app.api.news --cov=app.services.deep_researcher --cov-report=term tests/`
+- **남은 것 (1차 시점)**:
+  - 옛 DB 의 KST 피드 행이 보정되지 않았다. 2차의 m003 으로 해결했다 (아래).
+  - 루트의 옛 `agentlens.db`(2026-10-19)는 이제 쓰지 않는다.
+
+#### 2차 수정 (재리뷰 11절 N-10·N-11·N-12·TEST-07·TEST-08, ADR Q12)
+- **RED**:
+  - `backend/tests/test_b_round2.py` 7개: `run_backend_tdd.py --phase red` → `7 failed`. 요지:
+    - N-10: `href="http://localhost:3001"`
+    - N-11: `no attribute '_m003_fix_legacy_news_rows'`, `IndexError`(MIGRATIONS[2])
+    - N-12: `KeyError: 'other_process'`
+    - Q12: `'NoneType' object has no attribute 'flock'`, 하위 프로세스에서 `ImportError: no fcntl`
+    - TEST-08: 하위 pytest 뒤 `agentlens-test-*` 폴더 남음
+  - `test_collect_script.py::test_api_mode_other_process_running_exits_without_waiting`: `20.01 < 5` 실패 (시간 초과까지 기다림).
+  - TEST-07 의 두 테스트는 바꾼 뒤에도 지금 코드에서 통과한다. 지금 동작이 맞으므로 대체 테스트다. 소스 문자열 대신 동작을 단언한다.
+    - `test_high_signal_threshold_has_single_default`: config.py 사본을 키 없는 config.json 옆에서 따로 불러와 `Settings().HIGH_SIGNAL_THRESHOLD == 7.0` 을 확인한다. 평가 경로는 임계값을 점수 ±0.1 로 두고 `is_high_signal` 이 바뀌는지 본다.
+    - `test_chat_session_retention_uses_configured_limit`: 한도 7 로 두고, 세션 POST 업서트와 `append_messages_batch` 가 `enforce_fifo_retention(max_limit=7)` 를 두 번 부르는지 본다.
+    - 재리뷰의 변이(키가 없을 때 7.8, `… and 30`)를 넣으면 이 단언이 실패한다.
+- **GREEN**:
+  - N-10: `email_service.py` 대시보드 링크 `_safe_href(settings.PUBLIC_WEB_URL)`.
+  - N-11: `database._m003_fix_legacy_news_rows` (MIGRATIONS 3번째). 판정과 처리 순서:
+    1. `rss_kr` 피드(제목 머리 `[피드명]`) 가운데 `published_at > created_at` 인 행이 하나라도 있는 피드의 행을 모두 9시간 당긴다.
+    2. 옛 합성 지표를 0 으로 한다: RSS 150·180, arXiv 120, HF `댓글+40`, GitHub 감시 저장소 폴백(포크 = int(별×0.12), 발행·수집 1시간 안), 시드 2건.
+    3. 모든 행의 `hotness_score` 를 새 식으로 다시 계산한다. 기준 시각은 `created_at` 이다 (`calculate_hotness(..., now=)` 인자를 더했다).
+  - N-12: `POST /api/schedule/trigger` 의 `already_running` 응답에 `other_process` 를 싣는다 (다른 프로세스면 true, 문장도 다름). `scripts/collect.py` API 모드는 `other_process` 가 true 면 기다리지 않고 stderr 에 알리고 **종료 코드 1** (다른 실패와 같은 값).
+  - Q12: `manager.py` 는 `fcntl` import 실패 시 `fcntl = None` 이고 `threading.Lock` 비차단 잠금으로 대체한다 (같은 프로세스 안에서만 막는다).
+  - TEST-08: `conftest.pytest_sessionfinish` 가 이 실행의 테스트 DB 폴더를 지운다. 이미 쌓인 `$TMPDIR/agentlens-test-*` 는 5분 넘은 것 157개를 지웠다. 남은 12개는 다른 에이전트의 진행 중이거나 막 끝난 실행이다.
+  - 결과: `test_b_round2.py` 7 passed, `test_collect_script.py` 6 passed.
+- **m003 검증 (사본, scratchpad)**:
+  - 적용 전 사본이 없어 되짚어 만든 사본으로 검증했다. 이유: 사용자의 `make dev` uvicorn(`--reload`, 11-09 22:06 기동)이 `app/` 수정을 보고 다시 시작하며 실제 `backend/agentlens.db` 에 m002(13:14)와 m003(13:56)을 적용했다. 이 작업이 그 파일을 직접 열어 고치지는 않았다.
+  - 되짚는 방법: 실제 DB 의 지금 사본에서 두 피드 +9시간, 합성 지표 복원, 옛 식 hotness, `user_version` 2 로 적용 전 사본을 만들었다 (`rebuild_before.py`). 그 사본에 `ensure_db_schema` 를 돌린 결과가 실제 DB 의 지금 상태와 (id, published_at, raw_score, comments_count, hotness_score) 해시로 같았다.
+  - 적용 전 → 후:
+
+    | 지표 | 적용 전 | 적용 후 |
+    |---|---|---|
+    | 미래 시각 행 | 395 (rss_kr) | 0 |
+    | 시각을 고친 행 | - | 429 (AI타임스 241, GeekNews 188) |
+    | 합성 지표 0 처리 | - | rss_kr 475, rss 316, HF 612, GitHub 폴백 8 |
+    | hotness 100 | 1222 | 3 |
+    | hotness 0-24 / 25-49 / 50-74 / 75-99 | 3261 / 228 / 105 / 83 | 4264 / 246 / 296 / 90 |
+    | 다시 계산된 hotness 행 | - | 4874 |
+
+  - 다른 표(crawl_logs 117, chat_sessions 30, chat_messages 98, source_research_logs 518)는 그대로다.
+  - `PRAGMA integrity_check` ok, `foreign_key_check` 0건.
+  - m003 을 직접 한 번 더 돌린 뒤 해시가 같다 (멱등). `user_version` 3 이라 시작 때 다시 돌지 않는다.
+- **판정 한계**: 날짜 없는 국내 피드(요즘IT 36행, UTC 수집 시각이라 맞음)는 두고, 9시간보다 오래된 글만 있는 KST 피드(토스 테크 5, 네이버 D2 5)는 가려낼 수 없어 두었다.
+- **위 검증의 잘못 (재리뷰 11.11 M003-01 로 드러남)**: 되짚은 사본은 GitHub 감시 저장소 폴백 8행만 되살렸다. 그래서 m003 의 GitHub 규칙(포크 = int(별×0.12), 발행·수집 1시간 안)이 실제 검색 결과(별 1~8·포크 0 등)까지 지우는 것을 잡지 못했다. 위 표의 'GitHub 폴백 8' 은 틀린 수치다.
+
+#### 3차 수정: M003-01 (머지 전 필수)
+- **RED**: `test_m003_shifts_only_kst_wall_clock_feeds_and_recomputes_hotness` 에 오탐 회귀 행을 더했다.
+  - 실제 검색 결과 (3,0)·(8,0)·(512,61): 그대로 남아야 한다.
+  - 감시 저장소 URL 이지만 별이 `stars_hint` 와 다른 (900,108): 그대로 남아야 한다.
+  - 진짜 폴백 (1234,148), `stars_hint` 없는 (5000,600): 0 이 돼야 한다.
+  - 감시 저장소 목록은 `sources_service.get_all_sources` 를 흉내 낸다. Red: `assert (0, 0) == (3, 0)`.
+- **GREEN**: m003 의 GitHub 규칙을 감시 저장소 폴백 행으로 좁혔다. 조건은 URL `https://github.com/{repo}` 가 sources.json 감시 저장소이고, 별 = `stars_hint`(없으면 5000), 포크 = int(별×0.12) 인 행이다 (`backend/app/database.py` `_m003_fix_legacy_news_rows`). 번호는 m003 그대로다. 결과 `test_b_round2.py` 7 passed.
+- **사용자 실제 DB 복구 (일회성, 저장소 밖 스크립트)**:
+  - 스크립트: `/private/tmp/claude-501/-Users-wonyoung-workspace-ozplayground-agentlens/d9f16211-c83a-42a0-ad74-fe86247a152d/scratchpad/m003fix/restore_github_metrics.py`
+  - 복구 전 백업: `…/scratchpad/m003fix/live_backup_before_restore.db` (`.backup`, 14:22)
+  - m003 전 사본: `…/scratchpad/sd042/copy_local.db` (13:42, user_version 2) 의 `.backup` 사본 `…/m003fix/pre_m003_copy.db` 를 썼다.
+  - 대상: 실제 DB 의 `source='github'` 이고 지금 별·포크 0 인 행 가운데, 사본에 같은 id·url 로 있고 사본 값이 0 이 아닌 행 456개.
+  - 결과: 448개를 사본 값으로 되돌리고 hotness 를 새 식(기준 `created_at`)으로 다시 계산했다. 8개(id 3476~3483, 감시 저장소 폴백)는 0 으로 남겼다. 사본 이후 수집된 39행은 건드리지 않았다.
+  - 한 트랜잭션(`BEGIN IMMEDIATE`)으로 적용했고, `integrity_check` ok 다. GitHub 별·포크 0 행은 1528 → 1080 이다.
+  - 같은 스크립트를 백업 사본에 먼저 돌려(dry-run 사본) 실제 DB 결과와 행 단위로 같음을 확인했다 (차이 0).
+  - 고친 m003 을 m003 전 사본에 돌린 결과와 비교했다. GitHub 2510행 중 별·포크가 다른 5행과 hotness 가 다른 11행은 모두 m003 뒤 수집(crawl 118, 05:01 UTC)이 더 큰 실제 값으로 갱신한 행이다.
+
+#### 4차 수정: spec-writer 가 찾은 문구·동작 불일치
+- **RED**:
+  - `backend/tests/test_b_round4.py` 6개와 `test_collect_script.py::test_direct_mode_with_backend_up_reports_lock` 1개 → `7 failed`.
+  - 실패 요지:
+    - Slack 문구에 `Must Read`
+    - category_hint: `assert 0 == 1`(unrelated 로 걸러짐), `KeyError: 'category_hint'`
+    - 응답·감사 기록에 접속 예외 원문 `URL 접속 실패: secret-detail …`
+    - 자동 채택 저장 실패가 `SourcesWriteError` 로 사이클 중단
+    - 직접 모드 경고 `같은 DB 라면 동시에 수집할 수 있다`
+- **GREEN** (`test_b_round4.py`·`test_collect_script.py` 13 passed):
+  1. `webhook_service.build_test_payload("slack")`: 이 웹훅을 설정에 저장하고 `auto_dispatch_daily_briefing` 이 켜져 있으면 매일 일일 브리핑이 전달된다고 알린다. Discord·일반 문구에는 없는 기능 안내가 없어 그대로 두었다.
+  2. `scripts/collect.py` 직접 모드 경고: 같은 DB 면 수집 잠금으로 하나만 수집하고, 그쪽이 수집 중이면 `already_running` 으로 끝난다고 쓴다. 잠금을 못 쥐면 `수집 실패: status=already_running 다른 프로세스가 같은 DB 에 수집 중입니다.` 를 stderr 에 내고 종료 1 (테스트로 확인).
+  3. `category_hint` 는 분류기·평가가 모두 판단하지 못한(`unrelated`) 항목의 기본 카테고리로 쓴다 (`collectors/manager.py` `_prepare_row`, RSS 항목에 피드의 `category_hint` 를 싣는다 `rss.py`). 고른 이유:
+     - 화면이 등록 폼에서 받고 소스 목록 배지로 보이며 딥 리서치도 채운다. 빼면 frontend·계약까지 바뀐다.
+     - 쓰면 backend 두 줄로 끝난다. 평가를 통과한 항목에만 적용되므로 AI 관련성 검사는 그대로다.
+  4. `inspect-url`(`source_researcher.inspect_url`, `_test_and_extract_feed`)과 딥 리서치 탐침(`probe_and_discover_feed`, `_fetch_and_parse_feed`)의 접속 예외 원문은 `logger.warning` 에만 남긴다. 응답·감사 기록에는 고정 문장을 쓴다.
+  5. 딥 리서치 자동 채택 중 `SourcesWriteError` 가 나면 그 후보를 `WATCHLIST` 로 둔다. 사유("채택 기준을 넘었으나 … sources.json 저장에 실패해 등록하지 못했습니다.")를 감사 기록에 남기고 다음 후보로 넘어간다. 요약에 `adopt_failed` 수를 더했다.
+- 전체 `417 passed`.
+
+#### 5차 수정: QA D-54 (지운 `POST /api/sources/github` 가 307)
+- **원인**: Starlette 의 `redirect_slashes`(기본 켜짐)가 맞는 경로가 없을 때 끝 슬래시를 붙인 `/api/sources/github/` 를 다시 맞춰 본다. 그 경로가 `PATCH`·`DELETE /{source_type}/{item_id:path}`(빈 `item_id`)에 맞아 307 로 보냈고, 따라가면 405 였다.
+- **RED**: `test_b_round4.py::test_deleted_endpoints_answer_404_or_405_without_redirect`. 지운 11개 경로를 리다이렉트를 따라가지 않고 부른다. 결과 `{'POST /api/sources/github': 307}`.
+- **GREEN**:
+  - `backend/app/main.py` 의 `FastAPI(..., redirect_slashes=False)`.
+  - 확인한 것: frontend `src/`·`scripts/`·QA 스크립트에서 끝 슬래시로 API 를 부르는 곳을 grep 했다. 테스트의 prefix 검사 한 곳뿐이다.
+  - 기존 `test_unused_source_and_research_endpoints_are_removed` 는 307 을 허용하던 단언을 `(404, 405)` 로 좁혔다.
+- 전체 `418 passed`.
+
+#### 6차 수정: `BRIEFING_TITLE`(`briefing.title`) 을 읽는 코드가 없음 (devops 지적)
+- **결정: 연결한다.**
+  - 이 값은 `GET /api/briefing/settings` 응답의 `title` 로 이미 나가는 계약 필드다. 지우면 계약과 frontend 가 바뀐다.
+  - 연결하면 고정 문구 다섯 곳을 설정 값으로 바꾸면 끝난다.
+- **RED**: `test_b_round4.py` 의 `*_configured_title` 4개 → `4 failed`. 마크다운·응답 제목, 메일 `<title>`·제목줄, Notion 페이지 제목, 웹훅 제목이 모두 `오늘의 AI 브리핑` 고정이었다.
+- **GREEN**:
+  - `briefing_service.py`: 마크다운 첫 줄, 응답 `title`, 자동 웹훅 제목 `{제목} (날짜)`.
+  - `email_service.py`: `<title>`, h1, 제목줄 `[AgentLens] {제목} - 날짜`. 설정 값이라 HTML 이스케이프한다.
+  - `notion_service.py`: 페이지 제목 `{제목} - 날짜`.
+  - 리팩터 중 메일 h1 변수가 기사 반복의 `title` 에 덮이는 것을 찾았다. 변수 이름을 `page_title` 로 바꾸고 회귀 테스트 `test_briefing_email_heading_is_not_overwritten_by_item_titles` 를 더했다.
+- 전체 `423 passed`.
+
+### [Cycle v0.4.2-C] v0.4.2 사이클 — C 조 (API 오류 형식·브리핑·메일·Notion·라우터 구조·테스트 인프라)
+
+근거: `docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md` (SEC-03, SEC-07, CC-01, CC-02 중 3건, CC-05, BUG-15, BUG-16 중 브리핑·Notion·메일·웹훅, BUG-21, PERF-07, ARCH-01, ARCH-03 중 업서트·스크래퍼·초기화, TEST-02~05), `docs/qa-engineer/02_QA_TEST_REPORT.md` (D-05, D-06, D-21, D-27 backend 쪽, D-34, D-43 중 3건). 오류 형식과 상태별 기본 코드는 오케스트레이터 결정을 따랐다. 다른 조와 같은 작업 트리에서 동시에 작업했다. 커밋하지 않았다.
+
+#### 1. RED Phase
+- **작성된 테스트** (새 파일 6개, 64개): `test_network_guard.py`(8), `test_error_format.py`(19), `test_briefing_output.py`(16), `test_input_limits.py`(10), `test_news_service.py`(8), `test_transactions.py`(3).
+- 모듈이 아직 없는 기능(`clip_words`, `news_service`)은 모듈 머리에서 import 하지 않고 테스트 안에서 찾게 해 수집 오류가 아닌 단언 실패(종료 1)로 Red 를 냈다 (`test_briefing_output.py` 첫 실행은 import 오류 종료 2 로 Red 가 아니어서 고쳐 다시 냈다).
+
+| 항목 | Red 테스트 | 실패 이유 (Red 출력 요지) | 바꾼 파일 |
+|---|---|---|---|
+| TEST-03 | `test_network_guard.py` 8개 | `AttributeError: 'FakeLLM' object has no attribute 'take_blocked_external'`, `fake_smtp` fixture 없음 (`4 failed, 2 passed, 2 errors`) | `tests/llm_fakes.py`, `tests/conftest.py` |
+| SEC-03·CC-01·D-05·D-27 | `test_error_format.py` 첫 13개 | `422`·`{"detail": …}`·영문 `Not Found`, 500 본문의 예외 문자열, `sources_file` 절대 경로, Notion·SMTP 메시지의 예외 문자열 (`12 failed, 1 passed`) | `app/api/errors.py`(새), `app/main.py`, `app/api/sources.py`, `app/services/notion_service.py`, `app/services/email_service.py` |
+| SEC-03 (웹훅) | `test_webhook_failure_message_has_no_exception_text` | 변경 전 문장 `웹훅 요청 실패: {str(e)}` (Red 출력은 다른 조의 import 오류 시점이라 따로 남기지 못했다. 근거는 변경 전 코드) | `app/services/webhook_service.py` |
+| SEC-03·CC-01 (챗 라우터) | `test_chat_session_errors_hide_exception_text` ×3, `test_chat_session_delete_failed_exception_hides_db_text`, `test_chat_router_has_no_model_query_and_no_repeated_error_blocks` | `message` 에 `세션 … 오류가 발생했습니다: (sqlite3…)`, `SessionDeleteFailedException(str(e))` 원문, 라우터에 `db.get(`·`"error_code":` (`5 failed, 14 passed`) | `app/api/chat.py` |
+| CC-02·CC-05 | `test_unused_endpoints_are_removed` ×2 | `GET /api/mcp/info` 200, `POST /api/briefing/generate` 200 | `app/api/mcp.py`(삭제), `app/api/router.py`, `app/api/briefing.py` |
+| BUG-16·D-34 | `test_category_names_match_frontend_long_labels`, `test_category_icon_is_key_not_emoji`, `…_have_no_emoji` 6개 | `'MCP & 도구·스킬 생태계'` 등 이름 차이, `'🎯' == 'harness'`, 마크다운·Notion·메일·웹훅에서 `🎯🔌🤖💡🌅📌📝✅🔔⭐` 검출 | `app/services/briefing_service.py`, `notion_service.py`, `email_service.py`, `webhook_service.py`, `app/api/webhook.py` |
+| BUG-15·D-21 | `test_clip_words_*` 3개, `test_category_summary_uses_word_clip`, `test_headline_uses_word_clip` | `module 'app.services.briefing_service' has no attribute 'clip_words'` | `app/services/briefing_service.py` |
+| SEC-07·D-06 | `test_email_html_escapes_collected_strings_and_blocks_non_http_links` | `<script>`·`<img …>` 가 그대로, `javascript:` 링크 | `app/services/email_service.py` |
+| BUG-21 | `test_settings_save_failure_keeps_memory_and_file`, `test_save_json_config_writes_via_temp_file_and_keeps_original_on_failure` | 저장 실패 뒤 `settings.raw_json_config` 에 새 키(얕은 복사), 직렬화 실패 뒤 `config.json` 이 잘린 채 남음 | `app/api/briefing.py`, `app/config.py` |
+| PERF-07 | `test_input_limits.py` 8개 | 빈 질문·2001자 200, `max_candidates` 0·-1·21 과 `limit` 0·-1·201 이 200 (`8 failed, 2 passed`) | `app/schemas/news.py`, `app/api/research.py` |
+| ARCH-01 | `test_news_service.py` 8개 (3회에 나눠) | `ModuleNotFoundError: app.services.news_service`, `collector_manager` 에 `reset_progress` 없음, 라우터 소스에 `select(`, `get_item`·`latest_items`·`parse_tldr` 없음, chat·세션·브리핑 서비스의 `split(",")` 중복 | `app/services/news_service.py`(새), `app/api/news.py`, `stats.py`, `schedule.py`, `app/collectors/manager.py`(`reset_progress`), `app/services/chat_service.py`, `chat_session_service.py`, `briefing_service.py` |
+| ARCH-03 | `test_scraper_does_not_commit_request_session`, `test_session_upsert_is_one_transaction`, `test_session_upsert_commits_once` | 요청 세션 commit 1회(스크래퍼), 업서트 실패 시 commit 1회·제목 변경 남음, 정상 업서트 commit 2회 | `app/services/scraper.py`, `app/services/chat_session_service.py` |
+
+#### 2. GREEN Phase
+- **구현** (요지):
+  - 오류 형식: `app/api/errors.py` 에 `error_response`, `ApiError(HTTPException)`, 상태별 기본 코드·문장 `DEFAULT_ERRORS`, 전역 처리기 3개(`HTTPException` → 같은 상태·라우터 코드 또는 기본 코드, 상태 문구만 있는 detail 은 한국어 기본 문장 / `RequestValidationError` → 400 `ERR_INVALID_PAYLOAD`·`details [{loc,msg}]` / 처리 못 한 예외 → 500 `ERR_SERVER_INTERNAL` 고정 문장·`logger.exception`). `main.py` 의 옛 전역 처리기(`"error": str(exc)`)를 지우고 `install_error_handlers(app)`.
+  - `api/chat.py`: `JSONResponse` 오류 블록 20개를 `error_response` 로, 스트림 사전 LLM 검사의 예외 6개를 `LLM_ERROR_MAP` 표 하나로. 세션 목록·상세·삭제 500 은 고정 문장. scoped 기사 확인은 `ChatService.get_source_detail` 로 (모델 직접 조회 삭제).
+  - 영문 detail(`Source not found…`, `URL is required`, `News item not found`)을 한국어 문장으로. Notion·SMTP·웹훅 실패 문장에서 예외 문자열을 빼고 로그에만 남긴다. `GET /api/sources` 의 `sources_file` 은 파일 이름만.
+  - 삭제: `GET /api/mcp/info`(`app/api/mcp.py`)와 `test_api.py::test_mcp_info`, QA 스모크 목록의 `/api/mcp/info` 줄(`.claude/skills/fullstack-qa-testing/scripts/qa_runner.py`), `POST /api/briefing/generate`(CC-05 도 해결). `POST /api/webhook/send-briefing` 은 처음에 `WebhookSettingsModal.tsx` 가 불러 남겼으나, frontend 가 그 모달과 `sendBriefingToWebhook` 을 지운 뒤 다시 grep 해 호출처가 없음을 확인하고 지웠다 (Red: `test_unused_endpoints_are_removed[post-/api/webhook/send-briefing]` `assert 400 in (404, 405)`). 자동 발송이 쓰는 `webhook_service.dispatch_briefing` 은 남겼다. `POST /api/webhook/test` 는 `BriefingSettingsModal.tsx` 가 부르므로 남겼다. `GET /api/briefing/today` 는 `DailyBriefingResponse(**data)`.
+  - 브리핑: 분야 이름을 `frontend/src/lib/labels.ts` 긴 라벨과 같게, `icon` 은 분야 id(아이콘 키). 마크다운·Notion(페이지·콜아웃 이모지 아이콘 포함)·메일·웹훅(테스트·브리핑·send-briefing 제목) 문자열에서 그림 이모지 삭제 (`↳`, `•` 는 글자 기호라 남김). `clip_words(text, limit)`: 한도 안이면 그대로, 넘으면 공백 경계에서 자르고 `…`, 공백이 없으면 한도에서 자름. 헤드라인 40자·분야 요약 제목 45자·요약 90자에 쓴다.
+  - 메일 HTML: 모든 수집·설정 문자열 `html.escape`, 링크는 http(s) 만(그 밖은 `#`).
+  - 설정 저장: `copy.deepcopy(settings.raw_json_config)` 위에서 고치고, `save_json_config` 은 직렬화 → `config.json.tmp` 쓰기 → `replace`, `replace` 가 `OSError` 면 제자리 쓰기(Docker 단일 파일 bind mount), 임시 파일은 항상 지운다.
+  - 입력 제한: `AskQuestionRequest.question` 1~2000자, `run-deep` `max_candidates` 1~20, `audit-logs` `limit` 1~200.
+  - 라우터 구조: `NewsService`(`list_feed`, `get_item`, `latest_items`, `stats`, `recent_crawl_logs`, `delete_all_news_and_logs`)와 공용 변환 `split_csv`·`parse_tldr`·`format_news_item`. 뉴스 목록·Ask AI 스트림·RSS, 통계, 스케줄 상태·초기화 라우터가 서비스만 부른다. `collector_manager.reset_progress(message)`.
+  - 트랜잭션: 세션 업서트는 세션 행 `flush` → 메시지 배치(`commit=False`) → FIFO 정리(`commit=False`) → 커밋 한 번. 스크래퍼 본문 캐시(L2)는 자기 세션으로 저장하고 요청 세션을 커밋하지 않는다. 기사·수집 로그 삭제는 `delete_all_news_and_logs` 가 한 번 커밋한다 (이어지는 백그라운드 재수집이 지운 상태를 보게).
+  - 테스트 인프라(TEST-03): `llm_fakes` 전송 계층이 LLM 이 아닌 외부 호스트도 막는다 (루프백만 통과). 막힌 요청은 `blocked_external` 에 남고 teardown 에서 테스트를 실패시킨다. 흉내 응답은 `fake_llm.register_web(url, status, text, content_type)`, 흉내 본문 `FAKE_ARTICLE_HTML`·`FAKE_ATOM_FEED`. autouse `fake_smtp`(`smtplib.SMTP`·`SMTP_SSL` 대체, `connections`·`sent`·`fail_with`), autouse `cancel_leftover_tasks`(테스트가 띄우고 기다리지 않은 태스크 취소).
+  - 계약 모델 `ErrorResponse.details` (`app/schemas/chat.py`) 를 `Optional[Union[Dict[str, Any], List[Any]]]` 로 (검증 오류의 배열 `details`). Red: `test_error_response_model_matches_real_bodies` `Input should be a valid dictionary [type=dict_type …]`.
+- **실행 결과**: 파일마다 `--phase green` 통과 (`test_network_guard` 8, `test_error_format` 21, `test_briefing_output` 16, `test_input_limits` 10, `test_news_service` 8, `test_transactions` 3). 전체 `--phase green` → `380 passed in 8.79s`, `✅ GREEN 확인`. 후속(send-briefing 삭제, `ErrorResponse.details`) 뒤 전체 `381 passed in 8.68s`.
+
+#### 3. REFACTOR Phase
+- 챗 세션·소스 상세·브리핑의 태그·기술·tldr 변환 세 벌을 `news_service.split_csv`·`parse_tldr` 하나로 모았다. `news.py` 의 쓰이지 않는 import(`select`, `func`, `or_`, `delete`, `ceil`, `NewsItem`, `format_news_item`)를 지웠다.
+- **의도한 동작 변경으로 고친 기존 테스트**:
+  - 오류 형식: `test_code_review_fixes.py::test_toggle_unknown_repo_still_404` 기대값 `{"detail": "Source not found or invalid type"}` → `{"error_code": "ERR_NOT_FOUND", "message": "해당 소스를 찾을 수 없습니다.", "details": null}`.
+  - 삭제한 엔드포인트: `test_api.py::test_mcp_info` 삭제, `test_briefing_output.py::test_send_briefing_webhook_title_has_no_emoji` 삭제(자동 발송 제목 테스트는 남김).
+  - 외부 호출 흉내(TEST-03): `test_chat.py::test_chat_query_scoped_mode_success`·`test_chat_stream_scoped_sse_success`, `test_chat_sessions.py::test_chat_stream_auto_persists_turn_and_auto_titles`, `test_llm_processor.py::test_scoped_chat_stream_end_to_end_with_mocked_llm` 에 기사 페이지 `register_web`. `test_briefing_notion_email.py::test_notion_export_page_mock` 에 Notion `databases` GET 흉내(404). `test_email_api_endpoints` 는 설정 사본의 `smtp_host` 에 기대지 않게 `settings.SMTP_HOST = ""` 로 두고 SMTP 연결 0회를 단언 (전에는 실제 smtp.gmail.com 연결 실패로 400 이 나서 통과했다). `test_deep_researcher.py` 3개(GitHub Atom 흉내, 시드 2개 고정·발굴 0·채택 기록, `run-deep` 은 `run_deep_research` 흉내와 호출 인자 단언), `test_sources_and_research.py::test_source_researcher_inspect_url`(Atom 흉내, 항목 2).
+  - 약한 단언 강화(TEST-02): `test_config_and_live_llm.py` 버전 = 저장소 루트 `config.json` 의 `app.version`, `test_reset_and_delete.py::test_reset_and_collect_endpoint` 는 `status == "started"`·`deleted_count == 이전 행 수`·삭제 뒤 기사·수집 로그 0·수집 1회·진행 카운터 0, `test_chat_sessions.py` 업서트 `== 201`, `test_deep_researcher.py` 판정을 점수 구간으로 하나로(`AUTO_ADOPTED` ≥ 8.2, 아니면 `WATCHLIST`)·`should_add` 일치, 감사 로그는 `items[-1]` 대신 이번 실행 URL 로 찾는다.
+- TEST-04: 오케스트레이터가 `conftest.py:8` 을 `tempfile.mkdtemp(prefix="agentlens-test-")` 로 바꿨다. 실행마다 새 DB 라 앞 실행 행이 섞이지 않는 것을 확인했다 (`test_deep_research_run_and_audit` 는 그와 별개로 URL 로 찾게 고쳤다). 5절 'DB 격리' 문장(`backend/tests/test_agentlens.db`, 데이터가 쌓인다)은 이제 틀리다.
+- TEST-05: v0.1.0~v0.3.1 은 지난 이력이라 조치 없음. 이번 작업도 커밋은 오케스트레이터가 한다. 이후 작업은 `test:` 커밋 → `fix:`/`feat:` 커밋 순서를 지키고, squash 하면 PR 설명에 Red→Green 순서를 남긴다.
+- PERF-07 의 속도 제한은 넣지 않았다. 근거: 인증 없는 단일 사용자 로컬 앱이고(수용된 위험), 요청 하나의 비용은 길이·범위 제한으로 묶였다(질문 2000자, 후보 20개, 로그 200행). 수집·딥 리서치는 `is_running` 으로 동시에 하나만 돈다.
+- **회귀 검증**: `make check` 종료 0: backend `376 passed in 8.82s`(REFACTOR 의 parser 정리 전 실행), frontend `Test Files 66 passed (66)`·`Tests 777 passed (777)`, eslint `✖ 6 problems (0 errors, 6 warnings)`, `tsc --noEmit` 오류 없음. 이 뒤 전체 pytest `380 passed`. 실행 뒤 `git status` 의 `config.json`·`sources.json`·`backend/app/config/sources.json` 차이는 실행 전과 같다(사용자·B 조 변경).
+
 
 ### 2.7 지금 실행 증거 (2026-11-09, Cycle 6 이전)
 

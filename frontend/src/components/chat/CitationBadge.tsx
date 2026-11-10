@@ -9,7 +9,6 @@ export interface CitationBadgeProps {
   index: number | string;
   type?: ChatSourceType;
   source?: SourceReference;
-  onOpenSourceDetail?: (sourceId: number) => void;
   className?: string;
 }
 
@@ -17,7 +16,6 @@ export default function CitationBadge({
   index,
   type,
   source,
-  onOpenSourceDetail,
   className = '',
 }: CitationBadgeProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -79,7 +77,6 @@ export default function CitationBadge({
           isOpen={isOpen}
           onClose={() => setIsOpen(false)}
           anchorRef={buttonRef}
-          onOpenSourceDetail={onOpenSourceDetail}
         />
       )}
     </span>

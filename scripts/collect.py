@@ -70,6 +70,10 @@ def run_api(api_url, timeout_sec):
         return 1
 
     status = trig.get("status")
+    if status == "already_running" and trig.get("other_process"):
+        # 다른 프로세스(MCP 서버, 직접 모드 make collect)의 수집은 이 backend 의 진행 상태로 끝을 알 수 없다 (N-12)
+        _err(f"{trig.get('message') or '다른 프로세스가 수집 중이다'} 그 수집이 끝난 뒤 다시 실행한다")
+        return 1
     if status == "already_running":
         _out("이미 진행 중인 수집이 있다. 그 수집이 끝날 때까지 기다린다")
     elif status != "started":
@@ -132,7 +136,8 @@ def run_direct(api_url, backend_up):
 
     _out(f"직접 모드: {db_text}")
     if backend_up:
-        _out(f"경고: {api_url} 에 backend 가 떠 있다. 같은 DB 라면 동시에 수집할 수 있다")
+        _out(f"경고: {api_url} 에 backend 가 떠 있다. 같은 DB 라면 수집 잠금으로 한 번에 하나만 수집한다. "
+             "그쪽이 수집 중이면 이 수집은 시작하지 않고 already_running 으로 끝난다")
 
     async def _collect():
         await database.ensure_db_schema()

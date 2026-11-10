@@ -98,12 +98,6 @@ done
 trap cleanup EXIT
 trap on_signal INT TERM
 
-# frontend 가 브라우저에서 backend 에 직접 붙는 주소. 8000 이 아닐 때만 넘긴다.
-next_api_url="${NEXT_PUBLIC_API_URL:-}"
-if [ "$DEV_BACKEND_PORT" != "8000" ] && [ -z "$next_api_url" ]; then
-  next_api_url="http://localhost:$DEV_BACKEND_PORT"
-fi
-
 # 3. 각자 프로세스 그룹으로 띄운다 ($! 가 곧 그룹 id)
 set -m
 (
@@ -114,10 +108,9 @@ set -m
 BACKEND_PID=$!
 (
   cd frontend
+  # 브라우저는 같은 출처(/api/...)로만 부르고, Next rewrite 가 이 backend 포트로 넘긴다.
+  # NEXT_PUBLIC_API_URL 은 따로 넣지 않는다 (셸·frontend/.env.local 에 직접 정했을 때만 쓰인다).
   export INTERNAL_API_URL="http://127.0.0.1:$DEV_BACKEND_PORT"
-  if [ -n "$next_api_url" ]; then
-    export NEXT_PUBLIC_API_URL="$next_api_url"
-  fi
   exec pnpm dev --port "$DEV_FRONTEND_PORT"
 ) </dev/null &
 FRONTEND_PID=$!

@@ -1,15 +1,21 @@
 # [AgentLens Frontend 전체] 5-Pillar 코드 품질 감사 및 리뷰 보고서 (Code Review Report)
 
-Updated: 2026-11-09
-기준: v0.4.1 (main)
+Updated: 2026-11-10
+기준: v0.4.2 (main)
 
-- **검토일자**: 2026-11-09
+- **검토일자**: 2026-11-09 (1차 감사·재리뷰 1·2차), 2026-11-10 (v0.4.2 재리뷰)
 - **검토자**: 시니어 코드 리뷰어 (`frontend-code-reviewer`)
+- **v0.4.2 재리뷰 대상**: 커밋 전 작업 트리의 frontend 변경 전부 (`git diff HEAD -- frontend` 68개 파일 +2979/−2960, 새 파일 `src/app/error.tsx`, `src/lib/chatApi.ts`, `src/lib/contract.ts`, `src/mocks/api-error.ts`, 새 테스트 파일 13개). HEAD 는 `4944a5e` (v0.4.1). 대조 문서: 변경 요약(오케스트레이터 scratchpad `v042-changes.md`), `docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md` 2.8·2.9절, `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` v1.3, `docs/ui-system-designer/01_COMPONENT_SPEC.md`, `02_DESIGN_SYSTEM.md`. 결과는 **10절**.
+- **v0.4.2 최종 판정 (3차 재리뷰, 2026-11-10)**: **APPROVED** (머지 전 필수 0건). 12절. 2차 재리뷰(11절)도 APPROVED, 1차 재리뷰(10절)는 REQUEST_CHANGES (FE-37) 였다. 1차 재리뷰(10절)는 REQUEST_CHANGES (FE-37) 였다.
 - **검토 대상 PR / 브랜치**: PR 이나 diff 리뷰가 아니다. `main` (`9e0c9e5`, v0.4.0) 의 frontend 를 지금 있는 그대로(as-built) 감사했다. 범위는 `frontend/src/**` (제품 코드, `mocks/`, `tests/`), `frontend/next.config.ts`, `frontend/scripts/ui-audit.mjs`. lockfile 은 보지 않았다.
 - **대조 문서**: `docs/ui-system-designer/01_COMPONENT_SPEC.md` (10절 알려진 불일치), `docs/ui-system-designer/02_DESIGN_SYSTEM.md` (7절 금지 규칙, 8절 검사, 9.2절 남은 문제), `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` (7절 CT-001~CT-026), `docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md` (3.2절 5대 상태 공백, 4절 실행 증거), 옛 `docs/known-issues.md` 의 frontend·UI·접근성 행 (8절 대응표), 이전 릴리스 리뷰의 Nit 3건 (7절)
 - **재리뷰 대상**: 작업 트리(커밋 전)의 필수 결함 수정. `git diff -- frontend/` 의 7개 파일(`components/chat/ChatWorkspace.tsx`, `components/chat/ChatMessageItem.tsx`, `components/chat/ExportToolbar.tsx`, `hooks/useNewsFeed.ts`, `tests/chat/ChatWorkspace.test.tsx`, `tests/chat/ChatMessageItem.test.tsx`, `tests/chat/ExportToolbar.test.tsx`)과 새 파일 2개(`tests/chat/ChatStreamTurn.test.tsx`, `tests/feed/FeedSearch.test.tsx`). 결과는 9절.
 - **재리뷰 2차 대상**: 같은 작업 트리에 더한 수정 FE-33·FE-34·BUG-02R (계약 `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` 8.1). 1차 재리뷰 범위에 `types/chat.ts`, `mocks/handlers/chat.ts`, `tests/chat/ContractAndMsw.test.ts` 3개 파일이 더해졌다. 결과는 9.7절.
-- **최종 판정**: **APPROVED** (재리뷰 2차, 2026-11-09). 1차 감사는 REQUEST_CHANGES, 재리뷰 1차는 APPROVED 였다.
+- **v0.4.1 판정 (기록)**: **APPROVED** (재리뷰 2차, 2026-11-09). 1차 감사는 REQUEST_CHANGES, 재리뷰 1차는 APPROVED 였다.
+
+지적 수 (v0.4.2 2차 재리뷰): FE-37(필수)·FE-38·FE-39·FE-30 남은 부분·ui-audit R6 **해결**, 다른 담당이 찾은 FE-40·FE-41 해결 확인. 새 지적 권장 1건(FE-42). **머지 전 필수 0건** (11절).
+
+지적 수 (v0.4.2 1차 재리뷰): 지난 권장 28건(FE-04~08, FE-10~21, FE-23~32, FE-35) 가운데 **해결 27건, 부분 해결 1건**(FE-30, 남은 부분은 권장). 사용자 보고 FE-36 **해결** (실제 브라우저 확인). 새 지적 **3건**: 머지 전 필수 1건(FE-37), 권장 2건(FE-38, FE-39). 아래 1~9절은 v0.4.1 감사 기록이고, 1절 매트릭스와 1.1절 검사 결과만 v0.4.2 로 고쳐 썼다.
 
 지적 수 (1차 감사): 모두 32건. **머지 전 필수 5건** (FE-01, FE-02, FE-03, FE-09, FE-22), **권장 27건**.
 지적 수 (재리뷰 뒤): 필수 5건은 모두 **해결**. 남은 지적은 권장 27건(FE-04~FE-08, FE-10~FE-21, FE-23~FE-32; FE-28 은 일부 해결)과 재리뷰에서 새로 찾은 **권장 3건**(FE-33~FE-35)으로, 머지 전 필수는 0건이다.
@@ -23,6 +29,18 @@ Updated: 2026-11-09
 
 이 서브에이전트의 감사 축(React·Next.js 아키텍처 / 성능·번들 / 접근성 / 타입·상태 / 테스트)으로 다섯 행을 채웠다. `fullstack-code-review` 스킬의 클린코드·SOLID 는 1·4행에, 보안·데이터 무결성은 4행에 넣었다.
 
+### v0.4.2 (2026-11-10, 작업 트리)
+
+| 감사 필라 (Pillar) | 세부 검토 기준 | 평가 점수 (1~5) | 검토 소견 및 발견 사항 |
+| :--- | :--- | :---: | :--- |
+| **Pillar 1: React·Next.js 아키텍처** | RSC/RCC 경계, 훅 의존성 배열, 상태 갱신 함수의 순수성, 불필요한 상태 동기화, 설계 문서 일치 | 4 / 5 | 라우트 오류 경계 `app/error.tsx` 가 생겼고(FE-05), 훅을 쓰는 공용 부품 7개에 `'use client'` 가 붙고 `ClientBoundaryGuard.test.ts` 가 `components/**` 전체를 지킨다(FE-06). 챗 REST·스트림 호출이 `lib/chatApi.ts` 로 모였다(FE-07). 전송·재시도 콜백이 `messagesRef`·`sendMessageRef` 로 최신 목록을 읽어 토큰마다 다시 만들어지지 않는다(`ChatWorkspace.tsx:102-105`, `:582-598`). 죽은 코드·변형·prop 이 정리됐다(FE-08). 감점: 리뷰 시작 시점에 설계 문서(`02_DESIGN_SYSTEM.md:190` '팝오버는 포털을 쓰지 않는다', `01_COMPONENT_SPEC.md:347` 자동 스크롤 설명)가 바뀐 구현과 달랐다 (10.6절, 문서 담당이 반영 중) |
+| **Pillar 2: 성능·번들** | 클라이언트 번들, `next/dynamic` 분할, 불필요한 리렌더, 요청 수 | 5 / 5 | 홈 대화상자 6개가 `next/dynamic`(`page.tsx:27-35`)이고 프로덕션 빌드에서 ui-audit 의 대화상자 조합이 모두 열렸다(10.3절). `ChatMessageItem` 이 `memo` + 출처별 `useMemo` 마크다운 부품이라 스트리밍 중 이전 답을 다시 그리지 않는다(`ChatStreamRender.test.tsx`). 자동 스크롤이 `scrollTop` 한 번 대입으로 바뀌었다. 검색 대기 중 페이지·필터 변경은 요청 1번이다(FE-35). 번들 크기는 재지 않았다 |
+| **Pillar 3: 접근성·디자인 토큰** | 시맨틱 HTML, 키보드·포커스, ARIA, 대비 (WCAG 2.2 AA), 토큰 사용, 공통 부품 재사용 | 3 / 5 | 세션 카드 버튼 중첩(FE-12), `<p>` 안 `div`(FE-13), 토큰마다 읽히던 로그(FE-14), 삭제 실패 무알림(FE-15), 팝오버 닫기 버튼 재구현(FE-16)이 고쳐졌다. hex 는 `layout.tsx:12-13` `themeColor` 2개뿐이고 `ThemeColor.test.ts` 가 `--al-canvas` 와 같은지 본다. `!important` 0건. 감점: 인용 팝오버를 body 포털로 옮기면서 키보드 초점 순서가 끊겼다 — 배지에서 Tab 을 누르면 팝오버가 아니라 다음 배지로 간다 (**FE-37, 머지 전 필수**, 브라우저 확인) |
+| **Pillar 4: 타입·상태·보안** | `any`, zod 런타임 검증, 오류 경계, localStorage 값 검증, 환경 변수, 화면 문구의 사실성 | 4 / 5 | 응답 경계 런타임 검증 `lib/contract.ts`(던지지 않음, 실패 시 dev 경고 후 원본 사용)가 `api.ts`·`chatApi.ts`·챗 SSE 에 걸렸다(FE-19). 북마크·세션 목록 저장값 검증(FE-17·18), URL `session_id` UUID 검증·경로 인코딩(FE-24), `env.ts` 연결(FE-21), 고정 문구 정리(FE-25), 초기화 중복 요청 알림(FE-20). 감점: 챗 SSE payload 를 검증한 뒤 `as ReturnType<typeof JSON.parse>`(= `any`)로 바꿔 zod 타입을 버린다 (FE-38, 권장) |
+| **Pillar 5: 테스트** | 사용자 중심 RTL 쿼리, MSW 목 정합성, UI 5대 상태, 회귀 방지 | 4 / 5 | 67개 파일 783개 통과, eslint 경고 0 (v0.4.1 40개). 새 테스트가 각 결함을 직접 겨눈다(FE-36 스크롤 4개, FE-04 history 2개, 저장값 검증, `chatApi` 13개 등). 테스트 기대를 바꾼 곳은 모두 기능 변경에 따른 것이다(10.4절). MSW 가 backend 순서·필드로 바뀌었다(FE-31). 감점: 대화상자(소스·딥 리서치·스케줄·일일 브리핑)의 Error·Empty 테스트는 아직 없다 (FE-30 남은 부분) |
+
+### v0.4.1 (2026-11-09, 기록)
+
 | 감사 필라 (Pillar) | 세부 검토 기준 | 평가 점수 (1~5) | 검토 소견 및 발견 사항 |
 | :--- | :--- | :---: | :--- |
 | **Pillar 1: React·Next.js 아키텍처** | RSC/RCC 경계, 훅 의존성 배열, 상태 갱신 함수의 순수성, 불필요한 상태 동기화, 설계 문서 일치 | 2 / 5 | 라우트 경계는 맞다: `app/layout.tsx`·`app/chat/page.tsx` 는 RSC 이고 `ChatWorkspace` 를 `Suspense` 로 감싼다. 그러나 챗 전송 콜백이 오래된 모델 티어를 잡아 **고른 모델과 다른 모델로 요청한다** (FE-01, 실행 확인). `setMessages` 갱신 함수 안에서 서버 저장을 부르고 한 턴에 두 번 저장한다 (FE-02, 실행 확인). `done` 없이 끊긴 스트림을 완료로 표시한다 (FE-03, 실행 확인). 재시도가 실패한 질문을 history 에 한 번 더 넣는다 (FE-04). 오류 경계(`error.tsx`)가 없다 (FE-05). 훅을 쓰는 공용 부품 7개에 `'use client'` 가 없다 (FE-06). 챗 호출 6곳이 `lib/api.ts` 를 거치지 않고 시간 제한이 없다 (FE-07). 쓰지 않는 코드와 연결되지 않은 prop 이 있다 (FE-08). |
@@ -31,9 +49,11 @@ Updated: 2026-11-09
 | **Pillar 4: 타입·상태·보안** | `any`, zod 런타임 검증, 오류 경계, localStorage 값 검증, 환경 변수, 화면 문구의 사실성 | 2 / 5 | 제품 코드에 `any` 는 0건이다. 그러나 응답을 zod 로 검증하는 곳이 없다 (FE-19). localStorage 의 북마크·세션 목록이 배열이 아니면 화면이 렌더 오류로 죽는다 (FE-17·FE-18, 실행 확인). 챗 `Notion 동기화` 는 서버를 부르지 않고 성공을 표시한다 (FE-22). 초기화 함수가 실행하지 않고 끝나도 확인 창은 성공처럼 닫힌다 (FE-20). `env.ts` 를 아무도 import 하지 않고 `NEXT_PUBLIC_APP_VERSION` 이 스키마에 없다 (FE-21). 그 밖에 Ask AI 스트림 파서 (FE-23), URL 의 `session_id` 검증 (FE-24), 고정 문구 (FE-25), localStorage 상세 캐시 누적 (FE-26), 개인 개발 호스트 커밋 (FE-27). |
 | **Pillar 5: 테스트** | 사용자 중심 RTL 쿼리, MSW 목 정합성, UI 5대 상태, 회귀 방지 | 3 / 5 | 52개 파일 649개 테스트가 모두 통과하고 쿼리는 대부분 `getByRole`·접근 이름 기준이다. 그러나 FE-01·02·03·09 결함을 잡는 테스트가 없다: 모델 변경 테스트는 버튼 글자만 보고 요청 본문을 보지 않는다 (FE-28). `ContractAndMsw.test.ts:1017` 은 방금 만든 객체 리터럴을 단언한다 (FE-29). 피드 첫 화면의 Loading·Error·Empty 를 그리는 테스트가 없다 (FE-30). MSW 가 backend 와 다르게 응답해 테스트가 실제 순서·필드를 검증하지 못한다 (FE-31). eslint 경고 41개 (FE-32). |
 
-### 1.1 검사 실행 결과 (2026-11-09, 직접 실행)
+### 1.1 검사 실행 결과
 
-`make check` (저장소 루트, 종료 코드 **0**):
+v0.4.2 (2026-11-10, 직접 실행): `make check` 종료 코드 **0**. 출력과 전후 `git status` 비교는 10.2절.
+
+v0.4.1 1차 감사 (2026-11-09, 기록) `make check` (저장소 루트, 종료 코드 **0**):
 
 ```
 cd backend && ../.venv/bin/pytest -v tests/
@@ -66,6 +86,8 @@ eslint 경고 41개 (오류 0) 내역:
 ## 2. 세부 피드백 및 코드 개선 제안 (Action Items)
 
 경로는 `frontend/` 기준이다. 심각도는 **[머지 전 필수]** 와 **[권장]** 두 가지다.
+
+이 절의 FE-01~FE-32 는 v0.4.1 감사 기록이다 (위치 줄 번호는 그때 코드 기준). v0.4.2 에서 각 지적의 해결 여부는 **10.1절 건별 확인표**, 새 지적 FE-37~FE-39 는 **10.3절**에 있다.
 
 ### Pillar 1: React·Next.js 아키텍처
 
@@ -641,6 +663,11 @@ eslint 경고 41개 (오류 0) 내역:
 
 ## 3. 최종 리뷰 판정 및 출시 승인
 
+- **판정 결과 (v0.4.2 3차 재리뷰, 2026-11-10)**: **APPROVED (승인)**. 마지막 수정 3건(포커스 필터 라벨, 감사 일지 라벨, 기사 질문 스트림 첫 응답 30초 제한)이 맞고 `make check` 종료 0 (backend 417, frontend 70개 파일 827개). FE-42·FE-43 도 해결돼 남은 권장은 0건이다 (`make check` 4차: backend 418, frontend 70개 파일 831개, 종료 0). 근거는 12절.
+- **판정 결과 (v0.4.2 2차 재리뷰, 2026-11-10)**: **APPROVED (승인)**
+- **2차 코멘트**: 머지 전 필수 FE-37 이 고쳐졌고 프로덕션 빌드에서 키보드 흐름(Enter → 팝오버 안 `팝오버 닫기` → Tab → `원문 보기` → Escape → 배지)을 세 폭 모두 확인했다. 권장 FE-38·FE-39·FE-30 남은 부분과 ui-audit R6 도 해결됐다. 다른 담당이 찾은 FE-40·FE-41·FE-04 경쟁 상태·계약 v1.4·MSW 테스트 격리도 코드와 테스트로 확인했다. `make check` 종료 0 (backend 410, frontend 69개 파일 820개, eslint·tsc 0). 남은 지적은 권장 1건(FE-42, 기사 Ask AI 파서의 `any` 캐스트, 동작 영향 없음)이다. 근거는 11절.
+- **판정 결과 (v0.4.2 1차 재리뷰, 2026-11-10)**: **REQUEST_CHANGES (변경 요청)**
+- **v0.4.2 코멘트**: 지난 권장 28건 가운데 27건과 사용자 보고 FE-36 이 코드·테스트로 해결됐고, FE-36 은 프로덕션 빌드를 375×667·390×844·1280×800 에서 띄워 긴 답을 흘려 확인했다 (입력창 위치 고정, 조상 상자 스크롤 0, 목록만 스크롤). `make check` 종료 0 (backend 384, frontend 67개 파일 783개, eslint 경고·오류 0, tsc 0). 그러나 이번 변경이 새로 만든 접근성 회귀 1건이 머지 전에 고쳐야 할 결함이다: **FE-37** 인용 팝오버를 body 포털로 옮기면서 키보드 초점 순서가 끊겨, 배지에서 Tab 을 누르면 팝오버의 `원문 보기` 링크가 아니라 다음 배지로 간다 (v0.4.1 은 DOM 바로 다음이라 Tab 한 번으로 들어갔다). 고치는 범위는 `CitationPopover` 에 `focusOnOpen` 한 줄과 테스트 하나다. 권장 2건(FE-38, FE-39)과 FE-30 남은 부분은 머지를 막지 않으며 남기는 이유를 10.8절에 적었다. 근거는 10절.
 - **판정 결과 (재리뷰 2차, 2026-11-09)**: **APPROVED (승인)**
 - **재리뷰 2차 코멘트**: FE-33(끊긴 스트림의 부분 답 유지)·FE-34(중단 뒤 정상 종료는 중단으로 저장)·BUG-02R(스트림 요청에 클라이언트 메시지 id)이 고쳐졌고 재현으로 확인했다. `ChatStreamTurn.test.tsx` 의 새 테스트 4개는 결함을 정확히 겨누고, `findByText` → `waitFor(getByText)` 7곳은 같은 의미라 테스트를 약하게 만들지 않았다. `make check` 종료 0 (backend 244, frontend 54개 파일 664개 통과, eslint 오류 0·경고 40, tsc 오류 0). 근거는 9.7절.
 - **판정 결과 (재리뷰 1차, 2026-11-09)**: **APPROVED (승인)**
@@ -662,6 +689,18 @@ eslint 경고 41개 (오류 0) 내역:
 ---
 
 ## 4. 준수 확인 (`fullstack-code-review` 스킬)
+
+v0.4.2 (2026-11-10):
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 계약 (`backend/app/schemas/` ↔ `frontend/src/types/` ↔ `frontend/src/mocks/`) | 맞춤. 계약 문서 v1.3 의 열린 불일치 0건, 응답 경계 런타임 검증 적용 | `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` 2.0절·7절, `src/lib/contract.ts:17-57`, `ContractAndMsw.test.ts` 115개 통과 |
+| 설정 (새 frontend 변수는 `env.ts`) | 준수. `NEXT_PUBLIC_APP_VERSION`·`ALLOWED_DEV_ORIGINS` 가 스키마에 있고 루트 `.env.example:55-60` 에 있다 | `src/lib/env.ts:8-46`, `next.config.ts:16-22`. `docs/devops-engineer/01_DEPLOYMENT_SPEC.md` 표 반영은 devops 몫 (10.6절) |
+| 문서 | 리뷰 시작 시점 미반영, 리뷰 중 다른 작업이 반영 중 (판정하지 않음) | 10.6절 확인 목록 (문서 담당에게 넘김) |
+| 버전 문자열 | `frontend/package.json` 은 아직 `0.4.1`. `/api/health` 는 이제 빌드 때 `package.json` 버전을 쓴다 (`src/app/api/health/route.ts:11`). 릴리스 단계에서 `docs/releases.md` 목록대로 올린다 | 릴리스 절차 (오케스트레이터) |
+| 디자인 토큰 | `.tsx` hex 는 `layout.tsx:12-13` `themeColor` 2개, `!important` 0건, `ThemeColor.test.ts` 가 `--al-canvas` 와 같은지 본다 | FE-16 해결 |
+
+v0.4.1 (2026-11-09, 기록):
 
 | 항목 | 결과 | 근거 |
 |---|---|---|
@@ -907,3 +946,369 @@ EXIT=0
 - `tsc --noEmit` 오류 0 (출력 0줄).
 - eslint 경고 40개 (오류 0). 파일 구성은 재리뷰 1차와 같다: 제품 코드 2 (`useChatSessions.ts:14`·`:16`), MSW 24, 테스트 14. 이번에 바뀐 파일에서 새로 생긴 경고는 없다.
 - vitest stderr 의 Vite `configLoader` 경고와 jsdom `Not implemented: navigation to another Document` 는 이전과 같다 (실패 아님).
+
+---
+
+## 10. v0.4.2 재리뷰 (2026-11-10, 작업 트리)
+
+### 10.0 범위와 방법
+- 범위: HEAD `4944a5e`(v0.4.1) 대비 작업 트리의 frontend 변경 전부 (`git diff HEAD -- frontend` 68개 파일, 새 파일은 `git status --short frontend` 의 `??` 15개 경로 (디렉터리 `tests/app/`·`tests/lib/` 포함)). backend 변경은 `docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md` 범위라 판정하지 않았다 (`make check` 에는 함께 들어간다).
+- 방법: (1) diff 와 지금 코드를 읽어 지난 지적마다 해결 여부를 확인하고, 새 테스트가 그 결함을 겨누는지 봤다. (2) `make check` 를 직접 돌리고 전후 `git status --porcelain`·`git diff HEAD` 해시를 비교했다. (3) frontend 를 scratchpad 사본(`rsync`, `.env.local` 제외)으로 프로덕션 빌드해 **3300 포트**에 띄우고 Playwright(Chromium headless shell 1248)로 FE-36·인용 팝오버를 쟀고, `scripts/ui-audit.mjs` 를 같은 서버에 돌렸다. 챗 API(`/api/chat/sessions`, `/api/chat/stream`)는 페이지 안 `fetch` 대역으로 흉내 내 사용자 backend·DB 에 쓰지 않았다. 사용자의 `make dev`(3000·8000)는 건드리지 않았고, 띄운 3300 서버는 끝에 내렸다 (`lsof` 로 3300 닫힘, 3000·8000 그대로 확인).
+- "실행 확인" 은 위 (2)·(3) 에서 직접 돌린 결과, "코드로 확인" 은 코드 경로만 읽은 것이다. 범위 밖 5개 범주(`CLAUDE.md` 최우선 규칙 6)는 판정 근거로 쓰지 않았다.
+
+### 10.1 지난 지적 건별 확인표
+
+| 지적 | 결과 | 고친 내용 (path:line, `frontend/` 기준) | 근거 (테스트·실행) |
+|---|---|---|---|
+| FE-04 재시도 history 중복 | **해결** | `src/components/chat/ChatWorkspace.tsx:331-342` history 는 완료된 assistant 와 그 바로 앞 user 만. `:589-594` 재시도는 `messagesRef`·`sendMessageRef` 로 최신 목록·전송 함수를 쓴다 | `tests/chat/ChatStreamTurn.test.tsx` +2 (RED: `+ { role: 'user', content: '재시도 질문' }`, `[{ role: 'user', content: '실패할 질문' }]` → GREEN). 재시도 직후 `messagesRef` 에는 실패 쌍이 남아 있지만 필터가 실패 assistant(`error`)와 그 앞 user 를 함께 빼므로 결과가 같다 (코드로 확인) |
+| FE-05 오류 경계 없음 | **해결** | `src/app/error.tsx:10-25` (`ErrorState` 제목 `화면을 그리지 못했습니다`, 다시 시도 → `reset`, 예외 원문은 콘솔만) | `tests/app/ErrorBoundary.test.tsx`. `global-error.tsx` 는 없다: 레이아웃 자체의 예외는 잡지 못하지만 레이아웃은 정적 셸이라 위험이 낮다 (관찰) |
+| FE-06 `'use client'` 누락 7곳 | **해결** | `ui/SearchField`·`SegmentedControl`·`Select`·`Switch`·`TextField`·`Textarea`·`ErrorState`, `feed/FeedStatusBar` 첫 줄 | `tests/ui/ClientBoundaryGuard.test.ts` 가 `components/**` 전체에서 훅·이벤트 prop 을 쓰는데 지시문이 없는 파일을 찾는다 |
+| FE-07 챗 직접 `fetch` 6곳, 시간 제한 없음 | **해결** | `src/lib/chatApi.ts:33-92` (조회·저장·삭제 8초, 스트림 첫 응답 30초·본문 무제한, 오류는 backend `message`). `src/lib/api.ts:74-90` `fetchWithTimeout` 이 바깥 `signal` 도 따른다 | `tests/lib/chatApi.test.ts` 13개. `grep "fetch(" src/components/chat` 0건. 사용자 중단은 `AbortError` 로 그대로 올라가고(`chatApi.ts:44`), 시간 초과만 `응답이 늦어 요청을 멈췄습니다…` 가 된다 (코드로 확인). 헤더가 온 뒤 타이머를 지우므로(`api.ts:87-89`) 긴 답의 본문은 끊지 않는다 — 브라우저 확인에서 3.6초 스트림이 끝까지 왔다 (10.3절) |
+| FE-08 죽은 코드·연결 안 된 prop | **해결** | 지운 파일 `WebhookSettingsModal.tsx`·`ThemeToggle.tsx`, api 함수 5개, `HotkeyListener` prop 3개, `onHandoverToChat`, `onOpenSourceDetail` 사슬과 `기사 상세` 버튼, `anchorRect`, `initialSourceId`·`initialQuestion`, 변형 `header-*`·`modal-icon`·`ModelTierBadge.variant`, 옛 `ChatHeaderProps` | `tests/chat/ChatUnusedApi.test.tsx` (지운 prop 8개를 `@ts-expect-error` 로 단언, `tsc` 가 확인). `onCopyMessage={() => {}}` 는 넘기지 않게 됐다 (`ChatWorkspace.tsx:647-657`, `ChatMessageList` 의 선택 prop) |
+| FE-10 토큰마다 전체 리렌더 | **해결** | `src/components/chat/ChatMessageItem.tsx:31-126` `buildMarkdownComponents`, `:146` `useMemo([message.sources])`, `:322` `memo`. `ChatWorkspace.tsx:102-105`, `:582-598` 콜백 고정. 부드러운 스크롤 제거 (`ChatMessageList.tsx:50-62`) | `tests/chat/ChatStreamRender.test.tsx` (RED: 두 번째 턴 스트리밍 중 첫 답 마크다운 9번 → 3번). 측정은 렌더 횟수만, 시간은 재지 않았다 |
+| FE-11 코드 분할 없음 | **해결** | `src/app/page.tsx:27-35` 대화상자 6개 `next/dynamic({ ssr: false })` | `tests/feed/HomePage.test.tsx` 정적 import 금지 단언. 프로덕션 빌드에서 ui-audit 의 뉴스 상세·AI 질의응답·일일 브리핑·공유 설정·스케줄·MCP·소스·팔레트·초기화 확인 조합이 모두 열리고 통과했다 (10.3절). 번들 크기는 재지 않았다 |
+| FE-12 세션 카드 버튼 중첩 | **해결** | `src/components/chat/SessionItemCard.tsx:84-117` 선택 `<button>`(안은 `span` 만), `:119-126` 삭제 `IconButton` 이 형제 (`absolute` 겹침, 카드 `pr-14 md:pr-12`) | `tests/chat/ChatSidebar.test.tsx` (RED `expected 'DIV' to be 'BUTTON'`). ui-audit `chat-*` 조합 `occluded`·`clip` 0건 |
+| FE-13 `<p>` 안 팝오버 `div` | **해결 (새 회귀 FE-37 있음)** | `src/components/ui/Popover.tsx:59-63`, `:139-154`, `:177` `portal` prop (body 에 `fixed`, 앵커 좌표, 스크롤·리사이즈 따라감). `CitationPopover.tsx:44` 만 켠다 | `tests/chat/CitationBadge.test.tsx` (RED `<p><span>…</span></p>` 안 팝오버 → 없음). 브라우저: 팝오버 부모 `body`, `position: fixed`, 세 폭 모두 화면 안, 목록을 50px 스크롤하면 앵커를 따라 움직임(배지 위 8px 유지), Escape 로 닫히고 배지로 포커스 복귀 (10.3절). 다만 키보드 Tab 순서가 끊겼다 → FE-37 |
+| FE-14 로그가 토큰마다 읽힘 | **해결** | `src/components/chat/ChatMessageList.tsx:123-124` `aria-relevant="additions"`·`aria-busy`, `:159-161` sr-only `role="status"` 에 `답변이 완료되었습니다.` | `ChatStreamRender.test.tsx` `aria-busy` true→false. 브라우저: 스트리밍 중 `aria-busy="true"`, 끝나면 `false` 이고 status 글자가 `답변이 완료되었습니다.` (세 폭) |
+| FE-15 세션 삭제 실패 무알림 | **해결** | `SessionItemCard.tsx:64-79` `catch` 에서 `toast`(danger, backend `message` 또는 `대화를 삭제하지 못했습니다.`) | `ChatSidebar.test.tsx` (RED: 문구 없음 + `Unhandled Rejection` → GREEN) |
+| FE-16 팝오버 닫기 버튼 재구현, `themeColor` hex | **해결** | `CitationPopover.tsx:64` 공통 `IconButton size="sm"` (모바일 44px, md 32px). `tests/design/ThemeColor.test.ts` 가 `layout.tsx` hex 와 `globals.css` `--al-canvas` 를 비교 | 브라우저: 닫기 버튼 375·390 폭 44×44, 1280 폭 32×32. `ThemeColor.test.ts` 2개 (지금 값이 같아 처음부터 통과하는 지킴 테스트) |
+| FE-17 북마크 저장값 비배열 | **해결** | `src/hooks/useBookmarks.ts:45-60` 배열 아니면 `[]`, 원소는 숫자 `id`·문자열 `title` 만 | `tests/hooks/useBookmarks.test.tsx` 6개, `HomePage.test.tsx` (객체·`null` 저장값에서 홈이 그려짐) |
+| FE-18 세션 목록 저장값 비배열 | **해결** | `src/components/chat/useChatSessions.ts:25-36` `readStoredIndex`, `:39-54` `readStoredDetail`, `:114-124` 서버 실패 + 쓸 만한 저장값 없음 → 오류 | `tests/chat/useChatSessions.test.tsx` 7개 (RED `sessions.map is not a function`). 상세 캐시는 `id`·`messages` 배열만 보고 원소는 검증하지 않는다 (10.7절 관찰) |
+| FE-19 런타임 검증 없음 | **해결** | `src/lib/contract.ts:17-57` (`parseResponse`·`readJson`·`readErrorMessage`·`parseChatSsePayload`), `api.ts` 응답 함수 전부, `chatApi.ts:55`, `:61`, `:78`, `ChatWorkspace.tsx:411` | 계약 문서 2.0절, `ContractAndMsw.test.ts` describe 'Runtime response validation policy' 8개. 실패해도 던지지 않아 화면을 막지 않는다 — 브라우저 확인과 ui-audit 160조합에서 페이지 오류 0건, 콘솔 경고·오류 0건 (10.3절). 남은 타입 문제는 FE-38 |
+| FE-20 초기화 미실행인데 성공처럼 닫힘 | **해결** | `src/hooks/useCollector.ts:226`, `:233` 진행 중이면 `이미 초기화 요청을 처리하고 있습니다.` 를 던진다 (확인 창이 문구를 보이고 열린 채 남음) | `tests/hooks/useCollector.test.ts` +1 (RED `expected null to be an instance of Error`). 구독자가 모두 떠난 경우(`:239`)는 확인 창도 없어 조용히 끝나는 것이 맞다 |
+| FE-21 `env.ts` 미사용, 버전 고정 | **해결** | `src/lib/env.ts:8-46` (`NEXT_PUBLIC_APP_VERSION`·`ALLOWED_DEV_ORIGINS`, `getClientEnv`·`getServerEnv`), `Header.tsx:67`, `app/api/health/route.ts:11`, `api.ts:66-68` | `tests/app/EnvAndHealth.test.ts` 5개 (`/api/health` version 이 빌드 값). 루트 `.env.example:55-60` 에 두 변수 |
+| FE-23 Ask AI 파서 끝 버퍼·`Gemini` 기본값 | **해결** | `src/lib/api.ts:171-221` (끝날 때 디코더·버퍼 비움, `modelUsed = ''`, `error` 이벤트·`done` 없음 → 실패, 사용자 중단 → `AbortError`) | `tests/lib/askStream.test.ts` 6개 (끝 빈 줄 없는 본문, meta 없음, error 이벤트, done 없음) |
+| FE-24 URL `session_id` 무검증 | **해결** | `ChatWorkspace.tsx:46`, `:484` UUID 일 때만, `chatApi.ts:27` `encodeURIComponent` | `tests/chat/ChatSessionParam.test.tsx` 2개 (RED: `../../news` 가 `/api/chat/sessions/..%2F..%2Fnews` 로 나감 → 요청 0) |
+| FE-25 고정·사실과 다른 문구 | **해결 (새 권장 FE-39 있음)** | `ScheduleModal.tsx:34`, `:46-61` (응답의 `schedule_hours`·`timezone`, UTC 면 KST 환산), `McpModal.tsx:57-61`, `DeepResearcherTab.tsx:110`, `NewsDetailModal.tsx:338`, `ModelTierBadge.tsx` 지연 수치 삭제·`상대 비용` sr-only, `AskAiPanel.tsx:91`, `:115` | `ScheduleModal.test.tsx`·`McpModal.test.tsx`·`DeepResearcherTab.test.tsx`·`NewsDetailModal.test.tsx`·`ChatModelSelector.test.tsx`. 스케줄 응답이 실패하면 시각이 `불러오는 중...` 에 머문다 → FE-39 |
+| FE-26 상세 캐시 누적 | **해결** | `useChatSessions.ts:216-224` 밀려난 세션 상세 키 삭제, `:284-290` `resetSessions` 가 `agentlens_chat_session_*` 전부 삭제 | `useChatSessions.test.tsx` (RED `expected '{}' to be null`) |
+| FE-27 개인 호스트·LAN IP 커밋 | **해결** | `next.config.ts:18-22` (`localhost`·`127.0.0.1` + `ALLOWED_DEV_ORIGINS`) | `EnvAndHealth.test.ts`. 개인 값은 git 밖 `frontend/.env.local` 로 옮겨졌다 |
+| FE-28 필수 결함 회귀 테스트 | **해결** (v0.4.1 에서) | — | v0.4.1 재리뷰 9.1절의 테스트가 그대로 있다 |
+| FE-29 받지 않는 prop 단언 | **해결** | `ContractAndMsw.test.ts` 의 헤더 prop 객체 리터럴 단언 삭제, 옛 `ChatHeaderProps` 삭제 | 헤더에 모델 선택이 없음은 `ChatHeader.test.tsx` R39 가 화면으로 본다 |
+| FE-30 UI 5대 상태 테스트 공백 | **부분 해결** | 홈 Loading(MSW 지연)·Error(500, 다시 시도)·Empty·Success: `tests/feed/HomePage.test.tsx` 8개. 세션 목록 500 → 오류: `useChatSessions.test.tsx` | **남음 (권장)**: 소스 대화상자·딥 리서치 탭·스케줄 대화상자의 Loading·Error·Empty, 일일 브리핑 대화상자의 브리핑 없음·요청 실패 화면 테스트. `grep -l "mockRejectedValue\|status: 500\|apiError(" src/tests/modals` 는 `NewsDetailModal.test.tsx` 하나뿐이다. 남기는 이유는 10.8절 |
+| FE-31 MSW 와 backend 불일치 | **해결** | `src/mocks/handlers/chat.ts:500-570` (global 은 `token*` 뒤 `sources`, `publisher: null`, 보충 출처·MSW 전용 단계·GET 스트림 삭제), `mocks/api-error.ts` 공통 오류 형식 | 계약 문서 3.1절·7절(열린 항목 0), `ChatWorkspace.test.tsx` 'citations when sources arrive after tokens (backend global order, D-29)' |
+| FE-32 eslint 경고 41개 | **해결** | 미사용 import·변수 정리 | `make check` 의 `pnpm lint` 출력에 문제 줄이 없다 (경고 0, 오류 0, 10.2절) |
+| FE-35 검색 대기 중 페이지 되돌림·이중 요청 | **해결** | `src/hooks/useNewsFeed.ts:59-98` `setPage`·`setCategory`·`setSource`·`setSort`·`setHighSignalOnly` 가 `flushPendingSearch` 로 기다리던 검색어를 먼저 반영 | `tests/feed/FeedSearch.test.tsx` +2 (RED `[[null,'3'],['mcp','1']]` → `[['mcp','3']]`, 필터 변경도 요청 1번) |
+| **FE-36** 모바일 챗 입력창이 밀려 올라감 (사용자 보고) | **해결** | `ChatMessageList.tsx:125` 로그 상자 `relative` (모바일 `max-md:sr-only` 라벨의 기준 상자를 목록으로), `:50-62` `scrollIntoView` 대신 `log.scrollTop = scrollHeight`, `:44-48` 맨 아래 24px 안일 때만 따라감, `:52-55` 메시지 수가 바뀌면 다시 맨 아래 | `ChatMessageList.test.tsx` +4. **브라우저 실행 확인** 10.3절: 375×667·390×844·1280×800 모두 입력창 위치가 처음부터 끝까지 그대로이고 조상 상자 스크롤 0 |
+
+지난 지적 가운데 FE-01·02·03·09·22(필수)와 FE-33·34 는 v0.4.1 에서 해결됐고, 이번 변경에서 되돌아가지 않았다: 해당 회귀 테스트(`ChatStreamTurn.test.tsx`, `FeedSearch.test.tsx`, `ExportToolbar.test.tsx`)가 모두 통과한다.
+
+### 10.2 `make check` (2026-11-10, 직접 실행)
+
+종료 코드 **0**. 출력 발췌:
+
+```
+cd backend && ../.venv/bin/pytest -v tests/
+============================= 384 passed in 12.83s =============================
+cd frontend && pnpm test && pnpm lint && pnpm exec tsc --noEmit
+$ vitest run
+ Test Files  67 passed (67)
+      Tests  783 passed (783)
+$ eslint
+EXIT=0
+```
+
+- `eslint`: 문제 줄 없음 (경고 0, 오류 0. v0.4.1 은 경고 40).
+- `tsc --noEmit`: 출력 0줄 (오류 0).
+- vitest stderr 의 Vite `configLoader: 'native'` 경고, jsdom `Not implemented: navigation to another Document`, jsdom 환경 생성 시간 안내는 실패가 아니다.
+- backend 384 는 backend 작업 트리 변경 때문이다. 이 보고서 범위 밖이다.
+- 전후 비교: 실행 전후 `git status --porcelain` 이 같았고, `git diff HEAD` 의 md5 도 같았다 (`d20c7760…`). `backend/app/config/sources.json` 의 사용자 변경 diff md5(`b83f23f7…`)도 전후 같다. 이 리뷰는 저장소 추적 파일을 바꾸지 않았다 (이 보고서 제외).
+
+### 10.3 브라우저 실행 확인 (Playwright, 프로덕션 빌드, 3300 포트)
+
+준비: scratchpad 사본에서 `next build`(성공, 라우트 `/`·`/chat`·`/api/health`) 뒤 `next start -p 3300`. 챗 화면에서 질문을 보내면 페이지 안 `fetch` 대역이 `status` 2개 → `token` 90개(40ms 간격, 문단마다 `[1]`) → `sources` → `done` 을 흘린다. 측정은 `textarea` 의 `getBoundingClientRect`, `[role=log]` 의 `scrollTop`·`scrollHeight`·`clientHeight`, 로그 위 조상 상자 가운데 `scrollTop ≠ 0` 인 것, `window.scrollY` 다.
+
+**FE-36 (입력창 위치, 목록만 스크롤)**
+
+| 뷰포트 | 입력창 top (대기 → 스트리밍 0.6s·1.5s·2.5s → 끝 → 두 번째 질문 끝) | 로그 맨 아래와의 거리 (스트리밍 중) | 조상 상자 스크롤 | `window.scrollY` |
+|---|---|---|---|---|
+| 375×667 (모바일) | 557 → 557 · 557 · 557 → 557 → 557 | 0 · 0 · 0 | 0곳 (모든 시점) | 0 |
+| 390×844 (모바일) | 734 → 734 · 734 · 734 → 734 → 734 | 0 · 0 · 0 | 0곳 | 0 |
+| 1280×800 (데스크톱) | 705 → 705 · 705 · 705 → 705 → 705 | 0 · 0 · 0 | 0곳 | 0 |
+
+- 입력창은 세 폭 모두 화면 안(`bottom` ≤ 뷰포트 높이)에 있었고 로그 `scrollHeight` 만 1162 → 10236 으로 늘었다 (모바일 기준).
+- 스트리밍 중 로그를 `scrollTop = 100` 으로 올리면 0.7초 뒤에도 100 에 머문다 (자동으로 끌어내리지 않음). 다시 맨 아래로 내리면 이후 토큰을 따라간다 (거리 0).
+- 위로 올려 둔 상태(`scrollTop = 0`)에서 두 번째 질문을 보내면 맨 아래로 간다 (거리 0).
+- 페이지 오류·콘솔 경고·오류 0건 (계약 위반 경고 없음).
+- 스크린샷: scratchpad `fcr042/shots/` (`m375x667-scrolled-up.png`, `-done.png`, `-popover.png` 등 9장).
+
+**인용 팝오버 (FE-13·FE-16·FE-37)**
+
+| 뷰포트 | 부모·위치 | 화면 안 | 닫기 버튼 | 목록 50px 스크롤 뒤 | 배지에서 Enter 후 Tab | Escape |
+|---|---|---|---|---|---|---|
+| 375×667 | `body`, `fixed` | 예 | 44×44 | 팝오버 bottom 305, 배지 top 313 (따라감) | 포커스가 **다음 배지**(`출처 1번: …`)로 감, 팝오버는 열린 채 | 닫힘, 포커스 배지로 |
+| 390×844 | `body`, `fixed` | 예 | 44×44 | 305 / 313 | **다음 배지** | 닫힘, 배지로 |
+| 1280×800 | `body`, `fixed` | 예 | 32×32 | 276 / 284 | **다음 배지** | 닫힘, 배지로 |
+
+**ui-audit (`scripts/ui-audit.mjs --base http://localhost:3300 --screenshots none`, 출력은 scratchpad)**: 조합 160, 통과 152, 실패 8, 건너뜀 0. 실패 8건은 이번 변경과 무관한 데이터 조건이다 (10.7절): `pictograph` 4건(사용자 DB 의 옛 세션 제목 `⚡ 최근 24시간…`), `R6` 4건(제목이 한 줄인 기사 카드의 제목 버튼 높이 24px, `NewsCard.tsx:140-146` 은 v0.4.0 뒤로 바뀌지 않음). 그 밖의 판정(`clip`·`occluded`·`chatScope`·`modelPicker`·`chatHeader`·`focusLabels`·`toast`·`chatAlign`·`briefing`·`cardMetric` 등 21종)은 모두 실패 0 이라 v0.4.0 UI 재설계가 되돌아가지 않았다. 대화상자 조합(뉴스 상세·AI 질의응답·일일 브리핑·공유 설정·스케줄·MCP·소스·팔레트·초기화 확인·레이더)이 모두 열렸으므로 `next/dynamic` 대화상자도 정상이다.
+
+### 10.4 테스트 변경 판단 (약하게 만든 흔적 확인)
+
+| 변경 | 판단 | 이유 |
+|---|---|---|
+| 파일별 `it`·`expect` 수 (HEAD → 작업 트리) | 약해지지 않음 | `ContractAndMsw` 80→115 / 316→423, `ChatSidebar` 11→13 / 36→43, `CitationBadge` 6→9 / 22→32, `ChatStreamTurn` 8→10 / 37→46. 줄어든 곳은 `ThemeSystem` 5→4, `HotkeyListener` 8→7, `Menu` −1 로 모두 지운 컴포넌트·prop 의 테스트다 |
+| `ChatWorkspace.test.tsx` 보충 출처 `[S1]` 단언 → 보충 버튼 0개 단언, 오류 문구 변경 | 정당 | backend 가 보충 출처를 만들지 않고(D-28) MSW 가 backend 순서·문구로 바뀌었다 (계약 3.1절). 1차 출처 버튼은 이름 `출처 1번: FastMCP` 와 `data-tone` 까지 더 좁게 단언한다 |
+| `HotkeyListener.test.tsx` 지운 prop 테스트 2개 → '⌘K 를 처리하지 않는다' | 정당 | ⌘K 는 `Header`, Escape 는 오버레이 스택이 맡는다. 새 테스트가 기본 동작을 막지 않음을 본다 |
+| `ScheduleModal.test.tsx` `getByText` → `findByText` | 약해지지 않음 | 시각을 응답 뒤에 그리게 되어 기다림만 더했다. 기대 문자열은 같다 |
+| `ChatSessionWorkflow.test.tsx` 삭제 버튼을 이름으로 찾음 | 정당 | FE-12 로 삭제 버튼이 카드 버튼 밖 형제가 됐다 |
+| `ChatModelSelector.test.tsx` 지연 수치 단언 → `상대 비용` 단언 | 정당 | FE-25 문구 변경 |
+
+새 테스트 13개 파일은 접근 이름 기준 쿼리와 MSW `server.use` 를 쓰고, RED 출력(TDD 기록 2.8·2.9절)이 리뷰 근거와 같은 관찰값으로 실패했다. FE-36 테스트는 jsdom 이 레이아웃을 계산하지 않아 `scrollHeight`·`clientHeight` 를 직접 정의하고 `relative` 클래스를 단언한다. 클래스 단언은 원인(기준 상자)의 대리 지표라 레이아웃 회귀를 다 잡지는 못하므로, 10.3절의 브라우저 확인으로 보완했다.
+
+### 10.5 새 지적
+
+### FE-37 [머지 전 필수] 인용 팝오버를 body 포털로 옮기면서 키보드 초점 순서가 끊겼다 (접근성 회귀)
+- **위치**: `src/components/chat/CitationPopover.tsx:36-46` (`portal` 은 켜고 `focusOnOpen` 은 없음), `src/components/ui/Popover.tsx:119-124` (`focusOnOpen` 일 때만 안으로 포커스), `:177` (`createPortal(panel, document.body)`)
+- **근거 (실행 확인)**: 10.3절 표. 세 폭 모두 배지에 포커스를 두고 Enter 로 연 뒤 Tab 을 누르면 포커스가 팝오버(`팝오버 닫기`, `원문 보기`)가 아니라 답 안의 다음 배지로 갔고 팝오버는 열린 채 남았다. 팝오버가 `body` 끝에 붙어 문서 순서상 페이지의 모든 조작 요소 뒤에 있기 때문이다. v0.4.1 은 팝오버가 배지 `span` 안 버튼 바로 뒤에 그려져(포털 없음) Tab 한 번으로 닫기 버튼에 들어갔다 (HEAD `CitationBadge.tsx`·`Popover.tsx` DOM 순서, 코드로 확인). 답에는 출처 목록이 따로 없어(`ChatMessageItem.tsx` 는 `원문 n건` 배지만 그린다) 키보드 사용자가 출처 원문 링크에 닿는 길은 이 팝오버뿐이다. WCAG 2.2 의 2.4.3 초점 순서(A)에 어긋나는 회귀이고, 같은 공통 부품을 쓰는 `DeleteConfirmPopover.tsx:39` 는 이미 `focusOnOpen` 을 쓴다.
+- **심각도 판단**: v0.4.1 에서 되던 키보드 접근이 이번 변경으로 나빠졌고, 이번 릴리스의 목표가 '남은 결함 0' 이며, 고치는 범위가 한 줄이라 머지 전에 고친다.
+- **현재 코드**:
+```tsx
+    <Popover
+      open={isOpen}
+      …
+      side="top"
+      portal
+```
+- **개선 제안 (Diff)**:
+```diff
+       side="top"
+       // 답변 문단(<p>) 안에서 열리므로 body 로 옮겨 그린다. 스크롤 상자에 잘리지도 않는다 (FE-13).
+       portal
++      // 포털은 문서 끝에 붙어 Tab 순서가 배지 다음이 아니다. 열 때 안으로 포커스를 옮기고, Escape·닫기는 배지로 돌려준다 (FE-37).
++      focusOnOpen
+```
+  Red 테스트 (`tests/chat/CitationBadge.test.tsx`):
+```diff
++  it('키보드로 연 인용 팝오버는 포커스를 안으로 옮기고, Escape 로 닫으면 배지로 돌려준다 (FE-37)', async () => {
++    const user = userEvent.setup();
++    render(<p><CitationBadge index={1} source={source} /></p>);
++    const badge = screen.getByRole('button', { name: /출처 1번/ });
++    badge.focus();
++    await user.keyboard('{Enter}');
++    const dialog = await screen.findByRole('dialog', { name: '출처 기사 상세 프리뷰' });
++    expect(dialog).toContainElement(document.activeElement as HTMLElement);
++    await user.keyboard('{Escape}');
++    expect(badge).toHaveFocus();
++  });
+```
+
+### FE-38 [권장] 챗 SSE payload 를 검증한 뒤 `any` 로 바꿔 zod 타입을 버린다
+- **위치**: `src/components/chat/ChatWorkspace.tsx:411`
+- **근거 (코드로 확인)**: `parseChatSsePayload(...)` 의 반환(`unknown`)을 `as ReturnType<typeof JSON.parse>` 로 바꾼다. `JSON.parse` 의 반환 타입은 `any` 라 `data.step`·`data.sources`·`data.model_tier`·`data.message` 접근을 `tsc` 가 보지 않는다. `parseResponse` 는 통과하면 스키마에 없는 키를 지우므로(`contract.ts:13-14`), 나중에 화면이 새 필드를 읽기 시작했는데 스키마에 넣지 않으면 그 필드가 경고 없이 사라지고 `tsc` 도 잡지 못한다. 지금 쓰는 필드는 모두 스키마에 있어 동작 결함은 아니다 (`types/chat.ts:265-273`, `:308-314`, `:432-442`, `:449-455` 대조). 제품 코드 `any` 0건이던 상태(6절)에서 암묵 `any` 가 하나 생겼다.
+- **개선 제안 (Diff)**: 이벤트별로 타입을 좁힌다.
+```diff
+ // src/lib/contract.ts
+-export function parseChatSsePayload(event: string, data: unknown): unknown {
++type ChatSsePayloads = {
++  status: ChatStatusPayload; sources: ChatSourcesPayload; token: SseTokenPayload; done: ChatDonePayload; error: ChatStreamErrorPayload;
++};
++export function parseChatSsePayload<E extends keyof ChatSsePayloads>(event: E, data: unknown): ChatSsePayloads[E];
++export function parseChatSsePayload(event: string, data: unknown): unknown;
++export function parseChatSsePayload(event: string, data: unknown): unknown {
+```
+```diff
+ // src/components/chat/ChatWorkspace.tsx
+-              const data = parseChatSsePayload(eventType, JSON.parse(dataStr)) as ReturnType<typeof JSON.parse>;
+-              if (eventType === 'status' && data.step) {
++              const raw: unknown = JSON.parse(dataStr);
++              if (eventType === 'status') {
++                const data = parseChatSsePayload('status', raw);
+```
+- **남기는 이유 (권장)**: 런타임 동작은 지금 맞고, 고치면 SSE 분기 전체를 다시 써야 해 이번 릴리스 범위보다 크다.
+
+### FE-39 [권장] 스케줄 응답이 실패하면 수집 시각이 `불러오는 중...` 에 머문다
+- **위치**: `src/components/ScheduleModal.tsx:54`, `:67`, `src/hooks/useCollector.ts:108-118` (`fetchScheduleStatus` 실패를 `.catch(() => {})` 로 버림)
+- **근거 (코드로 확인)**: FE-25 로 수집 시각을 응답의 `schedule_hours` 로 그리게 되면서, 응답이 실패하면(backend 꺼짐·8초 초과) 시각 칸이 `불러오는 중...`, 다음 수집 칸이 `계산 중...` 으로 끝나지 않는다. 전에는 시각이 고정 문구라 다음 수집 칸만 그랬다. 오류 문구·다시 시도가 없어 UI 5대 상태의 Error 가 없다 (FE-30 남은 부분과 같은 범주).
+- **개선 제안 (Diff)**:
+```diff
+ // src/hooks/useCollector.ts (loadStatus)
+-    .catch(() => {});
++    .catch(() => {
++      if (gen !== generation || listeners.size === 0) return;
++      setSnapshot({ statusError: '스케줄 정보를 불러오지 못했습니다.' });
++    });
+```
+```diff
+ // src/components/ScheduleModal.tsx
+-              {status ? formatHours(status.schedule_hours, ' · ') : '불러오는 중...'}
++              {status ? formatHours(status.schedule_hours, ' · ') : statusError ?? '불러오는 중...'}
+```
+  테스트: `fetchScheduleStatus` 를 `mockRejectedValue` 로 두고 대화상자에 오류 문구가 보이는지 단언한다.
+- **남기는 이유 (권장)**: backend 가 꺼져 있으면 홈 목록이 먼저 `ErrorState`(다시 시도)를 보여 사용자가 원인을 안다. 데이터가 틀리게 보이지는 않고 '기다림' 으로만 보인다.
+
+### 10.6 문서 동기화 (코드 밖, 오케스트레이터에게 넘김)
+
+리뷰를 시작할 때(`git status` 기록) 아래 산출물은 고쳐지지 않았다. 리뷰 도중 다른 작업이 `docs/ui-system-designer/01_COMPONENT_SPEC.md`, `docs/spec-writer/fsd/01·02`, `docs/fullstack-architect/`, `docs/system-designer/02_OPENAPI_SPEC.yaml` 을 고치기 시작했고(`01_COMPONENT_SPEC.md` 에는 `portal`·목록만 스크롤 설명이 들어가는 중이다), 이 리뷰는 그 결과를 판정하지 않았다. 아래는 반영 확인용 목록이다 (문서 줄 번호는 HEAD `4944a5e` 기준):
+- `docs/ui-system-designer/02_DESIGN_SYSTEM.md:190` ('`Popover`·`MenuButton` 은 포털을 쓰지 않고…'), `:248` (`Popover` prop 표에 `portal` 없음), `:404` (팝오버 포털 '없음'), `:599` (인용 팝오버가 `<p>` 안 `div` 로 그려진다는 남은 문제) → `portal` prop 과 인용 팝오버만 body `fixed` 라는 사실로.
+- `docs/ui-system-designer/01_COMPONENT_SPEC.md:181` (팝오버는 포털 없음), `:347` ('새 항목마다 맨 아래로 스크롤(줄인 모션이면 `auto`, `ChatMessageList.tsx:41-45`)' → 맨 아래 24px 안일 때만 따라가고 새 질문이면 맨 아래, `scrollTop` 직접 이동), `:405` (`WebhookSettingsModal.tsx`·`ThemeToggle.tsx` 미사용 표기 → 삭제됨), 10절 알려진 불일치 1·2·3·4·5·6·7·8·9·10·11·12·13·14·16 (이번에 해결된 항목).
+- 챗 FSD·UI 공통 FSD(`docs/spec-writer/fsd/02_AI_CHAT_SPECIFICATION.md`, `07_UI_COMMON_SPECIFICATION.md`): 자동 스크롤 규칙, 완료 알림 `답변이 완료되었습니다.`, 세션 삭제 실패 알림, 챗 요청 시간 제한(8초·30초)과 문구, URL `session_id` UUID 검증, 인용 팝오버 `기사 상세` 버튼 삭제, 모델 선택 목록의 지연 수치 삭제. 기사 Ask AI 끊김 처리(부분 답 + 오류 + `답변 다시 시도`, 복사 막음), 배지 문구 `응답 엔진: …`.
+- `docs/devops-engineer/01_DEPLOYMENT_SPEC.md`: `ALLOWED_DEV_ORIGINS`, `NEXT_PUBLIC_API_URL` 기본 빈 값(같은 출처).
+- FE-37 을 고치면 위 문서의 인용 팝오버 포커스 설명(열 때 안으로 포커스)도 함께 적는다.
+
+### 10.7 관찰 (지적으로 세지 않음)
+- **ui-audit 실패 8건은 데이터 조건**: (1) `pictograph` 4건은 `/api/chat/sessions` 가 돌려준 사용자 DB 의 옛 세션 제목 `⚡ 최근 24시간 내…`(이모지가 있던 시절 추천 질문으로 만든 대화)다. 지금 추천 질문 글자에는 이모지가 없다 (`ChatMessageList.tsx:23-28`). (2) `R6` 4건은 제목이 한 줄로 들어가는 기사(`[요즘IT] A2A 도입 전에 확인할 것 7가지`) 카드의 제목 버튼이 360·390 폭에서 높이 24px 인 것이다. 카드 전체가 눌리므로(`NewsCard.tsx:107` `onClick`) 실제 터치 영역은 카드이고, 이 코드는 v0.4.0 뒤로 바뀌지 않았다. v0.4.0 최초 QA 의 ui-audit(실패 0)와 데이터가 달라 드러났다. QA 가 판정 규칙(카드 안 제목 버튼을 R6 대상으로 볼지)과 함께 다룰 것을 권한다.
+- `readStoredDetail`(`useChatSessions.ts:39-54`)은 `id`·`messages` 배열만 보고 원소 모양은 보지 않는다. 앱이 쓴 값만 있으면 닿지 않고, 수동 편집으로 `messages: [null]` 같은 값을 넣어야 생긴다.
+- `getClientEnv()` 는 값이 스키마에 맞지 않으면 던진다(`env.ts:30-35`, fail-fast). `Header` 렌더(`Header.tsx:67`)와 `/api/health` 에서 부르므로 `NEXT_PUBLIC_API_URL` 을 URL 이 아닌 값으로 빌드하면 헤더가 그려지지 않고 `app/error.tsx` 가 보인다. `.claude/rules/environment-standards.md` 의 검증 방침대로이고, 빌드 때 값이 박히므로 배포 확인에서 드러난다.
+- `ChatDonePayloadSchema.model_tier` 기본값이 `'sonnet'`(`types/chat.ts:436`)이라 backend 가 `model_tier` 를 빼면 `data.model_tier || selectedTier`(`ChatWorkspace.tsx:433`)가 고른 티어 대신 `sonnet` 이 된다. 계약상 backend 는 늘 보낸다 (계약 3.1절).
+- 포털 팝오버는 앵커를 따라가므로(`Popover.tsx:139-154`) 앵커가 메시지 목록 밖으로 스크롤돼도 헤더·입력창 위에 떠 있을 수 있다. 터치 스크롤은 바깥 `pointerdown` 으로 닫혀 모바일에서는 생기지 않고, 데스크톱 휠 스크롤에서만 보인다.
+- `fetchWithTimeout`(`api.ts:78-80`)이 바깥 `signal` 에 붙인 `abort` 리스너를 떼지 않는다. 스트림마다 새 `AbortController` 라 리스너는 그 요청과 함께 사라진다.
+- `frontend/.env.example` 은 `frontend/.gitignore:34`(`.env*`)로 git 밖이고 로컬 사본은 아직 `NEXT_PUBLIC_API_URL="http://localhost:8000"` 이다. 추적되는 기준은 루트 `.env.example:55` (빈 값)이다.
+
+### 10.8 최종 판정 (v0.4.2)
+
+- **판정 결과**: **REQUEST_CHANGES (변경 요청)**
+- **머지 전 필수 (1건)**: FE-37 — 인용 팝오버 키보드 초점 순서 회귀. `CitationPopover` 에 `focusOnOpen` 을 더하고 `CitationBadge.test.tsx` 에 Red 테스트를 먼저 넣는다 (10.5절 diff).
+- **권장 (남기는 이유)**:
+  - FE-38 (`any` 캐스트): 런타임 동작은 맞고 SSE 분기 전체를 다시 쓰는 작업이라 이번 범위보다 크다.
+  - FE-39 (스케줄 오류 상태): backend 가 꺼지면 홈이 먼저 오류를 보이고, 틀린 값이 아니라 기다림으로만 보인다.
+  - FE-30 남은 부분 (대화상자 Error·Empty 테스트): 테스트 공백이고 동작 결함이 아니다. FE-39 를 고칠 때 스케줄 대화상자 Error 테스트부터 넣기를 권한다.
+- **해결 확인**: 지난 권장 28건 가운데 27건 해결, FE-30 부분 해결. 사용자 보고 FE-36 은 jsdom 테스트 4개와 실제 브라우저(모바일 375×667·390×844, 데스크톱 1280×800)로 해결을 확인했다.
+- **재리뷰 범위**: FE-37 수정 뒤에는 `CitationPopover.tsx` 와 테스트 파일만 다시 보면 된다. FE-38·FE-39 를 함께 고치면 그 파일들도 본다.
+
+---
+
+## 11. v0.4.2 2차 재리뷰 (2026-11-10, 작업 트리)
+
+### 11.0 범위와 방법
+- 범위: 10절 뒤에 더한 frontend 2차 수정 전부 (변경 요약 scratchpad `v042-changes.md` '2차 수정' 절, `docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md` 2.8·2.9절 덧붙임). 지금 `git diff HEAD --stat -- frontend` 는 77개 파일 +3735/−3122, 새 파일에 `src/mocks/handlers/ops.ts`·`src/tests/lib/chatSsePayload.test.ts` 가 더해졌다.
+- 방법: 10절과 같다. 코드·테스트를 읽고, `make check` 를 직접 돌리고, frontend 를 scratchpad 사본으로 다시 프로덕션 빌드해 **3300 포트**에서 Playwright 와 `ui-audit` 를 돌렸다. 챗 API 는 페이지 안 `fetch` 대역(완료 이벤트 `session_id` 는 UUID)으로 흉내 내 사용자 backend·DB 에 쓰지 않았다. 사용자 3000·8000 은 건드리지 않았고 3300 서버는 끝에 내렸다 (`lsof` 로 확인).
+
+### 11.1 건별 확인
+
+| 지적 | 결과 | 고친 내용 (path:line, `frontend/` 기준) | 근거 |
+|---|---|---|---|
+| **FE-37** 인용 팝오버 키보드 순서 (필수) | **해결** | `src/components/chat/CitationPopover.tsx:42-46` `portal` + `focusOnOpen` | 브라우저 11.2절: 세 폭 모두 Enter → 포커스 `팝오버 닫기`(팝오버 안) → Tab → `원문 보기`(`href` 확인) → Shift+Tab → `팝오버 닫기` → Escape → 닫히고 배지로 복귀. 닫기 버튼 Enter 로 닫아도 배지로 복귀. 마우스로 열고 바깥을 누르면 닫힘. 테스트 `tests/chat/CitationBadge.test.tsx:113-135` (Tab 뒤에도 팝오버 안, 다음 배지에 포커스 없음, Escape 뒤 배지 포커스) |
+| FE-38 챗 SSE `any` 캐스트 | **해결** | `src/lib/contract.ts:59-74` `ChatSsePayloads` + 오버로드, `src/components/chat/ChatWorkspace.tsx:417-457` 이벤트별 `parseChatSsePayload('status' …)` | `tests/lib/chatSsePayload.test.ts` 3개. `ChatWorkspace.tsx` 에 `ReturnType<typeof JSON.parse>` 0건. 같은 꼴이 기사 Ask AI 파서에 남았다 → FE-42 |
+| FE-39 스케줄 오류 상태 | **해결** | `src/hooks/useCollector.ts` `statusError`(성공하면 false, 더 나중 요청이 이미 성공했으면 표시 안 함), `reloadStatus`. `src/components/ScheduleModal.tsx:48-58` 상태를 한 번도 못 받고 실패하면 `InlineAlert`(danger) + `다시 시도`, 시각이 비면 `정해진 수집 시각이 없습니다` | `tests/modals/ScheduleModal.test.tsx:105` (실패 → 오류·다시 시도 → 다시 시도하면 시각을 그림) |
+| FE-30 남은 부분 (대화상자 Error·Empty) | **해결** | `src/components/SourcesModal.tsx:57`, `:205-206`, `:221-227` (받은 데이터 없이 실패하면 `ErrorState` + 다시 시도, 있으면 위쪽 안내), `sources/SourcesListTab.tsx:187` 등 `EmptyNote`(받기 전 `불러오는 중...`, 빈 목록 안내), `sources/DeepResearcherTab.tsx` `실행 기록 없음` | `tests/modals/SourcesModal.test.tsx:149` describe 'Error·Empty (FE-30)', `tests/feed/HomePage.test.tsx:141` 일일 브리핑 요청 실패 |
+| ui-audit R6 (카드 제목 버튼 24px) | **해결** | `src/components/NewsCard.tsx:143` 제목 버튼 `min-h-12` | ui-audit 다시 실행에서 R6 실패 0 (11.2절). `cardMetric`·`feedAreas`·`cardFooter`·`vRhythm` 도 실패 0 이라 카드 모양이 바뀌지 않았다 |
+| FE-40 세션 전환 실패 | **해결** | `ChatWorkspace.tsx:217-244` 상세를 받은 뒤에만 `setSessionId`·메시지 교체, 실패면 지금 대화 유지 + `대화를 불러오지 못했습니다.` | `tests/chat/ChatSessionParam.test.tsx:102`. 코드로 확인: 먼저 바꾸던 때는 이전 대화가 새 세션 id 로 저장될 수 있었다 |
+| FE-41 이관 기사 오류 문구 | **해결** | `src/lib/chatApi.ts:79` 404 → `null`, `ChatWorkspace.tsx:43-44`, `:515-544` 404 는 `요청하신 기사를 찾을 수 없어…`, 그 밖은 `기사 정보를 불러오지 못해 … 연결 상태를 확인해 주세요.` | `ChatSessionParam.test.tsx:76`, `tests/lib/chatApi.test.ts:76` |
+| FE-04 재시도 경쟁 상태 | **해결** | `ChatWorkspace.tsx:103-109`, `:606-609` `messagesRef`·`sendMessageRef` 를 `useLayoutEffect` 로 갱신 (커밋과 같은 때) | `tests/chat/ChatStreamTurn.test.tsx:299` (오류가 그려진 직후 다시 시도해도 요청이 나감). `useLayoutEffect` 는 지연 effect 보다 먼저 돌아 화면에 오류가 보인 뒤의 클릭이 옛 값을 읽지 않는다 |
+| 미사용 `ChatModelSelectorProps.variant`·`getServerEnv` | **해결** | 삭제 (`serverEnvSchema` 는 변수 목록으로 남김) | `tsc` 0, `ChatUnusedApi.test.tsx` |
+| 계약 v1.4 | **확인** | `types/chat.ts:4` `IsoDateTimeSchema = z.iso.datetime({ offset: true })`, `:7` 세션 UUID, 메시지 id 1~36자, `ChatStatusStepSchema` 4값, `contract.ts:76-91` `parseNewsAskSsePayload`, `recent_logs[].status` enum, trigger `other_process` | `ContractAndMsw.test.ts` 통과. 검증 실패 시 정책은 그대로(던지지 않음)라 오프셋 없는 옛 저장값이 있어도 화면은 막히지 않는다. 클라이언트 세션 id 는 `crypto.randomUUID()`, 비보안 출처(HTTP LAN·Tailscale)에서는 v4 꼴 대체 생성(`ChatWorkspace.tsx:50-59`)이라 backend 의 새 UUID 검사(400)에 걸리지 않는다 (코드로 확인) |
+| MSW 테스트 격리 | **확인** | `src/mocks/server.ts` `recordUnhandledRequest`(던져서 네트워크로 안 나감), `src/tests/setup.ts:75-82` afterEach 가 그 테스트를 실패시킴, `src/mocks/handlers/ops.ts` 운영 엔드포인트 기본 핸들러 | `make check` 출력에 목 없는 요청 오류 0. 전에는 목 없는 `/api/trends/radar`·`/api/schedule/status` 가 사용자 `make dev`(:3000)로 나갈 수 있었다 |
+| 간헐 실패 테스트 2개 | **확인** | ChipGroup ScrollRow 테스트, HomePage 목 없는 요청 | 이번 `make check` 1회 통과. 반복 실행은 하지 않았다 |
+
+### 11.2 브라우저·ui-audit (3300, 프로덕션 빌드)
+
+**FE-37 키보드 흐름** (375×667·390×844·1280×800 세 폭 같은 결과):
+
+| 단계 | 포커스 | 팝오버 |
+|---|---|---|
+| 배지에 포커스 | `BUTTON 출처 1번: 테스트 출처 기사` | 닫힘 |
+| Enter | `BUTTON 팝오버 닫기` (팝오버 안) | 열림, 부모 `body`, 화면 안 |
+| Tab | `A 원문 보기` (`https://example.com/a`) | 열림 |
+| Shift+Tab | `BUTTON 팝오버 닫기` | 열림 |
+| Escape | `BUTTON 출처 1번: …` (배지 복귀) | 닫힘 |
+| 다시 Enter → 닫기 버튼에서 Enter | 배지 복귀 | 닫힘 |
+| 마우스로 열기 → 바깥 누르기 | 열 때 팝오버 안, 닫은 뒤 `body` | 닫힘 |
+
+**FE-36 회귀 확인**: 같은 실행에서 입력창 top 이 세 폭 모두 9개 시점 내내 557 / 734 / 705 그대로, 조상 상자 스크롤 0곳, 스트리밍 중 위로 올리면 머물고(맨 아래와의 거리 3948 / 3771 / 2022) 내리면 다시 따라감(0), 완료 알림 `답변이 완료되었습니다.`. 페이지 오류·콘솔 경고 0건 (계약 v1.4 검증 경고 없음).
+
+**ui-audit** (`--base http://localhost:3300 --screenshots none`): 조합 160, 통과 156, 실패 4, 건너뜀 0. **R6 실패 0** (1차 재리뷰의 4건 해결). 남은 실패 4건은 `pictograph` 로, 사용자 DB 의 옛 세션 제목 `⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...`(10월 19일 대화)를 사이드바가 그대로 보인 것이다. 코드가 아니라 데이터 조건이다 (10.7절). 그 밖의 판정 20종은 실패 0 이다.
+
+### 11.3 `make check` (2026-11-10, 직접 실행)
+
+종료 코드 **0**:
+
+```
+============================= 410 passed in 11.86s =============================
+cd frontend && pnpm test && pnpm lint && pnpm exec tsc --noEmit
+ Test Files  69 passed (69)
+      Tests  820 passed (820)
+$ eslint
+EXIT=0
+```
+
+- eslint 문제 줄 없음 (경고·오류 0), `tsc --noEmit` 출력 0줄.
+- 전후 비교: `git status --porcelain` 에서 `M docs/releases.md`, `M frontend/package.json` 두 줄이 늘었고 `config.json` 의 diff 도 바뀌었다. 세 파일 모두 실행 중(14:12:22~14:12:35)에 바뀐 버전 올림(`0.4.1` → `0.4.2`)이다. 오케스트레이터의 릴리스 작업이고 `make check` 가 쓴 것이 아니다 (pytest 는 `config.json`·`sources.json` 을 임시 사본으로 쓴다, `backend/tests/conftest.py:172-174`). `config.json` diff 에서 이 리뷰 전과 달라진 것은 `version` 한 줄뿐이다. `backend/app/config/sources.json` 은 수정 시각이 12:00 그대로이고, 이 리뷰는 두 파일을 되돌리거나 고치지 않았다.
+
+### 11.4 새 지적
+
+### FE-42 [권장] 기사 Ask AI 스트림 파서가 검증 결과를 `any` 로 바꾼다 (FE-38 과 같은 꼴)
+- **3차 재리뷰 (2026-11-10)**: **해결**. `frontend/src/lib/contract.ts:89-93` `parseNewsAskSsePayload` 가 `NewsAskSseEvent | null` 을 돌려주고(모르는 이벤트는 `null`), `frontend/src/lib/api.ts:198-199` 는 캐스트 없이 받아 `null` 이면 건너뛴다. 제품 코드에 `ReturnType<typeof JSON.parse>` 0건(`grep`). `tests/lib/newsAskSsePayload.test.ts` 3개와 `askStream.test.ts` 통과, `tsc --noEmit` 오류 0 (직접 실행).
+- **위치**: `src/lib/api.ts:192`
+- **근거 (코드로 확인)**: 계약 v1.4 에서 `parseNewsAskSsePayload(JSON.parse(jsonStr))` 를 더하면서 결과를 `as ReturnType<typeof JSON.parse>`(= `any`)로 바꾼다. 지금 읽는 필드(`event`, `model`, `text`, `total_text`, `message`)는 모두 스키마(`types/news.ts:320-329`)에 있어 동작은 맞다. 전에도 `JSON.parse` 결과(`any`)를 바로 썼으므로 회귀는 아니다. 같은 파일에 이미 판별 유니온 `NewsAskSseEventSchema`(`types/news.ts:330-335`)가 있다.
+- **개선 제안 (Diff)**:
+```diff
+ // src/lib/contract.ts
+-export function parseNewsAskSsePayload(data: unknown): unknown {
++export function parseNewsAskSsePayload(data: unknown): z.output<typeof NewsAskSseEventSchema> | { event?: undefined } {
+```
+```diff
+ // src/lib/api.ts
+-          const payload = parseNewsAskSsePayload(JSON.parse(jsonStr)) as ReturnType<typeof JSON.parse>;
++          const payload = parseNewsAskSsePayload(JSON.parse(jsonStr));
+```
+- **남기는 이유 (권장)**: 런타임 동작과 화면에 영향이 없고, FE-38 처럼 `tsc` 가 앞으로 필드 누락을 잡게 하는 정리다.
+
+### 11.5 관찰 (지적으로 세지 않음)
+- `handleSelectSession`(`ChatWorkspace.tsx:217-244`)은 상세를 기다리는 동안 다른 세션을 누르면 늦게 온 응답이 이긴다 (요청 순서 번호가 없다). 두 조회가 순서를 바꿔 올 때만 생기고 결과는 사용자가 누른 세션 중 하나다. FE-40 전에도 같았다.
+- 스케줄 대화상자의 `다시 시도`(`ScheduleModal.tsx:52`)는 누르는 동안 로딩 표시가 없고, 다시 실패하면 화면이 그대로다. 오류 문구는 계속 보인다.
+- `CitationBadge.test.tsx:113` 의 이름은 'Tab 이 팝오버 안을 돈다' 이지만 단언은 Tab 한 번 뒤에도 팝오버 안이라는 것이다. 팝오버는 포커스 가두기가 없는 비모달이라(마지막 링크에서 Tab 하면 밖으로 나간다) 이름만 조금 넓다.
+
+### 11.6 문서 동기화
+- 10.6절 목록의 나머지와 함께: 인용 팝오버는 열 때 안(`팝오버 닫기`)으로 포커스를 옮긴다(FE-37), 스케줄 대화상자 오류 상태(FE-39), 소스 대화상자 Error·Empty 문구(FE-30), 세션 전환 실패 시 지금 대화 유지(FE-40), 이관 기사 오류 문구 두 가지(FE-41). 문서 담당이 반영 중이고 이 리뷰는 문서를 판정하지 않았다.
+
+### 11.7 최종 판정 (v0.4.2 2차 재리뷰)
+- **판정 결과**: **APPROVED (승인)**
+- **머지 전 필수**: 0건 (FE-37 해결, 브라우저로 확인).
+- **남은 권장**: FE-42 1건. 남기는 이유는 11.4절 (동작 영향 없음, 타입 정리). → 3차 재리뷰에서 해결 (11.4절).
+- **해결 누계**: v0.4.1 권장 28건 전부(FE-30 포함), FE-36, FE-37, FE-38, FE-39, ui-audit R6, FE-40, FE-41.
+
+---
+
+## 12. v0.4.2 3차 재리뷰 (2026-11-10, 마지막 frontend 수정 3건)
+
+범위: `docs/frontend-tdd-engineer/01_TDD_CYCLE_LOG.md` 2.8절 '마지막 항목'. 코드와 테스트를 읽고 `make check` 를 돌렸다. 브라우저는 쓰지 않았다 (문구 2건과 네트워크 시간 제한이라 jsdom 테스트로 충분).
+
+| 수정 | 결과 | 위치 | 근거 |
+|---|---|---|---|
+| 챗 포커스 필터 라벨 `Must-Read 고신호만 (품질 7.8+)` → `Must-Read 고신호만` | **맞음** | `frontend/src/components/chat/FocusBottomSheet.tsx:156` | 고신호 판정은 backend `is_high_signal`(기본 임계값 7.0)이 하므로 화면에 다른 숫자를 박지 않는 것이 맞다. 스위치 접근 이름 `Must-Read 고신호 전용 토글`(`:158`)은 그대로다. `tests/chat/FocusBottomSheet.test.tsx:238` |
+| 감사 일지 라벨 `AI 판정 사유:` → `판정 사유:` | **맞음** | `frontend/src/components/sources/DeepResearcherTab.tsx:192` | 딥 리서치 평가는 키워드 규칙이다 (FE-25 와 같은 원칙). `tests/modals/DeepResearcherTab.test.tsx:55-79` |
+| 기사 질문 스트림 첫 응답 30초 제한 | **맞음** | `frontend/src/lib/api.ts:126` (`ASK_STREAM_FIRST_BYTE_TIMEOUT_MS = 30000`), `:145-156` (`send`: `fetchWithTimeout`, 사용자가 중단하지 않았는데 `AbortError` 면 시간 초과 문구), `:163` (사용자 중단·시간 초과면 대체 경로로 다시 보내지 않음) | 코드로 확인: 타이머는 응답 머리가 오면 지워져(`fetchWithTimeout`, `api.ts:74-90`) 긴 답의 본문은 끊지 않는다. 사용자 중단은 바깥 `signal` 이 먼저 `aborted` 라 원래 `AbortError` 를 그대로 올리고, `NewsDetailModal` 은 이를 조용히 끝낸다. 시간 초과 뒤 대체 경로로 다시 보내지 않으므로 최대 대기는 30초 한 번이다. `tests/lib/askStream.test.ts:119-146` (가짜 타이머로 30초 → 문구, 중단 → `AbortError`) |
+
+**시간 초과의 화면 테스트 공백 판단: 머지를 막지 않는다 (권장 FE-43).**
+- 시간 초과는 `api.ts` 에서 문구 있는 일반 `Error` 로 바뀐다. `NewsDetailModal.tsx:186-196` 의 `catch` 는 `AbortError` 가 아닌 모든 `Error` 를 같은 길로 처리한다 (마지막 답에 `error: err.message`, `isStreaming: false`). 이 길은 `NewsDetailModal.test.tsx:114-149` 의 끊김 테스트 2개가 화면까지 확인한다 (오류 알림, `답변 다시 시도`, 다시 보내기). 남은 차이는 원인이 아니라 '받은 답이 비어 있다' 는 점이다.
+- 그 차이가 공백이다. 답이 빈 채 실패하면 `AskAiPanel.tsx:221` 이 본문과 스피너를 그리지 않고 `:237` 의 오류 알림만 그린다. 이 분기는 시간 초과뿐 아니라 연결 실패·5xx 같은 다른 원인으로도 화면 테스트가 없다. 코드는 세 줄짜리 조건이고 읽어서 맞다. 그래서 권장으로 둔다.
+
+### FE-43 [권장] 답이 빈 채 실패한 기사 질문(시간 초과·연결 실패)의 화면 테스트가 없다
+- **4차 확인 (2026-11-10)**: **해결**. `frontend/src/tests/modals/NewsDetailModal.test.tsx:152-174` (MSW 무한 지연 + 가짜 타이머로 30초를 넘기면 스피너가 사라지고 알림에 `응답이 늦어 요청을 멈췄습니다. 다시 시도해 주세요.` 와 `답변 다시 시도`), `:176-199` (첫 요청 `HttpResponse.error()` → 알림·다시 시도, 스피너 없음 → 다시 시도하면 `다시 받은 답`, 알림 사라짐). 실제 `askQuestionAboutNewsStream` 과 MSW 를 거치는 화면 테스트라 단위 테스트와 `catch` 길을 함께 묶는다. 코드는 처음부터 맞아 바뀐 곳이 없다 (TDD 기록 2.9절 '덧붙임 5'). `make check` 종료 0, 전후 `git status` 같음.
+- **위치**: `frontend/src/components/news-detail/AskAiPanel.tsx:221`, `:237`, 테스트 `frontend/src/tests/modals/NewsDetailModal.test.tsx`
+- **개선 제안 (Diff)**:
+```diff
++  it('첫 응답 전에 실패하면(시간 초과) 스피너 대신 오류 알림과 답변 다시 시도를 보인다', async () => {
++    vi.spyOn(api, 'askQuestionAboutNewsStream').mockRejectedValueOnce(new Error('응답이 늦어 요청을 멈췄습니다. 다시 시도해 주세요.'));
++    render(<Harness />);
++    fireEvent.click(screen.getByRole('tab', { name: /^AI 질의응답/ }));
++    fireEvent.click(screen.getByRole('button', { name: '핵심 원리 및 구조' }));
++    const alert = await screen.findByRole('alert');
++    expect(alert).toHaveTextContent('응답이 늦어 요청을 멈췄습니다');
++    expect(within(alert).getByRole('button', { name: '답변 다시 시도' })).toBeInTheDocument();
++    expect(screen.queryByText(/AI가 실시간 스트리밍 답변을 생성하는 중/)).not.toBeInTheDocument();
++  });
+```
+- **남기는 이유 (권장)**: 동작은 단위 테스트(시간 초과 → 문구)와 같은 `catch` 길의 화면 테스트(끊김)를 합쳐 보증되고, 비어 있는 경우의 분기는 단순한 조건이다.
+
+### `make check` (2026-11-10, 직접 실행)
+종료 코드 **0**:
+```
+============================= 417 passed in 11.17s =============================
+ Test Files  70 passed (70)
+      Tests  827 passed (827)
+$ eslint
+EXIT=0
+```
+- eslint 문제 줄 없음, `tsc --noEmit` 출력 0줄. 실행 전후 `git status --porcelain` 이 같다. `backend/app/config/sources.json`(수정 시각 12:00)·`config.json`(14:12:22, 버전 올림) 은 건드리지 않았다.
+
+### 최종 판정 (v0.4.2 3차)
+- **APPROVED**. 머지 전 필수 0건, **남은 권장 0건**. FE-42 해결 (11.4절), FE-43 해결 (위).
+- `make check` (4차, 직접 실행) 종료 0: backend `418 passed in 11.40s`, frontend `Test Files 70 passed (70)`, `Tests 831 passed (831)`, eslint 문제 줄 없음, tsc 출력 0줄.
+- 관찰 (지적으로 세지 않음): 연결 자체가 실패하면(`fetch` 의 `TypeError`) `askQuestionAboutNewsStream` 이 그 오류를 그대로 올려, 알림 글자가 브라우저 원문(Chromium 은 `Failed to fetch`)이 된다 (`frontend/src/lib/api.ts:163-165`, `NewsDetailModal.tsx:190`). 챗 쪽 `chatApi.ts` 는 이런 오류를 정해 둔 한국어 문구로 바꾼다. v0.4.1 도 `AI 응답 생성 실패: Failed to fetch` 로 원문을 보였으므로 회귀는 아니고, `:176` 테스트는 알림 글자를 단언하지 않는다. 다음 작업에서 문구를 맞추기를 권한다.
+
+### 12.1 5차 확인: 연결 실패 문구 (2026-11-10)
+- 위 관찰이 고쳐졌다. `frontend/src/lib/api.ts:129` `CONNECT_FAILED_MESSAGE`(`서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.`), `:155-160` 기사 질문 `send`: 사용자 중단이면 원래 `AbortError`, 제한 타이머의 중단이면 시간 초과 문구, 그 밖(연결 실패)이면 연결 문구. 직접 주소의 연결 실패는 시간 초과가 아니므로 같은 출처 대체 경로 재시도(`:163-166`, D-41)는 그대로다.
+- `frontend/src/lib/chatApi.ts:33-50` `request` 도 같은 세 갈래다 (중단 → `AbortError`, 시간 초과 → 호출마다 정한 문구, 연결 실패 → `CONNECT_FAILED_MESSAGE`).
+- 테스트: `NewsDetailModal.test.tsx:201-208` (화면 알림이 `Failed to fetch` 대신 연결 문구), `chatApi.test.ts:52-72` (조회·저장·삭제·기사·스트림 6개 함수 모두 연결 문구), 시간 초과 `chatApi.test.ts:130`, `:144-154`, `askStream.test.ts:128`, 중단 `chatApi.test.ts:158-169`, `askStream.test.ts:138-144` 가 그대로 통과한다.
+- `make check` 종료 0: backend `418 passed in 15.64s`, frontend `Test Files 70 passed (70)`, `Tests 833 passed (833)`, eslint·tsc 오류 0. 전후 `git status` 같음.
+- 판정 유지: **APPROVED**, 머지 전 필수 0건, 권장 0건, 남은 관찰 없음.

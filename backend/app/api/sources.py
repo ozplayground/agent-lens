@@ -1,23 +1,27 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
-from app.services.sources_service import sources_service
+from typing import Literal, Optional
+from app.api.errors import ApiError
+from app.services.sources_service import SourcesWriteError, sources_service
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
 class AddRssRequest(BaseModel):
-    name: str = Field(..., description="소스 표시명")
-    url: str = Field(..., description="RSS/Atom 피드 URL")
+    # 값 검증 실패는 전역 처리기가 400 ERR_INVALID_PAYLOAD 로 바꾼다 (BUG-20)
+    name: str = Field(..., min_length=1, max_length=200, description="소스 표시명")
+    url: str = Field(..., pattern=r"^https?://\S+$", max_length=1000, description="RSS/Atom 피드 URL (http/https)")
     site_url: Optional[str] = Field("", description="웹사이트 URL")
-    category_hint: Optional[str] = Field("ai_news", description="기본 카테고리 (harness, mcp_plugins_skills, agent_tech, ai_news)")
-    country: Optional[str] = Field("GLOBAL", description="국가 (KR, GLOBAL)")
+    category_hint: Literal["harness", "mcp_plugins_skills", "agent_tech", "ai_news"] = Field("ai_news", description="기본 카테고리")
+    country: Literal["KR", "GLOBAL"] = Field("GLOBAL", description="국가")
     description: Optional[str] = Field("", description="소스 설명")
 
-class AddGitHubRepoRequest(BaseModel):
-    repo: str = Field(..., description="GitHub 레포지토리 (예: owner/repo)")
-    category: Optional[str] = Field("agent_tech", description="기본 카테고리")
-    description: Optional[str] = Field("", description="레포 설명")
-    stars_hint: Optional[int] = Field(0, description="스타 수 힌트")
+
+def _saving(fn, *args, **kwargs):
+    """sources.json 저장 실패를 500 으로 알린다 (예전에는 성공으로 답했다, BUG-20)."""
+    try:
+        return fn(*args, **kwargs)
+    except SourcesWriteError:
+        raise ApiError(500, message="소스 파일(sources.json)을 저장하지 못했습니다. 파일 권한과 디스크를 확인해주세요.")
 
 @router.get("")
 async def get_all_sources():
@@ -30,7 +34,7 @@ async def get_all_sources():
 
     return {
         "status": "success",
-        "sources_file": str(sources_service.get_file_path()),
+        "sources_file": sources_service.get_file_path().name,  # 서버 절대 경로는 내보내지 않는다
         "updated_at": data.get("updated_at"),
         "stats": {
             "total_rss": len(rss_list),
@@ -50,42 +54,30 @@ async def get_all_sources():
 async def add_rss_source(req: AddRssRequest):
     """신규 RSS/Atom 피드를 sources.json에 등록합니다."""
     if not req.url or not req.name:
-        raise HTTPException(status_code=400, detail="Name and URL are required")
-    created = sources_service.add_rss_source(
+        raise HTTPException(status_code=400, detail="소스 이름과 URL 을 입력해주세요.")
+    created = _saving(
+        sources_service.add_rss_source,
         name=req.name,
         url=req.url,
         site_url=req.site_url or req.url,
-        category_hint=req.category_hint or "ai_news",
-        country=req.country or "GLOBAL",
+        category_hint=req.category_hint,
+        country=req.country,
         description=req.description or ""
     )
     return {"status": "success", "message": f"'{req.name}' 등록 완료", "source": created}
 
-@router.post("/github")
-async def add_github_repo(req: AddGitHubRepoRequest):
-    """지속 모니터링할 GitHub 저장소를 sources.json에 등록합니다."""
-    if not req.repo:
-        raise HTTPException(status_code=400, detail="Repository is required")
-    created = sources_service.add_github_repo(
-        repo=req.repo,
-        category=req.category or "agent_tech",
-        description=req.description or "",
-        stars_hint=req.stars_hint or 0
-    )
-    return {"status": "success", "message": f"'{req.repo}' 등록 완료", "repo": created}
-
 @router.patch("/{source_type}/{item_id:path}/toggle")
 async def toggle_source(source_type: str, item_id: str):
-    """특정 소스 또는 전체 소스 유형의 수집 활성화/비활성화를 토글합니다."""
-    res = sources_service.toggle_source(source_type, item_id)
+    """특정 소스(rss, github_repo) 또는 소스 유형 전체(github·reddit·hackernews·arxiv·huggingface, item_id 는 'all')의 수집을 토글합니다."""
+    res = _saving(sources_service.toggle_source, source_type, item_id)
     if not res:
-        raise HTTPException(status_code=404, detail="Source not found or invalid type")
+        raise HTTPException(status_code=404, detail="해당 소스를 찾을 수 없습니다.")
     return {"status": "success", "message": f"소스 상태가 변경되었습니다 ({source_type} / {item_id})"}
 
 @router.delete("/{source_type}/{item_id:path}")
 async def delete_source(source_type: str, item_id: str):
     """등록된 소스를 sources.json에서 제거합니다."""
-    res = sources_service.delete_source(source_type, item_id)
+    res = _saving(sources_service.delete_source, source_type, item_id)
     if not res:
-        raise HTTPException(status_code=404, detail="Source not found or failed to delete")
+        raise HTTPException(status_code=404, detail="해당 소스를 찾을 수 없습니다.")
     return {"status": "success", "message": f"소스가 삭제되었습니다 ({source_type} / {item_id})"}

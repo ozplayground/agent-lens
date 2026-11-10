@@ -1,7 +1,7 @@
 # UI 공통 상세기능정의서 (Modular FSD)
 
 Updated: 2026-11-10
-기준: v0.4.1 (main)
+기준: v0.4.2 (main)
 
 - **도메인**: UI 공통 (도메인 코드 `UI`) — 피드 헤더, 수집 진행 줄, 테마, 전역 단축키, 피드 키보드 탐색, 커맨드 팔레트, 대화상자·오버레이 공통 규칙, 반응형, 모바일 뷰포트, 로딩·오류·빈 상태, 마크다운, 복사 피드백, 접근성. 그리고 화면·라우트·대화상자 목록·화면 상태·localStorage·단축키의 기능 사실
 - **작성자**: 기획 명세 작성가 (`spec-writer`)
@@ -19,10 +19,10 @@ Updated: 2026-11-10
 - 피드 헤더와 단일 키 단축키는 뉴스 피드 화면(`/`)에만 있다. `/chat` 화면은 자체 챗 헤더를 쓰고, 커맨드 팔레트(⌘K)와 테마 선택은 두 화면 모두에 있다.
 - 대화상자·드로어·확인 창·메뉴·팝오버는 공통 부품과 오버레이 스택 위에서 같은 규칙으로 동작한다 (FUNC-UI-008).
 - UI 문구는 한국어다 (`<html lang="ko">`, `frontend/src/app/layout.tsx:30`).
-- 아이콘은 모두 `lucide-react` 아이콘(장식이면 `aria-hidden`)으로 그리고, 프론트가 정한 UI 글자(버튼·탭·라벨·제목·알림 문구)에는 그림 이모지를 쓰지 않는다. 그림 이모지는 기본이 이모지 표현인 글자(`Emoji_Presentation`)와 U+FE0F 로 이모지 표현을 고른 그림 문자다. `©`·`↔`·`➔`·`✓` 같은 텍스트 표현 기호는 해당하지 않는다. 정적 검사 `frontend/src/tests/ui/IconGuard.test.ts` 가 `src/components/**`·`src/app/**` 의 `.ts`·`.tsx` 를 검사한다. backend 가 만든 글자(브리핑 마크다운 전문, 챗 단계 라벨, Ask AI 휴리스틱 답의 제목 이모지)와 사용자·기사 글은 대상이 아니다.
+- 아이콘은 모두 `lucide-react` 아이콘(장식이면 `aria-hidden`)으로 그리고, 프론트가 정한 UI 글자(버튼·탭·라벨·제목·알림 문구)에는 그림 이모지를 쓰지 않는다. 그림 이모지는 기본이 이모지 표현인 글자(`Emoji_Presentation`)와 U+FE0F 로 이모지 표현을 고른 그림 문자다. `©`·`↔`·`➔`·`✓` 같은 텍스트 표현 기호는 해당하지 않는다. 정적 검사 `frontend/src/tests/ui/IconGuard.test.ts` 가 `src/components/**`·`src/app/**` 의 `.ts`·`.tsx` 를 검사한다. 사용자·기사 글은 대상이 아니다. v0.4.2 부터 backend 가 만든 글자(브리핑 마크다운·Notion·이메일·웹훅, 챗 단계 라벨, 수집 진행 문구)에도 그림 이모지가 없다.
 
 ### 에러 코드 표기 규칙
-이 도메인의 기능은 대부분 서버를 부르지 않는다. 서버를 부르는 곳(스케줄 상태, 즉시 수집, 초기화)은 backend 가 비즈니스 에러 코드를 쓰지 않으므로 '비즈니스 에러 코드 매핑' 표의 코드 열에 `없음` 을 쓰고 실제 응답과 화면 표시를 적는다.
+이 도메인의 기능은 대부분 서버를 부르지 않는다. 서버를 부르는 곳(스케줄 상태, 즉시 수집, 초기화)의 오류 응답은 v0.4.2 부터 공통 형식 `{error_code, message, details}`(`ERR_INVALID_PAYLOAD`·`ERR_NOT_FOUND`·`ERR_SERVER_INTERNAL` 등)이다. '비즈니스 에러 코드 매핑' 표에는 그 `error_code` 와 화면 표시를 적고, 200 으로 오는 `status` 값(`already_running` 등)도 적는다. 화면은 응답 `message` 를 먼저 쓰고, 오류 형식이 아니면 함수별 기본 문구를 쓴다 (`frontend/src/lib/api.ts` `readErrorMessage`).
 
 ### 화면 코드
 | 화면 코드 | 화면·요소 | 있는 곳 |
@@ -55,9 +55,12 @@ as-built 문서라 우선순위는 지금 제품에서의 역할로 분류했다
 |---|---|---|---|
 | `/` | 페이지 (클라이언트) | `AgentLens \| AI Agent, Harness & MCP Global News` (루트 레이아웃 메타데이터) | 뉴스 피드, 일일 브리핑, 트렌드 레이더, 대화상자 6종 |
 | `/chat` | 페이지 (서버 컴포넌트 껍데기 + 클라이언트 챗 작업 영역) | `AI 챗 워크스페이스 \| AgentLens` | AI 챗 워크스페이스 |
-| `/api/health` | 프론트 자체 API (`GET`) | — | 프론트 헬스체크. 응답 `{"status":"healthy","service":"agentlens-frontend","version":"0.4.1","timestamp":<ISO>}` |
+| `/api/health` | 프론트 자체 API (`GET`) | — | 프론트 헬스체크. 응답 `{"status":"healthy","service":"agentlens-frontend","version":<NEXT_PUBLIC_APP_VERSION, 없으면 "unknown">,"timestamp":<ISO>}`. 버전은 빌드 때 `package.json` 에서 넣는다 (v0.4.2, `frontend/src/app/api/health/route.ts`) |
 
-- 그 밖의 `/api/*` 요청은 rewrite 로 backend 에 넘긴다. 모든 화면은 클라이언트 컴포넌트가 데이터를 읽는다. 서버 컴포넌트에서 데이터를 읽는 곳은 없다.
+- 그 밖의 `/api/*` 요청은 rewrite 로 backend(`INTERNAL_API_URL`, 기본 `http://127.0.0.1:8000`)에 넘긴다. 모든 화면은 클라이언트 컴포넌트가 데이터를 읽는다. 서버 컴포넌트에서 데이터를 읽는 곳은 없다.
+- 환경 변수 (v0.4.2, `frontend/src/lib/env.ts`): 브라우저용 `NEXT_PUBLIC_API_URL`(기사 질문 스트림을 backend 에 직접 붙일 주소. 비우면 같은 출처 `/api/...` 로 보낸다. 기본 빈 값), `NEXT_PUBLIC_APP_VERSION`. 서버용 `INTERNAL_API_URL`, `ALLOWED_DEV_ORIGINS`, `PORT`, `NODE_ENV`. 브라우저용 값이 스키마에 맞지 않으면(예: URL 이 아닌 `NEXT_PUBLIC_API_URL`) 읽을 때 오류를 던진다.
+- 오류 경계 (v0.4.2): 홈·챗 공용 라우트 오류 경계(`frontend/src/app/error.tsx`)가 렌더 중 예외를 잡아 레이아웃은 남기고 본문에 오류 상태(제목 `화면을 그리지 못했습니다`, 본문 `일시적인 문제일 수 있습니다. 다시 시도해도 같으면 페이지를 새로 고쳐 주세요.`, `다시 시도` 버튼 = 경계 재설정)를 보인다. 예외 원문은 화면에 쓰지 않고 콘솔에만 남긴다.
+- 대화상자 6종(뉴스 상세, 일일 브리핑, 자동 수집 스케줄, MCP 연동, 공유 & 알림 설정, 소스 & 리서처)은 `next/dynamic`(`ssr: false`)으로 처음 열 때 불러온다 (v0.4.2, `frontend/src/app/page.tsx:27-35`).
 - 루트 레이아웃: `<html lang="ko">`. 첫 그리기 전에 저장된 테마와 OS 설정으로 `<html>` 의 테마를 정한다 (FUNC-UI-003). 메타 설명 `전세계 AI 뉴스, 최신 Agent 기술, 하네스(Harness) 방법론 및 벤치마크, MCP(Model Context Protocol) 및 스킬 플러그인 큐레이션 플랫폼`. 웹 글꼴을 읽지 않는다 (시스템 글꼴) (`frontend/src/app/layout.tsx:17-44`).
 - viewport: `width=device-width, initial-scale=1, interactive-widget=resizes-content`, `color-scheme: light dark`, `theme-color` 라이트 `#f8fafc` / 다크 `#0e1013`. 확대를 막지 않는다 (`frontend/src/app/layout.tsx:6-15`).
 - `/chat` 쿼리 파라미터 (`frontend/src/components/chat/ChatWorkspace.tsx:474-540`):
@@ -67,7 +70,7 @@ as-built 문서라 우선순위는 지금 제품에서의 역할로 분류했다
   | `session_id` | 저장된 대화를 불러온다. 있으면 다른 파라미터는 보지 않는다 |
   | `sourceId` | 정수 기사 id. 기사를 읽어 `단일 기사` 범위(scoped)로 시작한다. 못 찾으면 경고 알림 `요청하신 기사를 찾을 수 없어 전체 소식 모드로 시작합니다.` 후 `전체 소식` 범위(global) |
   | `q` | 시작하자마자 이 질문을 보낸다 (`sourceId` 와 함께면 그 기사 범위로) |
-- 404 커스텀 페이지, 로딩 페이지, 오류 페이지는 없다.
+- 404 커스텀 페이지와 로딩 페이지는 없다. 오류 페이지는 위 라우트 오류 경계 하나다 (v0.4.2).
 - 피드 화면 본문에는 화면 읽기용 제목 `AI 에이전트 소식`(`h1`, 보이지 않음)이 있고, 바닥글은 `AgentLens © 2026 · AI 에이전트 · 하네스 · MCP 생태계 소식` 이다 (`frontend/src/app/page.tsx:172`, `:271-273`).
 
 ### 피드 화면(`/`) 영역
@@ -95,7 +98,7 @@ as-built 문서라 우선순위는 지금 제품에서의 역할로 분류했다
 | 대화 기록 사이드바 (1024px 이상) | 머리 영역 두 줄(1줄 56px `+ 새 대화`·접기, 2줄 44px 제목 검색), 세션 카드 목록(제목, 범위 배지 `단일 기사`·`전체 소식`, 시간. 접근 이름 `대화: <제목>, <시간>, 단일 기사 모드`/`… 전체 소식 모드`. 삭제 확인 팝오버). 접으면 그리지 않는다 |
 | 챗 헤더 | 왼쪽부터 피드로 돌아가기(`/`, 모든 폭에서 맨 왼쪽), 기록 버튼(1024px 이상은 사이드바 접기·펴기, 미만은 드로어), 제목 `AI 챗`, 새 대화, 커맨드 팔레트(768px 이상), 더보기(테마 라디오, `뉴스 피드로 이동`, 768px 미만 `커맨드 팔레트`) |
 | 맥락 줄 | 검색 스코프 전환(그룹 이름 `검색 스코프 모드`, `단일 기사`(scoped)·`전체 소식`(global)), 선택 기사 칩(짧은 카테고리 라벨, 해제). 가로 스크롤 줄, 안쪽 폭은 메시지 열과 같다 |
-| 메시지 목록 | 웰컴/추천 질문(카드마다 앞에 아이콘 `Server`·`GitBranch`·`ChartColumn`·`TrendingUp`, 글자 왼쪽 정렬, 누르면 아이콘 없는 글자 그대로 보냄), 메시지·모델 변경 구분선 시간순, 답변의 모델 배지(티어 아이콘: haiku `Zap`, sonnet `Target`, opus `Brain`, Claude 밖 gemini `Sparkles`·gpt `Bot`·그 밖 `Target` + 이름), 새 항목마다 맨 아래로 부드럽게 스크롤 |
+| 메시지 목록 | 웰컴/추천 질문(카드마다 앞에 아이콘 `Server`·`GitBranch`·`ChartColumn`·`TrendingUp`, 글자 왼쪽 정렬, 누르면 아이콘 없는 글자 그대로 보냄), 메시지·모델 변경 구분선 시간순, 답변의 모델 배지(티어 아이콘: haiku `Zap`, sonnet `Target`, opus `Brain`, Claude 밖 gemini `Sparkles`·gpt `Bot`·그 밖 `Target` + 이름). 스크롤은 목록 상자 안에서만 일어난다: 맨 아래(24px 이내)를 보고 있을 때만 새 내용을 따라 내려가고, 위로 올려 읽는 중이면 그대로 둔다. 새 메시지(전송·세션 열기)는 언제나 맨 아래로 (v0.4.2 FE-36, BR-UI-009-10) |
 | 포커스 캡슐 | 현재 필터 요약 버튼(앞말 `포커스:`, 필터가 없으면 `포커스: 전체 소식`, → 포커스 필터), 필터가 걸려 있으면 초기화 버튼 |
 | 입력창 | 질문 입력(Enter 전송, Shift+Enter 줄바꿈), 모델 칩(모든 폭에서 화면의 유일한 모델 선택, 팝오버는 위로 열림, 생성 중 비활성), 글자 수 `n / 2000`, `질문 전송` / 생성 중 `답변 생성 중단` |
 | 기록 드로어 (1024px 미만) | 사이드바와 같은 내용, 세션 선택·새 대화 때 닫힘 |
@@ -111,8 +114,8 @@ as-built 문서라 우선순위는 지금 제품에서의 역할로 분류했다
 | 뉴스 상세 | 대화상자 `xl` (전체 화면) | 카드·제목 버튼 클릭, 포커스 카드 Enter/Space | 머리줄(카테고리 긴 라벨·Must-Read 배지, 제목 2줄, 북마크, 닫기, 탭 `AI 요약 & 시사점` / `AI 질의응답`+대화 수), 요약 탭, 질의응답 탭, 바닥(출처, 작성자, `원문 링크 방문`) | Escape(질의응답 탭 질문 입력창 안에서는 닫지 않고 탭 패널로 포커스), 배경막, 머리줄 X. 닫으면 스트림 중단·상태 초기화 | FUNC-NEWS-009, FUNC-NEWS-010 |
 | 일일 브리핑 | 대화상자 `xl` (전체 화면) | 요약 바 `오늘의 브리핑` | 제목 `오늘의 AI 브리핑` + 날짜, 설명 = 헤드라인(여기 한 번만), 도구줄(`Notion 내보내기`/`Notion에서 열기`, `이메일 발송`→주소 입력 줄, 복사, `.md 다운로드`. 768px 미만은 주 버튼 + `브리핑 작업` 메뉴(이메일 발송·복사·`.md 다운로드`)), 결과 인라인 알림(실패하면 `Notion 설정 열기`·`이메일 설정 열기`), 탭 `카테고리별 요약` / `마크다운 전문`. 요약 탭: `오늘의 핵심 요약` 칸(개요가 있을 때만, 개요 줄의 분야 이름은 긴 라벨로), 분야별 칸(머리글 = 피드 카테고리 칩과 같은 아이콘 + 긴 라벨, 표에 없는 분야는 아이콘 없이 backend 이름, 기사마다 `Lightbulb` 아이콘 + `시사점:`). 바닥 `연동 설정`(설정 진입은 이 한 곳)·`닫기` | Escape, 배경막, X, `닫기` | BRF |
 | 공유 & 알림 설정 | 대화상자 `md` (전체 화면) | 더보기 `공유 & 알림`, 팔레트, 일일 브리핑 바닥 `연동 설정`·실패 알림의 `Notion 설정 열기`·`이메일 설정 열기` (브리핑 위에 쌓인다) | 탭 `Notion 연동` / `이메일 (SMTP)` / `웹훅 (Slack/Discord)`, 입력 필드, 결과 인라인 알림, 바닥 `닫기`·`연결 테스트`(현재 탭)·`저장` | Escape, X, `닫기` (배경막으로 닫히지 않음) | BRF |
-| 자동 수집 스케줄 | 대화상자 `md` (전체 화면) | 헤더 수집 상태 버튼(768px 이상), 더보기 `수집 스케줄`(768px 미만), 팔레트 | 설명 `매일 4회(0, 6, 12, 18시 UTC) 전세계 소식을 자동 수집합니다.`, 수집 주기(UTC·KST), 다음 예정(분, 시각. 받기 전 `계산 중...`), '위험 영역' `초기화 & 재수집…`(수집 중 비활성), 바닥 `즉시 수집`(수집 중 `수집 중`) | Escape, 배경막, X | COLL, FUNC-NEWS-017 |
-| AgentLens MCP 연동 | 대화상자 `lg` (전체 화면) | 더보기 `MCP 연동`, 팔레트 | MCP 도구 4개(정의 목록), `claude_desktop_config.json` 예시 코드 블록(복사), 바닥 `닫기` | Escape, 배경막, X, `닫기` | MCP |
+| 자동 수집 스케줄 | 대화상자 `md` (전체 화면) | 헤더 수집 상태 버튼(768px 이상), 더보기 `수집 스케줄`(768px 미만), 팔레트 | 설명 `정해진 시각마다 전세계 소식을 자동 수집합니다.`, 수집 주기(응답 `schedule_hours`·`timezone` 으로 그림. 시간대가 UTC 일 때만 KST 환산을 덧붙임, v0.4.2), 다음 예정(분, 시각. 받기 전 `계산 중...`), '위험 영역' `초기화 & 재수집…`(수집 중 비활성), 바닥 `즉시 수집`(수집 중 `수집 중`) | Escape, 배경막, X | COLL, FUNC-NEWS-017 |
+| AgentLens MCP 연동 | 대화상자 `lg` (전체 화면) | 더보기 `MCP 연동`, 팔레트 | MCP 도구 4개(정의 목록), `claude_desktop_config.json` 예시 코드 블록(복사)과 `cwd`·`command` 바꾸는 법 안내, 바닥 `닫기` | Escape, 배경막, X, `닫기` | MCP |
 | 소스 & 리서처 | 대화상자 `xl` (전체 화면) | 더보기 `소스 & 리서처`, 팔레트 | 탭 `AI 딥 리서처`(기본, 지표 카드 4개 2열·768px 이상 4열, 값은 말줄임 없이 줄을 바꿔 전부 보인다) / `등록된 수집원`, 결과 안내(`aria-live`), 바닥 `sources.json` 표시·`닫기`. 수집원 삭제는 확인 창 | Escape, X, `닫기` (배경막으로 닫히지 않음) | SRC |
 | 수집 데이터 전체 삭제 및 재수집 | 확인 창 (`alertdialog`, `sm`, 바텀시트) | 더보기 `초기화 & 재수집…`, 스케줄 대화상자 '위험 영역', 팔레트 | 영구 삭제 경고, `취소`(처음 포커스) / `전체 삭제 후 다시 수집`(진행 중 `초기화 중...`), 실패 시 창 안 오류 | Escape, 배경막, `취소`, 머리줄 X (진행 중에는 모두 무시) | FUNC-UI-002, FUNC-NEWS-017 |
 | 확인 창 (대화 초기화, 소스 삭제) | 확인 창 (`sm`, 바텀시트) | 뉴스 상세 질의응답 탭 `대화 초기화`, 수집원 삭제 버튼 | `AI 대화 내역을 모두 초기화하시겠습니까?` / `이 소스를 목록에서 삭제하시겠습니까?` | Escape, 배경막, `취소`, 머리줄 X | FUNC-NEWS-010, SRC |
@@ -120,12 +123,12 @@ as-built 문서라 우선순위는 지금 제품에서의 역할로 분류했다
 | 대화 기록 드로어 | 왼쪽 드로어 (`min(320px, 85vw)`, 높이 전체) | 챗 헤더 기록 버튼 (1024px 미만), 챗 팔레트 `대화 기록 열기` | 제목 `대화 기록`, 새 대화, 검색, 세션 목록 | Escape, 배경막, `대화 기록 드로어 닫기`, 세션 선택·새 대화 | CHAT |
 | 수집 소식 타깃팅 포커스 필터 | 대화상자 `sm` 바텀시트 (768px 이상 가운데 420px) | 포커스 캡슐 | 카테고리, 기간, 정렬, Must-Read, 대상 건수, `초기화`·`적용하기` | Escape, 배경막, `필터 닫기`, 아래로 100px 스와이프, `적용하기` | CHAT |
 | 모델 선택 | 팝오버 `role="radiogroup"` | 입력창 모델 칩(위로) | haiku / sonnet / opus 3단계 | Escape, 바깥 pointerdown, 선택 | CHAT |
-| 인용 출처 프리뷰 | 팝오버 `role="dialog"` | 답변 안 인용 배지 클릭 | 출처 기사 요약 | Escape, 바깥 pointerdown, `팝오버 닫기` | CHAT |
+| 인용 출처 프리뷰 | 팝오버 `role="dialog"`, `body` 포털에 그린다 (v0.4.2, 메시지 목록의 넘침 자르기에 잘리지 않는다) | 답변 안 인용 배지 클릭 | 출처 기사 요약 | Escape, 바깥 pointerdown, `팝오버 닫기` | CHAT |
 | 세션 삭제 확인 | 팝오버 `role="dialog"` (`min(18rem, 100vw-2rem)`) | 세션 카드 삭제 버튼 | `이 대화를 삭제하시겠습니까?`, `취소`(처음 포커스)·`삭제` | Escape, 바깥 pointerdown, `취소` | CHAT |
 | 메뉴 | 메뉴 버튼 (`min(280px, 100vw-32px)`) | 피드 헤더 `더보기`·`테마 선택`, 챗 헤더 `더보기`, 브리핑 `브리핑 작업` | 메뉴 항목·라디오·구분선 | Escape(트리거로 포커스), 바깥 pointerdown, Tab, 항목 실행 | FUNC-UI-004 |
 
 - 브라우저 기본 대화상자(`window.confirm`, `alert`)는 쓰지 않는다.
-- 어디서도 렌더하지 않는 대화상자: `frontend/src/components/WebhookSettingsModal.tsx`(웹훅 URL 하나를 localStorage 에 저장하고 테스트·브리핑 전송). import 하는 곳이 없다.
+- 어디서도 렌더하지 않던 `WebhookSettingsModal`(웹훅 URL 을 localStorage 에 저장)은 v0.4.2 에서 지웠다.
 
 ### 화면 상태와 기본값
 | 범위 | 가진 상태와 기본값 | 유지 |
@@ -150,10 +153,11 @@ as-built 문서라 우선순위는 지금 제품에서의 역할로 분류했다
 | 키 | 값 | 쓰는 때 | 비고 |
 |---|---|---|---|
 | `agentlens_theme` | `light` \| `dark` \| `system` | 테마 선택·순환 때. 첫 그리기 전에 읽는다 | `frontend/src/lib/theme-store.ts:72`, `:87`, `frontend/src/app/layout.tsx:23` |
-| `agentlens_bookmarks` | `NewsItem[]` JSON (최근 추가가 앞) | 북마크 토글 때 | 북마크 보기는 서버 대신 이 목록을 거른다 (`frontend/src/hooks/useBookmarks.ts:6`, `:34`, `:58`) |
-| `agentlens_chat_sessions_index` | `ChatSessionMeta[]` JSON, 최대 30개 | 서버 목록 조회 성공 때 덮어쓰고, 실패 때 대체로 쓴다 | `frontend/src/components/chat/useChatSessions.ts:19` |
-| `agentlens_chat_session_{sessionId}` | `ChatSessionDetail` JSON | 세션 상세 L1 캐시. 서버가 404 이거나 네트워크 오류면 이것을 쓴다 | `frontend/src/components/chat/useChatSessions.ts:20` |
-| `agentlens_webhook_url` | 웹훅 URL 문자열 | 렌더되지 않는 대화상자라 지금은 쓰이지 않는다 | `frontend/src/components/WebhookSettingsModal.tsx:30`, `:40` |
+| `agentlens_bookmarks` | `NewsItem[]` JSON (최근 추가가 앞) | 북마크 토글 때 | 북마크 보기는 서버 대신 이 목록을 거른다. 읽을 때 형식을 검사해 맞지 않는 항목은 버린다 (v0.4.2) (`frontend/src/hooks/useBookmarks.ts`) |
+| `agentlens_chat_sessions_index` | `ChatSessionMeta[]` JSON, 최대 30개 | 서버 목록 조회 성공 때 덮어쓰고, 실패 때 대체로 쓴다. 읽을 때 형식 검사 (v0.4.2) | `frontend/src/components/chat/useChatSessions.ts` |
+| `agentlens_chat_session_{sessionId}` | `ChatSessionDetail` JSON | 세션 상세 L1 캐시. 서버가 404 이거나 네트워크 오류면 이것을 쓴다. 읽을 때 형식 검사 (v0.4.2) | `frontend/src/components/chat/useChatSessions.ts` |
+
+- v0.4.1 의 `agentlens_webhook_url` 키는 쓰던 대화상자를 지워 v0.4.2 부터 읽거나 쓰지 않는다. 옛 브라우저에 남은 값은 무시된다.
 
 - `sessionStorage`, 쿠키, IndexedDB 는 쓰지 않는다.
 
@@ -208,7 +212,7 @@ flowchart TD
 | :--- | :---: | :--- | :---: | :--- | :---: | :--- | :--- |
 | 건너뛰기 링크 | 사용자 조작 | 링크 `본문으로 건너뛰기` → `#main` | - | - | 숨김 | - | 포커스를 받으면 보인다 |
 | 브랜드 | 사용자 조작 | `/` 링크 (아이콘 + `AgentLens`) | 필수 | - | - | - | 상시 |
-| 버전 배지 | 노출 전용 | Badge `v{NEXT_PUBLIC_APP_VERSION}` | - | 빌드 때 `package.json` 의 `version` (지금 `v0.4.1`) | - | 값이 없으면 숨김 | 1024px 이상 |
+| 버전 배지 | 노출 전용 | Badge `v{NEXT_PUBLIC_APP_VERSION}` | - | 빌드 때 `package.json` 의 `version` (v0.4.2 릴리스 기준 `v0.4.2`) | - | 값이 없으면 숨김 | 1024px 이상 |
 | 주 내비 | 사용자 조작 | `<nav aria-label="주 메뉴">` 링크 `피드`(`aria-current="page"`) · `AI 챗` | 필수 | - | - | - | 768px 이상 글자 링크 둘. 768px 미만 `피드` 숨김, `AI 챗` 아이콘 링크(글자는 화면 읽기용) |
 | 수집 상태 | 사용자 조작 | 버튼 (시계 아이콘) | - | 1024px 이상 `다음 수집 {h}h {m}m 후`, 768~1023px `{h}h {m}m`. 수집 중 스피너 + `수집 중`. 상태를 모르면 1024px 이상 `다음 수집 확인 중`, 768~1023px `…` | - | 접근 이름 `수집 스케줄 · {다음 수집 … 후 \| 다음 수집 확인 중}` | 768px 이상. 누르면 스케줄 대화상자 |
 | 즉시 수집 | 사용자 조작 | 보조 버튼 (아이콘 + `즉시 수집`) | - | 수집 중 스피너 + `수집 중`, 비활성 | - | - | 1024px 이상 글자, 768~1023px 아이콘 버튼(이름 `즉시 수집`). 768px 미만은 더보기 |
@@ -234,7 +238,7 @@ flowchart TD
 #### 7. 비즈니스 에러 코드 매핑
 | 비즈니스 에러 코드 | 발생 사유 | HTTP 상태 코드 매핑 | 클라이언트 표시 형태 |
 | :--- | :--- | :---: | :--- |
-| 없음 | 스케줄 상태 조회 실패 (`스케줄 정보를 불러오지 못했습니다.` 예외) | 비 2xx 또는 타임아웃 | 표시 없음 (이전 값 유지, 처음이면 `다음 수집 확인 중`) |
+| `ERR_SERVER_INTERNAL` 등 | 스케줄 상태 조회 실패 (응답 `message`, 없으면 `스케줄 정보를 불러오지 못했습니다.` 예외) | 비 2xx 또는 타임아웃 | 표시 없음 (이전 값 유지, 처음이면 `다음 수집 확인 중`) |
 
 - 근거: `frontend/src/components/Header.tsx:1-251`, `frontend/src/hooks/useCollector.ts`, `frontend/src/app/page.tsx:155-165`, 동작 확인 테스트 `frontend/src/tests/Header.test.tsx`
 
@@ -296,12 +300,12 @@ flowchart TD
 
 #### 5. 비즈니스 규칙 (Business Rules)
 - **BR-UI-002-1 (공유 저장소)**: 수집 상태는 모듈 단위 저장소 하나에 있다. 헤더, 수집 진행 줄, 스케줄 대화상자, 초기화 확인 창이 같은 값(`status`, `isCollecting`, `message`)을 본다 (`frontend/src/hooks/useCollector.ts:31-38`, `:266-291`).
-- **BR-UI-002-2 (즉시 수집)**: 수집 중이거나 요청 중이면 아무것도 하지 않는다. `POST /api/schedule/trigger` 를 부르고, 성공하면 `실시간 소식 수집 중...` 으로 진행 폴링을 시작한다. 응답 `status` 가 `already_running`(backend 가 이미 수집 중이라 새로 시작하지 않음)이면 응답 `message`(`이미 수집이 진행 중입니다.`)로 진행 폴링을 시작해 진행 중인 수집을 따라간다. 요청 자체가 실패하면 `수집 요청 실패` 를 3,000ms 동안 보여 준다 (`frontend/src/hooks/useCollector.ts:206-223`, `backend/app/api/schedule.py:48-67`).
+- **BR-UI-002-2 (즉시 수집)**: 수집 중이거나 요청 중이면 아무것도 하지 않는다. `POST /api/schedule/trigger` 를 부르고, 성공하면 `실시간 소식 수집 중...` 으로 진행 폴링을 시작한다. 응답 `status` 가 `already_running`(이 backend 나 같은 DB 를 쓰는 다른 프로세스가 수집 중이라 새로 시작하지 않음)이면 응답 `message`(이 backend 면 `이미 수집이 진행 중입니다.`, 다른 프로세스면 `다른 프로세스(MCP 서버·make collect)가 같은 DB 에 수집 중입니다.`)로 진행 폴링을 시작해 진행 중인 수집을 따라간다. 응답의 `other_process` 는 화면이 쓰지 않는다. 다른 프로세스의 수집은 이 backend 의 진행도에 나타나지 않아 폴링이 곧 `수집 완료 (+0건 신규 반영)` 으로 끝날 수 있다 (관찰 사항, '알려진 불일치·위험' 9). 요청 자체가 실패하면 `수집 요청 실패` 를 3,000ms 동안 보여 준다 (`frontend/src/hooks/useCollector.ts`, `backend/app/api/schedule.py:39-62`).
 - **BR-UI-002-3 (진행 폴링)**: 1,200ms 마다 `GET /api/schedule/progress` 를 읽는다. 앞 요청이 끝나지 않았으면 그 회차는 건너뛴다. `step_message` 가 있으면 메시지를 그것으로 바꾼다. `items_saved` 가 직전보다 늘면 등록된 새로고침 콜백(피드·통계·브리핑 다시 읽기)을 부른다. `is_running` 이 false 가 되면 폴링을 멈추고 `수집 완료 (+{items_saved}건 신규 반영)` 를 보여 준 뒤, 새로고침과 스케줄 상태 재조회를 하고 4,000ms 뒤 메시지를 지운다 (이 재조회 응답은 반영된다, BR-10). 폴링 요청이 실패하면 폴링을 멈추고 메시지를 바로 지운다. 이때는 스케줄 상태를 바로 다시 읽지 않는다 (진행 조회만 계속 실패하면 폴링이 1.2초마다 켜졌다 꺼지므로). 수집이 아직 돌고 있으면 다음 30초 재조회가 BR-9 로 다시 붙인다 (`frontend/src/hooks/useCollector.ts:121-165`).
 - **BR-UI-002-4 (진행 줄 위치)**: 헤더 밖, 헤더 바로 아래 한 줄이다 (`frontend/src/components/Header.tsx:226-251`).
 - **BR-UI-002-5 (초기화 확인 창)**: 제목 `수집 데이터 전체 삭제 및 재수집`, 영구 삭제 경고 문구, 버튼 `취소`(처음 포커스)와 `전체 삭제 후 다시 수집` (`frontend/src/components/ResetConfirmDialog.tsx:44-60`).
 - **BR-UI-002-6 (초기화 실행)**: 확인을 누르면 `POST /api/schedule/reset-and-collect` 를 부른다. 진행 중에는 확인 버튼이 `초기화 중...`(스피너)으로 바뀌고 `busy` 라 두 버튼이 비활성, Escape·배경막도 무시된다. 성공하면 새로고침 후 `기존 {deleted_count}건 삭제 완료. 신규 수집 중...` 메시지로 진행 폴링을 시작하고 창을 닫는다. 이미 요청 중이면 다시 보내지 않는다. 진행 폴링은 시작할 때마다 회차 번호를 올리고, 이전 회차의 늦은 응답은 버린다 (`frontend/src/components/ResetConfirmDialog.tsx:29-42`, `frontend/src/hooks/useCollector.ts:229-244`).
-- **BR-UI-002-7 (초기화 실패)**: 창을 닫지 않고 창 안 인라인 알림으로 오류 메시지(없으면 `초기화 실패`)를 보여 준다. 응답 `status` 가 `already_running`(backend 가 수집 중이라 삭제하지 않음)이어도 실패로 다룬다: 응답 `message`(없으면 `현재 수집이 진행 중이므로 초기화할 수 없습니다.`)를 창 안 오류로 보이고, 새로고침·진행 폴링을 시작하지 않는다. HTTP 오류는 응답 `detail`, 없으면 `초기화 및 재수집 요청 실패` 다 (`frontend/src/hooks/useCollector.ts:236-238`, `frontend/src/lib/api.ts:246-256`).
+- **BR-UI-002-7 (초기화 실패)**: 창을 닫지 않고 창 안 인라인 알림으로 오류 메시지(없으면 `초기화 실패`)를 보여 준다. 응답 `status` 가 `already_running`(이 backend 가 수집 중이거나 다른 프로세스가 수집 잠금을 쥐고 있어 삭제하지 않음, v0.4.2)이어도 실패로 다룬다: 응답 `message`(`현재 수집이 진행 중이므로 초기화할 수 없습니다. 잠시 후 다시 시도해주세요.`)를 창 안 오류로 보이고, 새로고침·진행 폴링을 시작하지 않는다. 앞선 초기화 요청이 아직 끝나지 않았는데 다시 누르면 `이미 초기화 요청을 처리하고 있습니다.` 로 거절한다 (v0.4.2). HTTP 오류는 응답 `message`, 없으면 `초기화 및 재수집 요청 실패` 다 (`frontend/src/hooks/useCollector.ts`, `frontend/src/lib/api.ts:271-278`, `backend/app/api/schedule.py:64-95`).
 - **BR-UI-002-8 (정리)**: 마지막 구독자(헤더 등)가 언마운트되면 스케줄 재조회·진행 폴링·메시지 타이머를 모두 정리하고 상태를 처음으로 되돌린다. 정리 뒤에 도착한 응답은 버린다 (`frontend/src/hooks/useCollector.ts:172-196`).
 - **BR-UI-002-9 (수집 상태 복원)**: 스케줄 상태(첫 구독 때와 30초 재조회 때)가 `is_running: true` 이고 진행 폴링이 돌고 있지 않으면 `실시간 소식 수집 중...` 으로 진행 폴링을 시작한다. 그래서 수집 중에 다른 화면에 갔다 돌아와도, 이 화면 밖에서 시작된 수집(정기 스케줄 등)이어도 진행 줄과 `isCollecting`(즉시 수집 `수집 중`·비활성)이 다시 붙는다 (`frontend/src/hooks/useCollector.ts:104-119`).
 - **BR-UI-002-10 (오래된 스케줄 상태 응답 버리기)**: 스케줄 상태 요청마다 번호(`statusSeq`)를 매기고, 마지막으로 반영한 응답 번호(`appliedStatusSeq`)와 진행 폴링이 완료·실패로 끝날 때의 번호(`progressEndSeq`)를 기억한다. 응답 번호가 `appliedStatusSeq` 보다 작거나(더 나중 요청의 응답이 이미 반영됨) `progressEndSeq` 이하이면(진행 폴링이 끝나기 전에 보낸 요청) 상태도 폴링도 바꾸지 않고 버린다. 그래서 수집 중에 나간 30초 재조회의 `is_running: true` 응답이 진행 폴링이 완료를 본 뒤에 늦게 도착해도 폴링이 다시 켜지지 않고, 수집 한 번에 `수집 완료` 는 한 번만 뜬다. 완료 처리에서 부르는 재조회는 `progressEndSeq` 를 정한 뒤에 보내므로 반영된다. 마지막 구독자가 빠지면(BR-8) 세 번호를 0 으로 되돌린다 (`frontend/src/hooks/useCollector.ts:58-66`, `:104-119`, `:134-149`).
@@ -313,19 +317,21 @@ flowchart TD
 | 스케줄 대화상자 안에서 초기화 확인 창 | 스케줄 대화상자 위에 쌓이고, Escape 는 확인 창만 닫는다 | (없음) |
 | 수집 중 `/chat` 으로 이동 | 정리 규칙(BR-8)에 따라 폴링이 멈춘다. 다시 `/` 로 돌아오면 첫 스케줄 상태 조회에서 BR-9 로 진행 줄이 다시 붙는다. 문구는 `실시간 소식 수집 중...` 으로 시작해 다음 진행 응답의 `step_message` 로 바뀐다 | `실시간 소식 수집 중...` |
 | 돌아온 직후 스케줄 상태를 받기 전 `즉시 수집` | 요청이 간다. backend 가 `already_running` 으로 답해 새 수집은 시작되지 않고, BR-2 대로 진행 폴링만 붙는다 | `이미 수집이 진행 중입니다.` |
+| MCP 서버나 직접 모드 `make collect` 가 수집 중일 때 `즉시 수집` | `already_running` + `other_process: true`. 폴링을 붙이지만 이 backend 의 진행도는 `is_running: false` 라 곧 끝난다 (관찰 사항) | `다른 프로세스(MCP 서버·make collect)가 같은 DB 에 수집 중입니다.` 후 `수집 완료 (+0건 신규 반영)` |
+| 다른 프로세스 수집 중 초기화 | 수집 잠금을 못 쥐어 삭제하지 않는다 (v0.4.2) | `현재 수집이 진행 중이므로 초기화할 수 없습니다. 잠시 후 다시 시도해주세요.` |
 | 즉시 수집 요청 실패 | 3,000ms 표시 후 지움 | `수집 요청 실패` |
 | 진행 조회 실패 | 폴링 멈춤, 메시지 지움 | (없음) |
 
 #### 7. 비즈니스 에러 코드 매핑
 | 비즈니스 에러 코드 | 발생 사유 | HTTP 상태 코드 매핑 | 클라이언트 표시 형태 |
 | :--- | :--- | :---: | :--- |
-| 없음 (`status: "already_running"`) | 즉시 수집 때 이미 수집 중 | 200 | 진행 줄에 응답 `message` 로 폴링 |
-| 없음 (`status: "already_running"`) | 초기화 때 수집 중 | 200 | 확인 창 안 오류 (응답 `message`) |
-| 없음 | trigger 실패 (`수집 요청에 실패했습니다.` 예외) | 비 2xx 또는 타임아웃 | 진행 줄 `수집 요청 실패` 3,000ms |
-| 없음 | reset 실패 | 비 2xx 또는 타임아웃 | 확인 창 안 오류 (`detail` 또는 `초기화 및 재수집 요청 실패`, 예외 문구가 비면 `초기화 실패`) |
+| `status: "already_running"` (`other_process` 있음) | 즉시 수집 때 이미 수집 중 (이 backend 또는 다른 프로세스) | 200 | 진행 줄에 응답 `message` 로 폴링 |
+| `status: "already_running"` | 초기화 때 수집 중 (이 backend 또는 다른 프로세스) | 200 | 확인 창 안 오류 (응답 `message`) |
+| `ERR_SERVER_INTERNAL` 등 | trigger 실패 (응답 `message`, 없으면 `수집 요청에 실패했습니다.` 예외) | 비 2xx 또는 타임아웃 | 진행 줄 `수집 요청 실패` 3,000ms |
+| `ERR_SERVER_INTERNAL` 등 | reset 실패 | 비 2xx 또는 타임아웃 | 확인 창 안 오류 (응답 `message` 또는 `초기화 및 재수집 요청 실패`, 예외 문구가 비면 `초기화 실패`) |
 | 없음 | progress 실패 | 비 2xx 또는 타임아웃 | 폴링 멈춤, 메시지 지움 |
 
-- 근거: `frontend/src/hooks/useCollector.ts:1-293`, `frontend/src/components/Header.tsx:226-251`, `frontend/src/components/ResetConfirmDialog.tsx:1-62`, `frontend/src/components/ScheduleModal.tsx:14-84`, `frontend/src/lib/api.ts:171-202`, `:246-256`, `backend/app/api/schedule.py:43-99`, 동작 확인 테스트 `frontend/src/tests/hooks/useCollector.test.ts`, `frontend/src/tests/Header.test.tsx`
+- 근거: `frontend/src/hooks/useCollector.ts`, `frontend/src/components/Header.tsx`, `frontend/src/components/ResetConfirmDialog.tsx`, `frontend/src/components/ScheduleModal.tsx`, `frontend/src/lib/api.ts:236-278`, `backend/app/api/schedule.py:39-95`, 동작 확인 테스트 `frontend/src/tests/hooks/useCollector.test.ts`, `frontend/src/tests/Header.test.tsx`
 
 ---
 
@@ -441,7 +447,7 @@ flowchart TD
 #### 6. 예외 처리 및 엣지 케이스 (Edge Cases & Exception Handling)
 | 발생 상황 (Edge Case Scenario) | 화면 반응 및 시스템 처리 방식 | 사용자 안내 메시지 |
 | :--- | :--- | :--- |
-| 쓰지 않는 순환 버튼 | `ThemeToggle`(누를 때마다 순환하는 아이콘 버튼 `테마 전환`, 옵션이면 메뉴)은 남아 있지만 렌더하는 곳이 없다 | (없음) |
+| 순환 버튼 | 렌더하는 곳이 없던 `ThemeToggle` 은 v0.4.2 에서 지웠다. 순환은 `t` 키와 팔레트 명령뿐이다 | (없음) |
 | 하이드레이션 첫 렌더 (모바일) | 테마 메뉴가 잠깐 보였다 사라진다 (FUNC-UI-001) | (없음) |
 
 #### 7. 비즈니스 에러 코드 매핑
@@ -449,7 +455,7 @@ flowchart TD
 | :--- | :--- | :---: | :--- |
 | 없음 | 서버 호출 없음 | - | - |
 
-- 근거: `frontend/src/components/ui/ThemeMenu.tsx:1-34`, `frontend/src/components/ui/Menu.tsx`, `frontend/src/components/Header.tsx:45-49`, `:105-109`, `:202`, `frontend/src/components/chat/ChatHeader.tsx:36-91`, `frontend/src/components/ThemeToggle.tsx`
+- 근거: `frontend/src/components/ui/ThemeMenu.tsx:1-34`, `frontend/src/components/ui/Menu.tsx`, `frontend/src/components/Header.tsx:45-49`, `:105-109`, `:202`, `frontend/src/components/chat/ChatHeader.tsx:36-91`
 
 ---
 
@@ -465,10 +471,10 @@ flowchart TD
 - **진입점**: 홈 화면이 렌더하는 단축키 리스너. `window` 의 `keydown` 을 듣고 화면에는 아무것도 그리지 않는다 (`frontend/src/app/page.tsx:140-154`).
 
 #### 2. 사전 조건 (Pre-conditions)
-1. `/` 에 있다. 리스너 입력: 콜백 `onNavigateFeed`, `onOpenDetailModal`, `onHandoverChat`, `onToggleBookmark`, `onFocusSearch`, `onToggleTheme`, `onCloseOverlays`, `onToggleCommandPalette`, 추가 매핑 `customHotkeys`(기본 `[]`), `enabled`(기본 true), `blockSingleKeys`(기본 false). 홈 화면은 `onCloseOverlays`, `onToggleCommandPalette`, `customHotkeys` 를 넘기지 않고, `blockSingleKeys` 에 '오버레이가 하나라도 열려 있는지' 를 넘긴다.
+1. `/` 에 있다. 리스너 입력 (v0.4.2 단일 키 전용): 콜백 `onNavigateFeed`, `onOpenDetailModal`, `onHandoverChat`, `onToggleBookmark`, `onFocusSearch`, `onToggleTheme`, `enabled`(기본 true), `blockSingleKeys`(기본 false). 홈 화면은 `blockSingleKeys` 에 '오버레이가 하나라도 열려 있는지' 를 넘긴다. v0.4.1 의 `onCloseOverlays`, `onToggleCommandPalette`, `customHotkeys` 입력은 쓰는 곳이 없어 지웠다 (⌘K 는 헤더, Escape 는 오버레이 스택이 처리한다).
 
 #### 3. 사용자 인터랙션 및 시스템 동작 흐름과 플로우차트
-판정 순서 (`frontend/src/components/HotkeyListener.tsx:87-172`):
+판정 순서 (`frontend/src/components/HotkeyListener.tsx:61-127`):
 
 ```mermaid
 flowchart TD
@@ -476,21 +482,14 @@ flowchart TD
     A1 -->|아니오| Z["리스너 없음"]
     A1 -->|예| B{"IME 조합 중, isComposing 또는 keyCode 229"}
     B -->|예| X["무시"]
-    B -->|아니오| C{"Meta 또는 Ctrl 과 k"}
-    C -->|예, 팔레트 콜백 있음| C1["기본 동작 막고 팔레트 토글"]
-    C -->|예, 콜백 없음 홈 화면| D
-    C -->|아니오| D{"Escape"}
-    D -->|예| D1["onCloseOverlays 호출 후 끝, 홈 화면은 없음"]
-    D -->|아니오| E{"blockSingleKeys"}
+    B -->|아니오| E{"blockSingleKeys"}
     E -->|예| X
     E -->|아니오| F{"대상이 입력 요소"}
     F -->|예| X
     F -->|아니오| G{"Meta, Ctrl, Alt 눌림"}
     G -->|예| X
     G -->|아니오| H["키 판정: key 소문자 또는 code"]
-    H --> I{"customHotkeys 일치"}
-    I -->|예| I1["첫 매핑 handler 호출"]
-    I -->|아니오| J{"표준 키"}
+    H --> J{"표준 키"}
     J -->|j, k, 슬래시, b, c, t| K["기본 동작 막고 콜백"]
     J -->|Enter 또는 Space, 대상이 body, 콜백 있음| L["기본 동작 막고 상세 열기"]
     J -->|그 밖| X
@@ -505,11 +504,11 @@ flowchart TD
 #### 5. 비즈니스 규칙 (Business Rules)
 - **BR-UI-005-1 (입력 요소)**: 대상 요소가 `INPUT`, `TEXTAREA`, `SELECT`, `contentEditable`, `role="combobox"` 이면 끝낸다.
 - **BR-UI-005-2 (조합키)**: ⌘, Ctrl, Alt 중 하나라도 눌려 있으면 끝낸다. Shift 는 검사하지 않는다.
-- **BR-UI-005-3 (한글 입력)**: 물리 키 판정이라 한글 입력 상태에서도 동작한다 (`frontend/src/components/HotkeyListener.tsx:47-64`).
-- **BR-UI-005-4 (추가 매핑)**: `customHotkeys` 에서 `key` 가 같은 첫 매핑의 `handler` 를 부르고 끝낸다. `modifiers`, `allowInInputs` 필드는 타입에만 있고 판정에 쓰지 않는다.
+- **BR-UI-005-3 (한글 입력)**: 물리 키 판정이라 한글 입력 상태에서도 동작한다 (`frontend/src/components/HotkeyListener.tsx:24-41`).
+- **BR-UI-005-4 (단일 키 전용, v0.4.2)**: 이 리스너는 단일 키만 다룬다. 추가 매핑(`customHotkeys`)과 그 `modifiers`·`allowInInputs` 필드, ⌘K·Escape 처리는 지웠다. 인수 기준: 홈 화면에서 ⌘K 를 누르면 팔레트가 한 번만 열린다(헤더 `useHotkey('mod+k')` 하나만 반응).
 - **BR-UI-005-5 (표준 키)**: `j` → `onNavigateFeed(1)`, `k` → `onNavigateFeed(-1)`, `/` → `onFocusSearch()`, `b` → `onToggleBookmark()`, `c` → `onHandoverChat()`, `t` → `onToggleTheme()`. 모두 기본 동작을 막는다.
-- **BR-UI-005-6 (Enter/Space)**: `onOpenDetailModal` 이 있고 이벤트 대상이 `document.body` 일 때만 기본 동작을 막고 부른다. 버튼·링크·입력 등에 포커스가 있으면 가로채지 않는다 (`frontend/src/components/HotkeyListener.tsx:160-168`).
-- **BR-UI-005-7 (다시 달기)**: 콜백이나 `blockSingleKeys` 가 바뀔 때마다 리스너를 다시 단다 (`frontend/src/components/HotkeyListener.tsx:176-188`).
+- **BR-UI-005-6 (Enter/Space)**: `onOpenDetailModal` 이 있고 이벤트 대상이 `document.body` 일 때만 기본 동작을 막고 부른다. 버튼·링크·입력 등에 포커스가 있으면 가로채지 않는다 (`frontend/src/components/HotkeyListener.tsx:115-123`).
+- **BR-UI-005-7 (다시 달기)**: 콜백이나 `blockSingleKeys` 가 바뀔 때마다 리스너를 다시 단다 (`frontend/src/components/HotkeyListener.tsx:129-140`).
 - **BR-UI-005-8 (홈 화면 연결)** (`frontend/src/app/page.tsx:140-154`):
 
   | 콜백 | 연결된 동작 |
@@ -534,7 +533,7 @@ flowchart TD
 | :--- | :--- | :---: | :--- |
 | 없음 | 서버 호출 없음 | - | - |
 
-- 근거: `frontend/src/components/HotkeyListener.tsx:1-191`, `frontend/src/app/page.tsx:38`, `:83-154`, `frontend/src/lib/overlay-stack.ts:152-163`, 동작 확인 테스트 `frontend/src/tests/HotkeyListener.test.tsx`, `frontend/src/tests/HotkeyGating.test.tsx`
+- 근거: `frontend/src/components/HotkeyListener.tsx:1-143`, `frontend/src/app/page.tsx`, `frontend/src/lib/overlay-stack.ts:152-163`, 동작 확인 테스트 `frontend/src/tests/HotkeyListener.test.tsx`, `frontend/src/tests/HotkeyGating.test.tsx`
 
 ---
 
@@ -863,6 +862,7 @@ flowchart TD
   - 입력 신호 없이 온 `scroll`(브라우저가 줄이 좁아져 범위를 자르거나 스냅 위치로 다시 맞춘 것, 다른 코드의 `scrollLeft` 변경)과 이 부품이 선택 항목을 보이려고 둔 값(1px 이내)의 `scroll` 은 사용자 스크롤이 아니다. 그래서 손대지 않은 줄은 폭이 바뀔 때마다 선택 항목이 다시 보이고, 손가락·가로 휠(Shift + 휠 포함)·버튼으로 민 줄은 폭이 바뀌어도 민 위치가 남는다.
 - **BR-UI-009-8 (마크다운 영역)**: 마크다운 영역은 긴 토큰을 끊고, 코드 블록과 표만 자체 가로 스크롤을 갖는다 (FUNC-UI-012).
 - **BR-UI-009-9 (한국어 줄바꿈)**: 모든 글자가 어절 단위로 줄을 바꾸고(`word-break: keep-all`), 긴 토큰은 넘칠 때만 끊는다 (`frontend/src/app/globals.css:125-134`). 마크다운·코드 영역은 자체 규칙이 이긴다. 카드 제목·뉴스 상세 제목은 어절 단위를 지키되 긴 토큰도 끊는다.
+- **BR-UI-009-10 (챗 메시지 목록 스크롤, v0.4.2 FE-36)**: 챗 화면에서 세로로 스크롤되는 것은 메시지 목록 상자 하나다. 헤더·맥락 줄·입력 영역은 제자리에 있다. 새 내용(토큰·단계·구분선)이 오면 목록 상자의 `scrollTop` 을 맨 아래로 바꾼다. `scrollIntoView` 는 넘침이 숨겨진 바깥 상자까지 밀어 입력창을 화면 밖으로 밀어내므로 쓰지 않는다. 토큰마다 부드러운 스크롤을 걸지 않는다. 맨 아래에서 24px(`STICK_THRESHOLD_PX`) 이내를 보고 있을 때만 따라 내려가고, 위로 올려 읽는 중이면 그대로 둔다. 메시지 수가 바뀌면(질문 전송, 세션 열기) 따라가기를 다시 켜고 맨 아래로 간다. 목록 상자는 `relative` 라, 모바일에서 화면 읽기 전용으로 숨긴 라벨(절대 위치)이 바깥 열을 넘치게 하지 않는다 (`frontend/src/components/chat/ChatMessageList.tsx:20`, `:39-62`, `:113-126`). 인수 기준: (1) 360×640 화면에서 답변이 스트리밍되는 동안 입력창의 화면 위치가 바뀌지 않는다. (2) 목록을 맨 아래에서 100px 위로 올린 뒤 토큰이 더 와도 `scrollTop` 이 바뀌지 않는다. (3) 그 상태에서 새 질문을 보내면 목록이 맨 아래로 간다.
 
 #### 6. 예외 처리 및 엣지 케이스 (Edge Cases & Exception Handling)
 | 발생 상황 (Edge Case Scenario) | 화면 반응 및 시스템 처리 방식 | 사용자 안내 메시지 |
@@ -871,13 +871,15 @@ flowchart TD
 | 1024px 이상에서 사이드바 접음 | 사이드바(`chat-history-sidebar`)를 그리지 않는다. 기록 버튼은 그동안 `aria-controls` 를 달지 않는다 (FUNC-UI-014) | (없음) |
 | 폭 변경 (피드) | 검색 영역·필터 영역·목록 머리줄은 같은 트리이고 CSS 로만 바뀌어, 서버 렌더·첫 렌더와 그 뒤의 배치·DOM 순서가 같다. 검색 입력·칩 줄·`Must-Read` 토글·정렬이 다시 마운트되지 않는다. 768px 미만 토글의 `Must-Read` 글자는 화면 읽기용으로 남아 접근 이름이 같다 (`frontend/src/components/feed/FeedToolbar.tsx:211-229`, `frontend/src/components/feed/FeedStatusBar.tsx:52-86`) | (없음) |
 | 가로 스크롤 줄 첫 그림 | 넘침 상태·스크롤 버튼·`‹`·`›` 표시는 JS 로 정하므로 서버 렌더와 첫 그림에는 없다 | (없음) |
+| 모바일 챗에서 답변 스트리밍 중 위로 올려 읽기 | 목록이 아래로 끌려가지 않는다. 맨 아래 24px 안으로 다시 내리면 따라가기가 다시 켜진다 (v0.4.2) | (없음) |
+| 모바일 챗 스트리밍 중 입력창 위치 | 바깥 상자가 스크롤되지 않아 입력창이 밀려 올라가거나 사라지지 않는다 (v0.4.2 FE-36, 옛 동작은 `scrollIntoView` 가 바깥 상자까지 밀었다) | (없음) |
 
 #### 7. 비즈니스 에러 코드 매핑
 | 비즈니스 에러 코드 | 발생 사유 | HTTP 상태 코드 매핑 | 클라이언트 표시 형태 |
 | :--- | :--- | :---: | :--- |
 | 없음 | 서버 호출 없음 | - | - |
 
-- 근거: `frontend/src/app/page.tsx:167-269`, `frontend/src/components/Header.tsx:122-205`, `frontend/src/components/feed/FeedToolbar.tsx:63-229`, `frontend/src/components/feed/FeedStatusBar.tsx:29-88`, `frontend/src/components/feed/InsightsBar.tsx:54-118`, `frontend/src/components/ui/ScrollRow.tsx:35-49`, `frontend/src/components/chat/ChatSidebarHeader.tsx:26-76`, `frontend/src/components/chat/ChatMessageList.tsx:49-98`, `frontend/src/components/chat/ChatWorkspace.tsx:602-735`, `frontend/src/components/chat/ChatHeader.tsx:77-151`, `frontend/src/components/chat/ChatContextBar.tsx:37-57`, `frontend/src/app/globals.css:125-134`, 동작 확인 테스트 `frontend/src/tests/ResponsiveLayout.test.tsx`, `frontend/src/tests/ui/ChipGroup.test.tsx`, `frontend/src/tests/feed/FeedToolbar.test.tsx`
+- 근거: `frontend/src/app/page.tsx:167-269`, `frontend/src/components/Header.tsx:122-205`, `frontend/src/components/feed/FeedToolbar.tsx:63-229`, `frontend/src/components/feed/FeedStatusBar.tsx:29-88`, `frontend/src/components/feed/InsightsBar.tsx:54-118`, `frontend/src/components/ui/ScrollRow.tsx:35-49`, `frontend/src/components/chat/ChatSidebarHeader.tsx:26-76`, `frontend/src/components/chat/ChatMessageList.tsx:20-126`, `frontend/src/components/chat/ChatWorkspace.tsx`, `frontend/src/components/chat/ChatHeader.tsx:77-151`, `frontend/src/components/chat/ChatContextBar.tsx:37-57`, `frontend/src/app/globals.css:125-134`, 동작 확인 테스트 `frontend/src/tests/ResponsiveLayout.test.tsx`, `frontend/src/tests/ui/ChipGroup.test.tsx`, `frontend/src/tests/feed/FeedToolbar.test.tsx`
 
 ---
 
@@ -903,6 +905,9 @@ flowchart TD
     B -->|예| D["resize, scroll 이벤트마다 루트 높이를 visualViewport 높이로"]
     D --> E["가상 키보드가 올라오면 줄어든 높이에 맞춤"]
     F["챗 입력창 포커스"] --> G["100ms 뒤 입력창을 아래 끝에 맞춰 스크롤"]
+    H["답변 토큰 도착"] --> I{"목록 맨 아래 24px 이내 보는 중"}
+    I -->|예| J["목록 상자 scrollTop 만 맨 아래로, 입력창 위치 그대로"]
+    I -->|아니오| K["스크롤 위치 유지"]
 ```
 
 #### 4. 화면 표시 및 입력 데이터 항목 명세 (UI Data Elements - 8대 표준 컬럼)
@@ -922,18 +927,20 @@ flowchart TD
 - **BR-UI-010-5 (입력창 높이)**: 최대 180px (`frontend/src/components/chat/ChatPromptInput.tsx:27`, `:96`, `frontend/src/components/ui/Textarea.tsx:51-54`).
 - **BR-UI-010-6 (알림 위치)**: 전역 알림 영역은 768px 미만에서 아래 `max(1rem, env(safe-area-inset-bottom))` 에 뜬다 (`frontend/src/components/ui/Toast.tsx:250`). 챗 화면의 알림은 입력 영역 바로 위에 떠 입력창과 겹치지 않는다 (FUNC-UI-009).
 - **BR-UI-010-7 (바텀시트)**: 아래로 100px 넘게 끌면 닫힌다 (FUNC-UI-008).
+- **BR-UI-010-8 (모바일 챗 스크롤, v0.4.2 FE-36)**: 가상 키보드가 열려 루트 높이가 줄어도 스크롤은 메시지 목록 상자 안에서만 일어난다. 스트리밍 중 자동 따라가기는 목록 상자의 `scrollTop` 만 바꾸고 바깥 상자를 밀지 않아, 입력창이 키보드 위 제자리에 남는다. 입력창 포커스 때의 `scrollIntoView`(BR-4)는 그대로다. 세부 규칙과 인수 기준은 BR-UI-009-10.
 
 #### 6. 예외 처리 및 엣지 케이스 (Edge Cases & Exception Handling)
 | 발생 상황 (Edge Case Scenario) | 화면 반응 및 시스템 처리 방식 | 사용자 안내 메시지 |
 | :--- | :--- | :--- |
 | `visualViewport` 없는 브라우저 | `100dvh` 그대로 | (없음) |
+| 키보드가 열린 채 답변 스트리밍 | 목록만 따라 내려가고 입력창은 키보드 위에 남는다 (v0.4.2) | (없음) |
 
 #### 7. 비즈니스 에러 코드 매핑
 | 비즈니스 에러 코드 | 발생 사유 | HTTP 상태 코드 매핑 | 클라이언트 표시 형태 |
 | :--- | :--- | :---: | :--- |
 | 없음 | 서버 호출 없음 | - | - |
 
-- 근거: `frontend/src/app/layout.tsx:6-15`, `frontend/src/app/chat/page.tsx:10-24`, `frontend/src/components/chat/ChatWorkspace.tsx:115-132`, `:671`, `frontend/src/components/chat/ChatPromptInput.tsx:27-110`, `frontend/src/components/ui/Dialog.tsx:241`, 동작 확인 테스트 `frontend/src/tests/chat/MobileViewport.test.tsx`
+- 근거: `frontend/src/app/layout.tsx:6-15`, `frontend/src/app/chat/page.tsx:10-24`, `frontend/src/components/chat/ChatWorkspace.tsx:115-132`, `:671`, `frontend/src/components/chat/ChatPromptInput.tsx:27-110`, `frontend/src/components/chat/ChatMessageList.tsx:39-62`, `frontend/src/components/ui/Dialog.tsx:241`, 동작 확인 테스트 `frontend/src/tests/chat/MobileViewport.test.tsx`
 
 ---
 
@@ -994,21 +1001,26 @@ flowchart TD
 - **BR-UI-011-6 (대화상자)**: 공유 & 알림 설정은 결과·실패를 인라인 알림으로 (`frontend/src/components/BriefingSettingsModal.tsx:336-345`). 소스 & 리서처 결과 안내는 대화상자 안 `aria-live` 영역에 보이고 3,500ms 뒤 사라진다 (`frontend/src/components/SourcesModal.tsx:73-74`, `:100-102`, `:200-211`). 스케줄은 상태를 받기 전 `계산 중...` (`frontend/src/components/ScheduleModal.tsx:55`). 일일 브리핑은 Notion·이메일 결과를 인라인 알림으로(실패면 해당 설정 열기 버튼).
 - **BR-UI-011-7 (챗)**: 대화 목록 조회가 실패해도 localStorage 캐시가 있으면 오류 없이 캐시를 보여 준다 (`frontend/src/components/chat/useChatSessions.ts:83-97`). 메시지가 없으면 웰컴 화면과 추천 질문 4개를 보여 준다 (`frontend/src/components/chat/ChatMessageList.tsx:49-88`). URL 의 `sourceId` 기사를 찾지 못하면 `warning` 알림을 입력 영역 바로 위에 띄운다 (`frontend/src/components/chat/ChatWorkspace.tsx:42`, `:506`, `:519`). 챗 기록 목록 상태 (`frontend/src/components/chat/SessionList.tsx:35-60`, `frontend/src/components/chat/SessionListSkeleton.tsx:19-20`). 챗 페이지 Suspense 대기 문구 (`frontend/src/app/chat/page.tsx:13-19`).
 - **BR-UI-011-8 (알림 자동 닫힘)**: 알림은 기본 3,500ms 뒤 닫힌다 (`frontend/src/components/ui/Toast.tsx:25`).
+- **BR-UI-011-9 (화면 오류 경계, v0.4.2)**: 렌더 중 예외는 라우트 오류 경계가 받아 본문 자리에 `화면을 그리지 못했습니다` 오류 상태와 `다시 시도` 를 보인다 ('화면·라우트' 절). 인수 기준: 피드 카드 렌더가 예외를 던지면 헤더는 남고 본문에 이 제목과 `다시 시도` 버튼이 보이며, 예외 원문은 화면에 없다.
+- **BR-UI-011-10 (응답 형식 검증, v0.4.2)**: API 응답은 zod 스키마로 확인하되 맞지 않아도 던지지 않고 받은 값으로 그린다 (개발 중에만 콘솔 경고). 그래서 계약에서 조금 벗어난 응답이 오류 상태를 만들지 않는다 (`frontend/src/lib/api.ts` `readJson`).
+- **BR-UI-011-11 (소스 대화상자 첫 읽기 실패, v0.4.2)**: 받은 데이터가 없으면 0건 목록 대신 오류 상태와 `다시 시도` 를 보인다 (FUNC-SRC-002).
 
 #### 6. 예외 처리 및 엣지 케이스 (Edge Cases & Exception Handling)
 | 발생 상황 (Edge Case Scenario) | 화면 반응 및 시스템 처리 방식 | 사용자 안내 메시지 |
 | :--- | :--- | :--- |
-| 북마크 보기 | 서버를 부르지 않고 localStorage 목록을 거르므로 로딩·오류 상태가 없다 (`frontend/src/hooks/useNewsFeed.ts:109`, `:137-151`) | (없음) |
-| 챗 API 응답 지연 | 챗 호출에는 시간 제한이 없어 로딩 상태가 계속될 수 있다 (알려진 문제) | (없음) |
+| 북마크 보기 | 서버를 부르지 않고 localStorage 목록을 거르므로 로딩·오류 상태가 없다 (`frontend/src/hooks/useNewsFeed.ts`) | (없음) |
+| 챗 API 응답 지연 (v0.4.2 해결) | 챗 REST 호출은 8,000ms, 스트림은 첫 바이트 30,000ms 시간 제한이 있다. 넘으면 실패로 끝내 로딩이 계속되지 않는다 (`frontend/src/lib/chatApi.ts`, FSD02) | 스트림: `응답이 늦어 요청을 멈췄습니다. 다시 시도해 주세요.` |
+| 렌더 중 예외 | 라우트 오류 경계 (BR-9) | `화면을 그리지 못했습니다` |
 
 #### 7. 비즈니스 에러 코드 매핑
 | 비즈니스 에러 코드 | 발생 사유 | HTTP 상태 코드 매핑 | 클라이언트 표시 형태 |
 | :--- | :--- | :---: | :--- |
-| 없음 | 피드 목록 실패 | 비 2xx, 타임아웃 | 오류 상태 또는 `danger` 알림 (FUNC-NEWS-001) |
-| 없음 | 챗 기록 목록 실패, 캐시 없음 | 비 2xx, 네트워크 | 오류 상태 `대화 기록을 불러오지 못했습니다` |
-| 없음 | 챗 `sourceId` 기사 없음 | 404 등 | `warning` 알림 |
+| `ERR_INVALID_PAYLOAD` / `ERR_SERVER_INTERNAL` 등 | 피드 목록 실패 | 400·500 등, 타임아웃 | 오류 상태 또는 `danger` 알림 (FUNC-NEWS-001) |
+| `ERR_SERVER_INTERNAL` 등 | 챗 기록 목록 실패, 캐시 없음 | 비 2xx, 네트워크 | 오류 상태 `대화 기록을 불러오지 못했습니다` |
+| `ERR_NOT_FOUND` | 챗 `sourceId` 기사 없음 | 404 | `warning` 알림 |
+| (클라이언트) | 렌더 중 예외 | - | 라우트 오류 경계 |
 
-- 근거: 위 각 줄, `frontend/src/components/ui/ErrorState.tsx`, `frontend/src/components/ui/EmptyState.tsx`, `frontend/src/components/ui/Skeleton.tsx`, `frontend/src/components/ui/Toast.tsx`, 동작 확인 테스트 `frontend/src/tests/hooks/useNewsFeed.test.tsx`, `frontend/src/tests/feed/InsightsBar.test.tsx`
+- 근거: 위 각 줄, `frontend/src/app/error.tsx`, `frontend/src/components/ui/ErrorState.tsx`, `frontend/src/components/ui/EmptyState.tsx`, `frontend/src/components/ui/Skeleton.tsx`, `frontend/src/components/ui/Toast.tsx`, 동작 확인 테스트 `frontend/src/tests/hooks/useNewsFeed.test.tsx`, `frontend/src/tests/feed/InsightsBar.test.tsx`
 
 ---
 
@@ -1195,24 +1207,25 @@ flowchart TD
   | 챗 헤더 | DOM 순서대로 `피드로 돌아가기`(첫 조작 요소, 툴팁 `뉴스 피드로 돌아가기`), 기록 버튼 `aria-label="대화 기록 보기" aria-expanded`, 기록이 열렸을 때만 `aria-controls`(1024px 이상 `chat-history-sidebar`, 미만 `chat-history-drawer`), 제목 `h1` `AI 챗`, `새 대화 시작`, `커맨드 팔레트 열기`, `더보기` |
   | 맥락 줄 | 스코프 `role="group" aria-label="검색 스코프 모드"` + 버튼 `aria-pressed`, 기사 칩 해제 `기사 컨텍스트 해제` |
   | 대화 기록 사이드바·드로어 | 사이드바 `<aside role="navigation" aria-label="대화 기록 목록">`, 드로어 `role="dialog"`(제목 `대화 기록`) 안 `<nav aria-label="대화 기록 목록">`, 닫기 `대화 기록 드로어 닫기`, `사이드바 접기`/`사이드바 펼치기`, 검색 `대화 검색`·`검색어 지우기`, 검색 결과 수 화면 읽기용 `aria-live="polite"` |
-  | 세션 카드 | `role="button" tabIndex={0}` + Enter/스페이스로 선택, 활성 `aria-current="true"`, `aria-label="대화: {제목}, {시간}, {모드}"`, 삭제 `대화 '{제목}' 삭제` |
-  | 메시지 목록 | `role="log" aria-live="polite" aria-relevant="additions text"` |
+  | 세션 카드 | 선택 `<button>`(활성 `aria-current="true"`, `aria-label="대화: {제목}, {시간}, {모드}"`, 안에는 구문 요소만)과 삭제 `IconButton`(`대화 '{제목}' 삭제`)이 형제다. 버튼 안 버튼이 없다 (v0.4.2) |
+  | 메시지 목록 | `role="log" aria-live="polite" aria-relevant="additions" aria-busy={스트리밍 중}`. 토큰마다 읽지 않고, 답변이 끝나면 화면 읽기용 상태 영역이 `답변이 완료되었습니다.` 를 한 번 알린다 (v0.4.2) |
   | 포커스 필터 | 캡슐 `<button aria-haspopup="dialog" aria-expanded aria-label="지식 검색 포커스 필터 설정 열기. 현재 설정: …">`, `포커스 필터 초기화`, 시트는 대화상자 공통 + 닫기 `필터 닫기`, Must-Read `role="switch"` |
   | 모델 선택 | 트리거 `aria-label="Claude 모델 선택: {이름}" aria-haspopup aria-expanded`, 열렸을 때만 `aria-controls`, 팝오버 `role="radiogroup" aria-label="Claude AI 모델 선택"` + 항목 `role="radio" aria-checked` 로빙 `tabIndex`, 화살표 4방향 순환·Home·End, Enter/스페이스 선택 |
-  | 기타 챗 | 입력창 화면 읽기용 라벨 `질문 입력`, `답변 생성 중단`, `질문 전송`, `답변 복사`, `답변 다시 시도`, 내보내기 `role="group" aria-label="리포트 익스포트 툴바"`(`마크다운 복사`, `.md 다운로드`. v0.4.1 에서 모의 `Notion 동기화` 버튼을 지웠다), 진행 표시 `role="region"`/`role="progressbar"`, 모델 변경 구분선 `role="separator"`, 인용 팝오버 `role="dialog"` + `팝오버 닫기` |
+  | 기타 챗 | 입력창 화면 읽기용 라벨 `질문 입력`, `답변 생성 중단`, `질문 전송`, `답변 복사`, `답변 다시 시도`, 내보내기 `role="group" aria-label="리포트 익스포트 툴바"`(`마크다운 복사`, `.md 다운로드`. v0.4.1 에서 모의 `Notion 동기화` 버튼을 지웠다), 진행 표시 `role="region"`/`role="progressbar"`(단계 라벨에 이모지 없음, v0.4.2), 모델 변경 구분선 `role="separator"`, 인용 팝오버 `role="dialog"` + `팝오버 닫기`(`body` 포털, v0.4.2) |
 
 #### 6. 예외 처리 및 엣지 케이스 (Edge Cases & Exception Handling)
 | 발생 상황 (Edge Case Scenario) | 화면 반응 및 시스템 처리 방식 | 사용자 안내 메시지 |
 | :--- | :--- | :--- |
-| 세션 카드 안 삭제 버튼 | `role="button"` 카드 안에 버튼이 들어 있어 상호작용 요소가 중첩된다 (알려진 문제) | (없음) |
-| 인용 팝오버 | 포털 없이 답변 문단(`<p>`) 안에 `div` 로 그려진다 (알려진 문제) | (없음) |
+| 세션 카드와 삭제 버튼 | 형제 요소라 상호작용 요소가 중첩되지 않는다 (v0.4.2 해결) | (없음) |
+| 인용 팝오버 | `body` 포털에 `fixed` 로 그려 답변 문단 안 중첩과 넘침 자르기가 없다 (v0.4.2 해결) | (없음) |
+| 답변 스트리밍 중 화면 읽기 | `aria-busy` 동안 토큰을 하나씩 읽지 않고, 끝나면 `답변이 완료되었습니다.` 한 번 (v0.4.2) | `답변이 완료되었습니다.` |
 
 #### 7. 비즈니스 에러 코드 매핑
 | 비즈니스 에러 코드 | 발생 사유 | HTTP 상태 코드 매핑 | 클라이언트 표시 형태 |
 | :--- | :--- | :---: | :--- |
 | 없음 | 서버 호출 없음 | - | - |
 
-- 근거: `frontend/src/components/ui/Dialog.tsx:200-245`, `frontend/src/components/ui/Menu.tsx`, `frontend/src/components/ui/Tabs.tsx`, `frontend/src/components/ui/ScrollRow.tsx`, `frontend/src/components/news-detail/AskAiPanel.tsx`, `frontend/src/components/DailyBriefingModal.tsx:162-172`, `frontend/src/components/sources/SourcesListTab.tsx:118-126`, `frontend/src/components/CommandPalette.tsx:209-314`, `frontend/src/components/Header.tsx:123-205`, `frontend/src/components/NewsCard.tsx:80-238`, `frontend/src/components/chat/ChatHeader.tsx:98-151`, `frontend/src/components/chat/ChatContextBar.tsx`, `frontend/src/components/chat/SessionItemCard.tsx:75-122`, `frontend/src/components/chat/ChatMessageList.tsx:92-95`, `frontend/src/components/chat/FocusCapsule.tsx:83-108`, `frontend/src/components/chat/ChatModelSelector.tsx:96-187`
+- 근거: `frontend/src/components/ui/Dialog.tsx:200-245`, `frontend/src/components/ui/Menu.tsx`, `frontend/src/components/ui/Tabs.tsx`, `frontend/src/components/ui/ScrollRow.tsx`, `frontend/src/components/news-detail/AskAiPanel.tsx`, `frontend/src/components/DailyBriefingModal.tsx:162-172`, `frontend/src/components/sources/SourcesListTab.tsx:118-126`, `frontend/src/components/CommandPalette.tsx:209-314`, `frontend/src/components/Header.tsx:123-205`, `frontend/src/components/NewsCard.tsx:80-238`, `frontend/src/components/chat/ChatHeader.tsx:98-151`, `frontend/src/components/chat/ChatContextBar.tsx`, `frontend/src/components/chat/SessionItemCard.tsx:80-135`, `frontend/src/components/chat/ChatMessageList.tsx:64-69`, `:118-126`, `frontend/src/components/chat/CitationPopover.tsx:44`, `frontend/src/components/ui/Popover.tsx:89-177`, `frontend/src/components/chat/FocusCapsule.tsx:83-108`, `frontend/src/components/chat/ChatModelSelector.tsx:96-187`
 
 ---
 
@@ -1221,13 +1234,13 @@ flowchart TD
 |---|---|---|---|
 | ⌘K / Ctrl+K | 커맨드 팔레트 열기 / 닫기 | `/`, `/chat`. 팔레트가 맨 위면 닫고, 다른 레이어가 열려 있으면 무시. 입력창 안에서도 동작. 기본 동작 막음. IME 조합 중 무시 | `frontend/src/components/Header.tsx:69-81`, `frontend/src/components/chat/ChatHeader.tsx:62-75`, `frontend/src/hooks/useHotkey.ts:97-121` |
 | Escape | 맨 위 레이어 하나 닫기 (대화상자, 드로어, 시트, 확인 창, 팔레트, 메뉴, 팝오버) | 모든 화면. 레이어가 열려 있을 때. 입력창 안에서도 동작 (뉴스 상세 `AI 질의응답` 탭 질문 입력창은 닫지 않고 그 탭 패널로 포커스). IME 조합 중 무시. 확인 창은 진행 중이면 무시 | `frontend/src/lib/overlay-stack.ts:47-55`, `frontend/src/components/news-detail/AskAiPanel.tsx:90-98` |
-| j | 다음 카드로 포커스 (제목 버튼으로 DOM 포커스, 화면 안으로 스크롤) | `/`, 입력 중 아님, ⌘·Ctrl·Alt 없음, IME 조합 아님, 오버레이 없음 | `frontend/src/components/HotkeyListener.tsx:136-139`, `frontend/src/app/page.tsx:108-118` |
-| k | 이전 카드로 포커스 | 같음 | `frontend/src/components/HotkeyListener.tsx:140-143` |
-| / | 검색 입력창 포커스, 검색 영역을 sticky 헤더 아래로 보이게 스크롤 | 같음 | `frontend/src/components/HotkeyListener.tsx:144-147`, `frontend/src/app/page.tsx:145-151` |
-| b | 포커스 카드 북마크 토글 | 같음 + 포커스 카드 있음 | `frontend/src/components/HotkeyListener.tsx:148-151` |
-| c | 포커스 카드로 `/chat?sourceId={id}` 이동 | 같음 + 포커스 카드 있음 | `frontend/src/components/HotkeyListener.tsx:152-155` |
-| t | 테마 순환 (light→dark→system) | 같음 | `frontend/src/components/HotkeyListener.tsx:156-159` |
-| Enter / 스페이스 | 포커스 카드 상세 열기 | 같음 + 이벤트 대상이 `document.body`. 버튼·링크 등에서는 브라우저 기본 동작 (카드 제목 버튼은 기본 클릭으로 상세를 연다) | `frontend/src/components/HotkeyListener.tsx:160-168` |
+| j | 다음 카드로 포커스 (제목 버튼으로 DOM 포커스, 화면 안으로 스크롤) | `/`, 입력 중 아님, ⌘·Ctrl·Alt 없음, IME 조합 아님, 오버레이 없음 | `frontend/src/components/HotkeyListener.tsx:91-94`, `frontend/src/app/page.tsx` |
+| k | 이전 카드로 포커스 | 같음 | `frontend/src/components/HotkeyListener.tsx:95-98` |
+| / | 검색 입력창 포커스, 검색 영역을 sticky 헤더 아래로 보이게 스크롤 | 같음 | `frontend/src/components/HotkeyListener.tsx:99-102`, `frontend/src/app/page.tsx` |
+| b | 포커스 카드 북마크 토글 | 같음 + 포커스 카드 있음 | `frontend/src/components/HotkeyListener.tsx:103-106` |
+| c | 포커스 카드로 `/chat?sourceId={id}` 이동 | 같음 + 포커스 카드 있음 | `frontend/src/components/HotkeyListener.tsx:107-110` |
+| t | 테마 순환 (light→dark→system) | 같음 | `frontend/src/components/HotkeyListener.tsx:111-114` |
+| Enter / 스페이스 | 포커스 카드 상세 열기 | 같음 + 이벤트 대상이 `document.body`. 버튼·링크 등에서는 브라우저 기본 동작 (카드 제목 버튼은 기본 클릭으로 상세를 연다) | `frontend/src/components/HotkeyListener.tsx:115-123` |
 | ↑ / ↓ | 팔레트 항목 이동 (순환) | 팔레트 검색 입력창 포커스, IME 조합 아님 | `frontend/src/components/CommandPalette.tsx:197-202` |
 | Enter | 팔레트 선택 항목 실행 | 팔레트 검색 입력창 포커스, IME 조합 아님 | `frontend/src/components/CommandPalette.tsx:203-206` |
 | ↑ / ↓, Home / End, Enter / 스페이스, Tab | 메뉴 항목 이동 (순환)·처음/끝·실행·닫기 | 메뉴가 열려 있을 때 | `frontend/src/components/ui/Menu.tsx:103-140` |
@@ -1251,7 +1264,10 @@ flowchart TD
 | 수집 진행 폴링 주기 | 1,200ms | `frontend/src/hooks/useCollector.ts:24` |
 | 수집 완료 메시지 표시 | 4,000ms | `frontend/src/hooks/useCollector.ts:25` |
 | 수집 요청 실패 메시지 표시 | 3,000ms | `frontend/src/hooks/useCollector.ts:29` |
-| 헤더 버전 표시 | `NEXT_PUBLIC_APP_VERSION` (빌드 때 `package.json` 의 `version`, 지금 `v0.4.1`), 1024px 이상, 값이 없으면 숨김 | `frontend/next.config.ts:6`, `:14`, `frontend/src/components/Header.tsx:66` |
+| 헤더 버전 표시 | `NEXT_PUBLIC_APP_VERSION` (빌드 때 `package.json` 의 `version`, v0.4.2 릴리스 기준 `v0.4.2`), 1024px 이상, 값이 없으면 숨김 | `frontend/next.config.ts`, `frontend/src/lib/env.ts:10`, `frontend/src/components/Header.tsx` |
+| 챗 목록 따라가기 기준 | 맨 아래에서 24px (`STICK_THRESHOLD_PX`) | `frontend/src/components/chat/ChatMessageList.tsx:20` (v0.4.2) |
+| 챗 API 시간 제한 | REST 8,000ms, 스트림 첫 바이트 30,000ms | `frontend/src/lib/chatApi.ts` (v0.4.2) |
+| 늦게 불러오는 대화상자 | 6종 (`next/dynamic`, `ssr: false`) | `frontend/src/app/page.tsx:27-35` (v0.4.2) |
 | 헤더 높이 | 56px | `frontend/src/components/Header.tsx:122`, `frontend/src/components/chat/ChatHeader.tsx:98` |
 | 팔레트 명령 수 | 피드 9 (기본 5 + 선택 4), 챗 4 | `frontend/src/components/CommandPalette.tsx:81-165`, `frontend/src/components/chat/ChatWorkspace.tsx:543-583` |
 | 팔레트 위치·크기 | 768px 이상 위에서 `12dvh`, 너비 560px, 최대 높이 `85dvh` / 미만 전체 화면 | `frontend/src/components/ui/Dialog.tsx:91`, `:101-105` |
@@ -1274,23 +1290,29 @@ flowchart TD
 
 ## 알려진 불일치·위험
 1. **클립보드 복사가 폐기 예정 API 에 기댄다.** 공통 훅과 Ask AI 복사는 `navigator.clipboard` 가 실패하면 `execCommand('copy')` 로 다시 시도하는데, 이 API 는 표준에서 폐기 예정이다. `frontend/next.config.ts` 의 허용 개발 출처에 LAN IP(`192.168.1.109`)가 있어 HTTP(비보안 출처)로 접속하면 첫 번째 방식이 실패하고 대체 방식에 기댄다 (FUNC-UI-013).
-2. **팝오버가 포털을 쓰지 않는다.** 인용 팝오버는 답변 문단 `<p>` 안에 `div` 로 그려져 HTML 중첩 규칙에 어긋나고, 부모의 `overflow`·쌓임 맥락에 잘릴 수 있다 (FUNC-UI-014).
-3. **세션 카드 안에 버튼이 중첩된다.** `role="button"` 카드 안에 삭제 버튼이 있다 (`frontend/src/components/chat/SessionItemCard.tsx:76-122`).
-4. **단축키 매핑의 `modifiers`·`allowInInputs` 는 선언만 있고 동작하지 않는다.** `ThemeToggle` 은 렌더하는 곳이 없다.
-5. **가로 스크롤 줄의 사용자 스크롤 판정이 시간 값에 기댄다.** 150ms·1,000ms 는 측정 근거가 없는 값이다. `scrollend` 가 없는 브라우저에서 관성 스크롤이 150ms 넘게 멈췄다 다시 움직이면 그 뒤 `scroll` 을 사용자 스크롤로 보지 않아, 폭이 바뀔 때 선택 항목으로 줄을 끌어올 수 있다. 입력 없이 다른 코드가 줄을 움직여도 사용자 스크롤로 보지 않는다 (FUNC-UI-009 BR-7, `frontend/src/components/ui/ScrollRow.tsx:43-52`).
-6. **쓰지 않는 화면 코드가 있다.** `WebhookSettingsModal`(렌더되지 않음, `agentlens_webhook_url` 키 포함), `ThemeToggle`(헤더가 테마 메뉴로 바뀌어 렌더하는 곳이 없음).
-7. **챗 API 호출에 시간 제한이 없다.** 챗 화면의 서버 호출 6곳(세션 목록·상세·저장·삭제, 챗 스트림, 기사 조회)은 시간 제한을 쓰지 않는다. 세션 목록·상세 조회가 멈추면 로딩 상태가 계속될 수 있다 (`frontend/src/components/chat/useChatSessions.ts:67`, `:136`, `:234`, `:265`, `frontend/src/components/chat/ChatWorkspace.tsx:338`, `:530`).
-8. **챗 세션 상세 캐시가 쌓인다.** 세션 목록을 30개로 자를 때 밀려난 세션의 `agentlens_chat_session_{id}` 키는 지우지 않는다. 세션 초기화도 목록 키만 지운다. localStorage 용량이 계속 늘 수 있다.
-9. **스케줄 대화상자 문구에 수집 시각이 고정돼 있다.** `매일 4회(0, 6, 12, 18시 UTC)` 와 UTC·KST 시각을 문자열로 박아 두어, backend 스케줄이 바뀌면 화면이 따라가지 않는다 (`frontend/src/components/ScheduleModal.tsx:30`, `:47-48`).
-10. **MCP 대화상자의 설정 예시가 고정 문자열이다.** `"cwd": "/path/to/agentlens/backend"` 자리표시를 그대로 복사하게 한다 (`frontend/src/components/McpModal.tsx:15-23`).
+2. **(v0.4.2 해결) 팝오버가 포털을 쓰지 않는다.** 인용 팝오버는 `body` 포털에 그린다 (`frontend/src/components/chat/CitationPopover.tsx:44`).
+3. **(v0.4.2 해결) 세션 카드 안에 버튼이 중첩된다.** 선택 버튼과 삭제 버튼이 형제다 (`frontend/src/components/chat/SessionItemCard.tsx:80-126`).
+4. **(v0.4.2 해결) 단축키 매핑의 `modifiers`·`allowInInputs` 는 선언만 있고 동작하지 않는다.** 단축키 리스너를 단일 키 전용으로 줄이고 추가 매핑을 지웠다. `ThemeToggle` 도 지웠다.
+5. **가로 스크롤 줄의 사용자 스크롤 판정이 시간 값에 기댄다.** 150ms·1,000ms 는 측정 근거가 없는 값이다. `scrollend` 가 없는 브라우저에서 관성 스크롤이 150ms 넘게 멈췄다 다시 움직이면 그 뒤 `scroll` 을 사용자 스크롤로 보지 않아, 폭이 바뀔 때 선택 항목으로 줄을 끌어올 수 있다. 입력 없이 다른 코드가 줄을 움직여도 사용자 스크롤로 보지 않는다 (FUNC-UI-009 BR-7, `frontend/src/components/ui/ScrollRow.tsx`).
+6. **(v0.4.2 해결) 쓰지 않는 화면 코드가 있다.** `WebhookSettingsModal`, `ThemeToggle` 을 지웠다.
+7. **(v0.4.2 해결) 챗 API 호출에 시간 제한이 없다.** 챗 REST 호출은 8,000ms, 스트림은 첫 바이트 30,000ms 시간 제한이 있다 (`frontend/src/lib/chatApi.ts`).
+8. **(v0.4.2 해결) 챗 세션 상세 캐시가 쌓인다.** 세션 목록을 30개로 자를 때 밀려난 세션의 `agentlens_chat_session_{id}` 키를 지우고, 세션 초기화는 상세 키도 모두 지운다 (`frontend/src/components/chat/useChatSessions.ts:56-64`, `:217-224`, `:284-290`). 남은 점: 서버가 FIFO 로 지운 세션의 상세 키는 프론트 목록에 남아 있지 않으면 지울 계기가 없다 (코드 경로 판단).
+9. **관찰 사항, 다른 프로세스의 수집은 화면 진행 표시에 나타나지 않는다.** MCP 서버나 직접 모드 `make collect` 가 수집하는 동안 이 backend 의 `is_running` 은 false 다(이 프로세스 기준). 즉시 수집은 `already_running` 으로 막히고 진행 줄은 곧 `수집 완료 (+0건 신규 반영)` 을 보인다. 결함이 아니라 지금 동작으로 기록한다 (FUNC-UI-002 BR-2). (v0.4.2 해결) 스케줄 대화상자의 고정 수집 시각 문구는 backend 응답(`schedule_hours`, `timezone`)으로 그리도록 바뀌었다 (`frontend/src/components/ScheduleModal.tsx:35`, `:64-76`).
+10. **MCP 대화상자의 설정 예시가 고정 문자열이다.** `"cwd": "/path/to/agentlens/backend"` 자리표시는 그대로지만, v0.4.2 부터 코드 블록 아래 안내가 `cwd`·`command` 를 바꾸라고 알려 준다 (`frontend/src/components/McpModal.tsx:15-23`, `:57-61`).
 
 ## 열린 질문
 - **Q-UI-1**: 우선순위(Must/Should)는 as-built 역할로 분류했다. 제품 오너가 확정해야 한다.
 - **Q-UI-2**: (해결) 대응 요구사항 ID 는 `docs/spec-writer/01_PRD.md` 의 `REQ-UI-001`~`008`, `REQ-COLL-004`, `REQ-COLL-007` 로 맞췄다.
 - **Q-UI-3**: (해결) 화면 코드 `SCR-UI-000~004` 는 기능 인덱스(`docs/spec-writer/02_FUNCTIONAL_SPECIFICATION.md` 3절)에 그대로 올렸다. 챗 FSD 의 챗 커맨드 팔레트와 수집 FSD 의 헤더 수집 컨트롤은 `SCR-UI-002`, `SCR-UI-001` 로 합쳤고, 초기화 확인 창은 `SCR-COLL-003` 으로 정했다.
 - **Q-UI-4**: 가로 스크롤 줄 판정 시간(150ms·1,000ms)은 측정 근거가 없다. 측정할지, 그대로 둘지 정해지지 않았다.
-- **Q-UI-5**: 쓰지 않는 화면 코드(`WebhookSettingsModal`, `ThemeToggle`)를 지울지, 웹훅 단독 설정 화면을 되살릴지 정해지지 않았다.
-- **Q-UI-6**: 챗 호출 시간 제한(알려진 문제 7)과 세션 상세 캐시 정리(알려진 문제 8)의 정책이 없다.
+- **Q-UI-5**: (해결, v0.4.2) `WebhookSettingsModal`, `ThemeToggle` 을 지웠다. 웹훅 단독 설정 화면은 되살리지 않는다.
+- **Q-UI-6**: (해결, v0.4.2) 챗 호출 시간 제한과 세션 상세 캐시 정리(목록에서 밀려나면 지움, 초기화 때 모두 지움)를 정했다.
+- **Q-UI-7**: 즉시 수집 응답의 `other_process: true` 를 화면이 따로 안내할지(예: '다른 프로세스가 수집 중' 문구 유지, 진행 폴링 생략) 정해지지 않았다.
+
+## 변경 이력
+| 버전 | 날짜 | 바뀐 점 |
+|---|---|---|
+| v0.4.2 | 2026-11-10 | 모바일 챗 스크롤(FE-36): 목록 상자 `scrollTop` 만, 24px 따라가기, `relative` 목록 (BR-UI-009-10, BR-UI-010-8). 라우트 오류 경계. 대화상자 6종 늦게 불러오기. `env.ts` 환경 변수 검증. 단축키 리스너 단일 키 전용. `ThemeToggle`·`WebhookSettingsModal`·`agentlens_webhook_url` 삭제. 인용 팝오버 포털, 세션 카드 버튼 형제, 메시지 목록 `aria-relevant="additions"`·`aria-busy`·완료 알림. 챗 API 시간 제한. 챗 세션 상세 캐시 정리. 스케줄 대화상자 응답 기반 시각. 즉시 수집·초기화의 다른 프로세스 `already_running`. 오류 형식 `{error_code, message, details}`. backend 문자열 이모지 제거. FUNC 수 변화 없음 (14) |
 
 ## 옛 기능명세 ID 대응표
 | 옛 ID (`docs/functional-spec/07-ui-common.md`) | 새 ID |

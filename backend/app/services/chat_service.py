@@ -9,16 +9,13 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.time_utils import iso_utc
 from app.models.news import NewsItem
 from app.schemas.chat import (
     ChatStreamRequest,
-    ChatQueryRequest,
-    ChatQueryResponse,
     ChatSourceItem,
     ChatSourceMeta,
     ChatSourceDetailResponse,
-    ChatSearchResponse,
-    ChatSearchChunk,
     ChatFocusFilter,
     ChatStatusPayload,
     ChatSourcesPayload,
@@ -33,8 +30,8 @@ from app.services.scraper import (
     ScrapeTimeoutException,
     ScrapeEmptyContentException,
 )
-from app.services.agentic_search import AgenticSearchService
 from app.services.chat_session_service import ChatSessionService
+from app.services.news_service import parse_tldr, split_csv
 from app.services.llm_providers.anthropic_provider import resolve_model_and_tier
 from app.services.llm_processor import (
     llm_processor,
@@ -61,16 +58,12 @@ class ChatPayloadTooLargeException(Exception):
 class InvalidScopeException(Exception):
     pass
 
-class SearchQueryTooShortException(Exception):
-    pass
-
 
 class ChatService:
     """
     Core AI Chat Service handling:
     - Scoped (single article handover) vs Global (corpus RAG) modes
     - ArticleScraperService on-demand scraping & L1/L2 caching
-    - AgenticSearchService sufficiency evaluation & context-anchored search
     - Inline citation [1] (Primary) and [S1] (Supplementary) dual mapping
     - Real-time SSE streaming (status -> sources -> token -> done) with honest error handling
     - Senior Staff Architect 4-Section Structured Engineering Reports
@@ -80,7 +73,6 @@ class ChatService:
         self.session = session
         self.facade = KnowledgeRetrieverFacade(session)
         self.scraper = ArticleScraperService(session)
-        self.agentic_search = AgenticSearchService()
         self.session_service = ChatSessionService(session)
 
     async def get_source_detail(self, source_id: int) -> ChatSourceDetailResponse:
@@ -89,19 +81,13 @@ class ChatService:
         if not item:
             raise HandoverSourceNotFoundException(source_id)
 
-        try:
-            tldr = json.loads(item.tldr_bullets) if item.tldr_bullets else []
-            if not isinstance(tldr, list):
-                tldr = [str(tldr)]
-        except Exception:
-            tldr = []
+        tldr = parse_tldr(item.tldr_bullets)
+        tech = split_csv(item.tech_stack)
+        tags = split_csv(item.tags)
 
-        tech = [t.strip() for t in item.tech_stack.split(",") if t.strip()] if item.tech_stack else []
-        tags = [t.strip() for t in item.tags.split(",") if t.strip()] if item.tags else []
-
-        pub_str = item.published_at.isoformat() if hasattr(item.published_at, "isoformat") else str(item.published_at)
-        created_str = item.created_at.isoformat() if hasattr(item.created_at, "isoformat") else str(item.created_at)
-        scraped_str = item.scraped_at.isoformat() if item.scraped_at and hasattr(item.scraped_at, "isoformat") else None
+        pub_str = iso_utc(item.published_at) or ""
+        created_str = iso_utc(item.created_at)
+        scraped_str = iso_utc(item.scraped_at)
 
         return ChatSourceDetailResponse(
             id=item.id,
@@ -124,38 +110,6 @@ class ChatService:
             scraped_at=scraped_str,
         )
 
-    async def search_corpus(
-        self,
-        query: str,
-        top_k: int = 5,
-        min_quality: float = 5.0,
-        category: Optional[str] = None,
-        source: Optional[str] = None,
-        filters: Optional[ChatFocusFilter] = None,
-    ) -> ChatSearchResponse:
-        """Pre-search news corpus chunks using FTS5 BM25 + Quality + Recency hybrid scoring."""
-        cleaned_q = query.strip() if query else ""
-        if len(cleaned_q) < 2:
-            raise SearchQueryTooShortException("검색어는 최소 2글자 이상이어야 합니다.")
-
-        start_time = time.time()
-        chunks = await self.facade.search_knowledge(
-            query=cleaned_q,
-            top_k=top_k,
-            min_quality=min_quality,
-            category=category,
-            source=source,
-            filters=filters,
-        )
-        latency_ms = int((time.time() - start_time) * 1000)
-
-        return ChatSearchResponse(
-            query=cleaned_q,
-            total_matches=len(chunks),
-            chunks=chunks,
-            latency_ms=latency_ms
-        )
-
     async def _resolve_sources(
         self,
         scope: str,
@@ -172,7 +126,7 @@ class ChatService:
             if not item:
                 raise HandoverSourceNotFoundException(source_id)
 
-            pub_str = item.published_at.isoformat() if hasattr(item.published_at, "isoformat") else str(item.published_at)
+            pub_str = iso_utc(item.published_at) or ""
             return [
                 ChatSourceItem(
                     index=1,
@@ -377,8 +331,8 @@ class ChatService:
 
         default_query = " ".join(keywords)
 
-        # When live LLM is available in non-test runtime, let the LLM decide ReAct Thought/Action
-        if not llm_processor.is_test_environment() and llm_processor.has_live_provider():
+        # 라이브 LLM 이 있으면 LLM 이 ReAct Thought/Action 을 정한다 (테스트·CI 여부로 분기하지 않는다, ARCH-05)
+        if await llm_processor.has_live_provider():
             planner_prompt = (
                 "당신은 AI 기술 뉴스 에이전트(AgentLens)의 ReAct Planner입니다.\n"
                 "사용자 질문을 분석하여 뉴스/기술 코퍼스 DB 검색 도구(`search_news_corpus`)를 호출할지, 도구 없이 직접 답변(`none`)할지 결정하세요.\n\n"
@@ -391,14 +345,11 @@ class ChatService:
                 '{"thought": "판단 근거 한 줄", "action": "search_news_corpus" | "none", "search_query": "핵심 키워드"}'
             )
             try:
-                try:
-                    raw_ans, _ = await llm_processor.generate_live_answer(
-                        planner_prompt,
-                        model=getattr(settings, "ANTHROPIC_HAIKU_MODEL", None) or "claude-haiku-5-5",
-                        model_tier="haiku",
-                    )
-                except TypeError:
-                    raw_ans, _ = await llm_processor.generate_live_answer(planner_prompt)
+                raw_ans, _ = await llm_processor.generate_live_answer(
+                    planner_prompt,
+                    model=getattr(settings, "ANTHROPIC_HAIKU_MODEL", None) or "claude-haiku-5-5",
+                    model_tier="haiku",
+                )
 
                 if raw_ans:
                     cleaned = re.sub(r"^```(?:json)?\s*", "", raw_ans.strip(), flags=re.IGNORECASE)
@@ -475,103 +426,17 @@ class ChatService:
 
         return candidate_sources[:1]
 
-    async def query_chat(self, req: ChatQueryRequest) -> ChatQueryResponse:
-        """Synchronous query-response handler with live LLM (Anthropic -> OpenAI -> Ollama). No fake fallback."""
-        self._validate_request(req.question, req.scope)
-        start_time = time.time()
-        session_id = req.session_id or str(uuid.uuid4())
-
-        full_content: Optional[str] = None
-        primary_count = 1
-        supplementary_count = 0
-
-        if req.scope == "scoped":
-            if not req.source_id:
-                raise HandoverSourceNotFoundException(0)
-            item = await self.session.get(NewsItem, req.source_id)
-            if not item:
-                raise HandoverSourceNotFoundException(req.source_id)
-
-            if item.full_content and len(item.full_content.strip()) > 0:
-                full_content = item.full_content
-            else:
-                try:
-                    full_content = await self.scraper.get_article_content(item)
-                except Exception as e:
-                    logger.warning(f"Scoped scraper fallback in query_chat: {e}")
-                    full_content = None
-
-            pub_str = item.published_at.isoformat() if hasattr(item.published_at, "isoformat") else str(item.published_at)
-            primary_source = ChatSourceItem(
-                index=1,
-                type="primary",
-                id=item.id,
-                title=item.title,
-                url=item.url,
-                source=item.source,
-                category=item.category,
-                quality_score=float(item.quality_score or 6.0),
-                snippet=item.summary or item.why_it_matters or (full_content[:400] if full_content else item.title),
-                full_content=full_content,
-                published_at=pub_str,
-            )
-            sources = [primary_source]
-            primary_count = 1
-            supplementary_count = 0
-            is_relaxed = False
-            applied_filters = req.filters or ChatFocusFilter()
-        else:
-            plan = await self._plan_react_action(
-                req.question, req.scope, req.history, req.model, req.model_tier
-            )
-            if plan["action"] == "search_news_corpus":
-                sources, is_relaxed, applied_filters = await self._resolve_sources(
-                    scope=req.scope,
-                    source_id=req.source_id,
-                    query=plan["search_query"],
-                    top_k=req.top_k,
-                    filters=req.filters,
-                )
-                primary_count = len(sources)
-                supplementary_count = 0
-            else:
-                sources = []
-                primary_count = 0
-                supplementary_count = 0
-                is_relaxed = False
-                applied_filters = req.filters or ChatFocusFilter()
-
-        prompt = self._build_grounding_prompt(req.question, sources, req.scope, req.history, full_content=full_content)
-        try:
-            answer, model_name = await llm_processor.generate_live_answer(
-                prompt, model=req.model, model_tier=req.model_tier
-            )
-        except TypeError:
-            answer, model_name = await llm_processor.generate_live_answer(prompt)
-
-        if req.scope != "scoped" and sources:
-            sources = self._filter_cited_sources(answer, sources, req.question)
-            primary_count = len(sources)
-
-        latency_ms = int((time.time() - start_time) * 1000)
-        _, resolved_tier = resolve_model_and_tier(req.model or req.model_tier or model_name)
-        usage_dict = getattr(llm_processor, "last_usage", None)
-        usage_meta = TokenUsageMeta(**usage_dict) if usage_dict else None
-
-        return ChatQueryResponse(
-            answer=answer,
-            sources=sources,
-            session_id=session_id,
-            model=model_name,
-            model_tier=resolved_tier,
-            scope=req.scope,
-            applied_filters=applied_filters,
-            is_relaxed=is_relaxed,
-            primary_count=primary_count,
-            supplementary_count=supplementary_count,
-            latency_ms=latency_ms,
-            usage=usage_meta,
-        )
+    @staticmethod
+    def _sse_error(error_code: str, message: str, status_code: int, step: str) -> str:
+        """SSE `error` 이벤트 한 프레임 (StreamErrorPayload). 예외 문자열은 싣지 않는다."""
+        payload = json.dumps({
+            "error_code": error_code,
+            "message": message,
+            "status_code": status_code,
+            "step": step,
+            "retryable": True,
+        }, ensure_ascii=False)
+        return f"event: error\ndata: {payload}\n\n"
 
     async def stream_chat(self, req: ChatStreamRequest) -> AsyncGenerator[str, None]:
         """
@@ -611,7 +476,7 @@ class ChatService:
             now_iso = datetime.now(timezone.utc).isoformat()
             status_p1 = json.dumps({
                 "step": "extracting_source",
-                "label": "📄 지정된 단일 뉴스 기사 컨텍스트 로드 중...",
+                "label": "지정된 단일 뉴스 기사 컨텍스트 로드 중...",
                 "progress": 30,
                 "timestamp": now_iso
             }, ensure_ascii=False)
@@ -632,7 +497,7 @@ class ChatService:
             now_iso = datetime.now(timezone.utc).isoformat()
             status_p4 = json.dumps({
                 "step": "synthesizing",
-                "label": "📝 Senior Staff Architect 단일 기사 심층 리포트 프롬프트 조립...",
+                "label": "Senior Staff Architect 단일 기사 심층 리포트 프롬프트 조립...",
                 "progress": 85,
                 "timestamp": now_iso
             }, ensure_ascii=False)
@@ -640,7 +505,7 @@ class ChatService:
             await asyncio.sleep(0.01)
 
             # Step 3: Single Primary Source Only (supplementary_count = 0)
-            pub_str = item.published_at.isoformat() if hasattr(item.published_at, "isoformat") else str(item.published_at)
+            pub_str = iso_utc(item.published_at) or ""
             primary_source = ChatSourceItem(
                 index=1,
                 type="primary",
@@ -675,22 +540,27 @@ class ChatService:
             now_iso = datetime.now(timezone.utc).isoformat()
             think_status = json.dumps({
                 "step": "thinking",
-                "label": "🧠 ReAct 추론: 질문 의도 및 도구 필요성 분석 중...",
+                "label": "ReAct 추론: 질문 의도 및 도구 필요성 분석 중...",
                 "progress": 25,
                 "timestamp": now_iso,
             }, ensure_ascii=False)
             yield f"event: status\ndata: {think_status}\n\n"
             await asyncio.sleep(0.01)
 
-            plan = await self._plan_react_action(
-                req.question, req.scope, req.history, req.model, req.model_tier
-            )
+            try:
+                plan = await self._plan_react_action(
+                    req.question, req.scope, req.history, req.model, req.model_tier
+                )
+            except Exception:
+                logger.exception("ReAct planner failed")
+                yield self._sse_error("ERR_LLM_UPSTREAM_FAILED", "질문 분석 중 오류가 발생했습니다. 다시 시도해 주세요.", 502, "thinking")
+                return
             if plan["action"] == "search_news_corpus":
                 search_q = plan["search_query"]
                 now_iso = datetime.now(timezone.utc).isoformat()
                 tool_status = json.dumps({
                     "step": "tool_calling",
-                    "label": f"🛠️ Action: search_news_corpus('{search_q}') 실행 중...",
+                    "label": f"Action: search_news_corpus('{search_q}') 실행 중...",
                     "progress": 50,
                     "timestamp": now_iso,
                     "query": search_q,
@@ -698,13 +568,18 @@ class ChatService:
                 yield f"event: status\ndata: {tool_status}\n\n"
                 await asyncio.sleep(0.01)
 
-                candidate_sources, is_relaxed, applied_filters = await self._resolve_sources(
-                    scope=req.scope,
-                    source_id=req.source_id,
-                    query=search_q,
-                    top_k=req.top_k,
-                    filters=req.filters,
-                )
+                try:
+                    candidate_sources, is_relaxed, applied_filters = await self._resolve_sources(
+                        scope=req.scope,
+                        source_id=req.source_id,
+                        query=search_q,
+                        top_k=req.top_k,
+                        filters=req.filters,
+                    )
+                except Exception:
+                    logger.exception("Corpus search failed")
+                    yield self._sse_error("ERR_RETRIEVER_INDEX_ERROR", "기사 검색 중 오류가 발생했습니다. 다시 시도해 주세요.", 500, "tool_calling")
+                    return
                 sources = candidate_sources
                 primary_count = len(sources)
                 supplementary_count = 0
@@ -712,7 +587,7 @@ class ChatService:
                 now_iso = datetime.now(timezone.utc).isoformat()
                 synth_status = json.dumps({
                     "step": "synthesizing",
-                    "label": "✍️ 검증된 컨텍스트를 바탕으로 답변 생성 중...",
+                    "label": "검증된 컨텍스트를 바탕으로 답변 생성 중...",
                     "progress": 80,
                     "timestamp": now_iso,
                 }, ensure_ascii=False)
@@ -731,7 +606,7 @@ class ChatService:
                 now_iso = datetime.now(timezone.utc).isoformat()
                 synth_status = json.dumps({
                     "step": "synthesizing",
-                    "label": "✍️ 도구 호출 없이 직접 답변 생성 중...",
+                    "label": "도구 호출 없이 직접 답변 생성 중...",
                     "progress": 75,
                     "timestamp": now_iso,
                 }, ensure_ascii=False)
@@ -743,14 +618,11 @@ class ChatService:
         # Stage: Generate and stream live tokens from llm_processor
         model_name = "LLM Stream"
         full_tokens = []
+        usage: Dict[str, Any] = {}  # 이 스트림의 토큰 사용량 (요청끼리 공유하지 않는다, BUG-09)
         try:
-            try:
-                stream_gen = llm_processor.stream_tokens(
-                    prompt, model=req.model, model_tier=req.model_tier
-                )
-            except TypeError:
-                stream_gen = llm_processor.stream_tokens(prompt)
-
+            stream_gen = llm_processor.stream_tokens(
+                prompt, model=req.model, model_tier=req.model_tier, usage_out=usage
+            )
             async for chunk_text, m_name in stream_gen:
                 model_name = m_name
                 full_tokens.append(chunk_text)
@@ -758,14 +630,7 @@ class ChatService:
                 yield f"event: token\ndata: {token_payload}\n\n"
         except Exception as e:
             logger.error(f"Mid-stream LLM exception: {e}")
-            err_payload = json.dumps({
-                "error_code": "ERR_LLM_STREAM_FAILED",
-                "message": "LLM 스트리밍 도중 외부 프로바이더 오류가 발생했습니다.",
-                "status_code": 502,
-                "step": "synthesizing",
-                "retryable": True
-            }, ensure_ascii=False)
-            yield f"event: error\ndata: {err_payload}\n\n"
+            yield self._sse_error("ERR_LLM_STREAM_FAILED", "LLM 스트리밍 도중 외부 프로바이더 오류가 발생했습니다.", 502, "synthesizing")
             return
 
         full_answer = "".join(full_tokens)
@@ -788,7 +653,7 @@ class ChatService:
         # Stage: Send done event
         latency_ms = int((time.time() - start_time) * 1000)
         _, resolved_tier = resolve_model_and_tier(req.model or req.model_tier or model_name)
-        usage_dict = getattr(llm_processor, "last_usage", None)
+        usage_dict = usage or None
 
         done_payload = json.dumps({
             "done": True,

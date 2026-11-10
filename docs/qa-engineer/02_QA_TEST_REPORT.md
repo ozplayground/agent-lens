@@ -1,156 +1,202 @@
 # [AgentLens] 통합 QA 테스트 결과 및 출시 검증 보고서 (QA Test Report)
 
-- **Updated**: 2026-11-09
-- **기준**: v0.4.1 (main)
-- **검증일자**: 2026-11-09 (v0.4.0 최초 QA 22:53~23:03 KST, v0.4.1 회귀 QA 23:47~23:52 KST)
+- **Updated**: 2026-11-10
+- **기준**: v0.4.2 (main)
+- **검증일자**: 2026-11-10. 1차 회귀 14:27~14:50 KST(v0.4.2 수정 1·2차), 마지막 확인 14:57~15:07 KST(그 뒤 들어간 마지막 수정: spec-writer 지적 5건, D-54, frontend 문구·시간 제한 4건). v0.4.0 최초 QA·v0.4.1 회귀 QA(2026-11-09)의 세부 기록은 git 이력에 있다.
 - **검증자**: 품질 보증 엔지니어 (`qa-engineer`)
-- **테스트 실행 빌드**: v0.4.1 회귀 = commit `9e0c9e5` 위 작업 트리(리뷰 수정, 커밋 전). `make docker-build` 로 다시 빌드(backend 2026-11-09 23:47:31, frontend 23:47:40)하고, backend 컨테이너 `/app/app` 과 작업 트리 `backend/app` 이 같음(`diff -rq` 차이 없음), frontend 번들에 `Notion 동기화` 글자가 없고 새 끊김 문구가 있음을 확인했다. v0.4.0 최초 QA 는 commit `9e0c9e5` 이미지(backend 22:17, frontend 22:44 빌드)로 했다. 2~3절 세부 결과는 v0.4.0 최초 QA 기록이고, v0.4.1 에서 바뀐 결과는 4절에 있다.
-- **최종 출시 승인 여부**: **RELEASE_APPROVED** (v0.4.1 회귀 QA 기준. 범위 안 Blocker 0, Critical 0. 보안·설정 결함 5건은 2026-11-09 제품 오너 결정으로 검사 범위 밖(수용된 위험). v0.4.0 처음 판정은 RELEASE_BLOCKED, Critical 5)
-- **기준 문서**: 계획 `docs/qa-engineer/01_QA_TEST_PLAN.md`, FSD `docs/spec-writer/fsd/01~07_*.md`, 화면 측정 결과 `docs/qa-engineer/ui-audit/report.json`
+- **테스트 실행 빌드**: commit `4944a5e`(v0.4.1) 위 작업 트리(v0.4.2 수정 전부, 커밋 전). backend 는 작업 트리 `backend/` 를 그대로 uvicorn 으로 띄웠고, frontend 는 작업 트리 `frontend/` 를 스크래치 폴더에 복사해(`diff -rq` 차이 없음, `node_modules` 제외) `next build` 한 프로덕션 빌드다. 마지막 확인 때 두 앱을 마지막 작업 트리로 다시 띄우고 다시 빌드했다. 앱 버전 `0.4.2` (`/health`, frontend `/api/health`).
+- **최종 출시 승인 여부**: **RELEASE_APPROVED** (범위 안 Blocker 0, Critical 0, Minor 0. 1차 회귀에서 찾은 D-54 는 마지막 수정으로 해결. 범위 밖(수용된 위험) 5건은 판정에 세지 않는다)
+- **기준 문서**: 계획 `docs/qa-engineer/01_QA_TEST_PLAN.md`, FSD `docs/spec-writer/fsd/01~07_*.md`, 계약 `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` v1.4, 리뷰 `docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md`(v0.4.2 3차 APPROVED)·`docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md`(v0.4.2 2차 APPROVED), 화면 측정 `docs/qa-engineer/ui-audit/report.json`
 
 ---
 
 ## 1. 테스트 실행 결과 요약 (Executive Summary)
 
 ```mermaid
-pie title v0.4.0 최초 QA 시나리오 케이스 결과 (72건)
-    "Passed (통과)" : 58
-    "Failed (실패)" : 9
-    "Blocked (미실행)" : 3
-    "Out of scope (범위 밖)" : 2
+pie title v0.4.2 회귀 QA 케이스 결과 (마지막 확인 기준 130건)
+    "Passed (통과)" : 130
+    "Failed (실패)" : 0
+    "Blocked (미실행)" : 0
 ```
 
-- **v0.4.1 회귀 QA 요약**: 스모크 17/17, API 시나리오 49개 중 48 통과(남은 1개는 범위 밖 `TC-SEC-001` 의 헤더 없는 호출), 바뀐 동작 회귀 케이스 8건 모두 PASS, 관련 단위 테스트 backend 27/27·frontend 94/94 통과, 해결 결함 9건. 자세한 내용은 4절
-- **총 시나리오 케이스 수 (v0.4.0 최초 QA)**: 72건 (`01_QA_TEST_PLAN.md` 2절 NEWS 24, CHAT 18, COLL 6, BRF 6, SRC 6, MCP 3, UI·보안 9)
-- **통과 (Pass)**: 58건 (80.6%)
-- **실패 (Fail)**: 9건. 실행해서 재현 3건(`TC-CHAT-007`, `TC-SRC-005`, `TC-SEC-002`), 코드·빌드 산출물로 확인 6건(`TC-NEWS-023`, `TC-NEWS-024`, `TC-CHAT-018`, `TC-COLL-004`, `TC-SRC-006`, `TC-MCP-003`)
-- **범위 밖 (Out of scope)**: 2건. `TC-SEC-001`(OOS-1), `TC-BRF-006`(OOS-5). 계획 1.4 에 따라 Pass/Fail 을 매기지 않고 관찰만 기록했다
-- **미실행 (Blocked)**: 3건. `TC-CHAT-017`(Playwright MCP 에 네트워크 차단 도구가 없음), `TC-COLL-003`·`TC-COLL-005`(실제 수집·외부 호출이 나가 계획 1.3 에 따라 실행하지 않음)
-- **스모크 (`qa_runner.py`, v0.4.0 최초 QA)**: 17 / 17 통과 (backend 14, frontend 3), 종료 0
-- **화면 규칙 (`ui-audit.mjs`, v0.4.0 최초 QA)**: 조합 160, 통과 150, 실패 0, 건너뜀 10 (트렌드 레이더 펼침 10개: 레이더 버튼이 그려지지 않음), 판정 21종 실패 0, 종료 0
-- **자동 테스트 (`make check`, v0.4.0 최초 QA)**: 이번 QA 에서 다시 돌리지 않았다 (외부 호출이 나가는 테스트가 있어서, 계획 4.3). `pytest --collect-only` 로 backend 217개·파일 21개, frontend 테스트 파일 52개를 다시 셌다. 마지막 통과 기록은 backend 217개·frontend 649개 모두 통과(계획 5절, 2026-11-09).
-- **미해결 결함 (Open Defects, v0.4.1 기준)**: 39건. **Blocker 0건, Critical 0건, Minor 39건** (3절). v0.4.0 의 Minor 38건 가운데 9건(D-07, D-09, D-10, D-11, D-12, D-13, D-14, D-15, D-32)이 v0.4.1 에서 해결됐고, 리뷰가 남긴 권장 지적 9건(D-44~D-52)과 회귀 QA 관찰 1건(D-53)이 Minor 로 더해졌다
-- **v0.4.0 최초 QA 때 미해결 결함**: 38건 (Blocker 0, Critical 0, Minor 38)
-- **범위 밖(수용) 결함**: 5건. D-01, D-02, D-03, D-04, D-08 (3.8절, 제품 오너 결정 2026-11-09)
+- **총 실행 케이스 수**: 130건 = 스모크 16 + API 시나리오 86 + 수집 잠금 3 + UI 17 (1차 회귀 122건) + 마지막 수정 확인 8 (2.9절). 단위 테스트로만 확인한 항목은 이 수에 넣지 않았다
+- **통과 (Pass)**: 130건 (100%). 1차 회귀의 122건은 마지막 작업 트리로 다시 돌려 같은 결과를 얻었다(스모크 16/16, API 시나리오, 수집 잠금 3건, UI 스크립트 3개)
+- **실패 (Fail)**: 0건. 1차 회귀에서 실패한 `TC-RM-008`(지운 `POST /api/sources/github` 가 307 → 405, D-54)은 마지막 수정(`redirect_slashes=False`) 뒤 404 `ERR_NOT_FOUND` 로 통과
+- **스모크 (`qa_runner.py`)**: 16 / 16 통과 (backend 13, frontend 3), 두 번 모두. v0.4.1 의 17개에서 지운 `GET /api/mcp/info` 하나가 빠졌다
+- **API 시나리오 (`api_scen.py`)**: 86건. 마지막 실행에서 스크립트 판정 83 통과·3 실패이고, 3건은 기대값·스크립트 잘못으로 확인해 PASS 로 고쳤다(`TC-NEWS-025` 토큰 필드 이름 `text` 를 스크립트가 `token` 으로 읽음, `TC-BRF-007` 이모지는 수집한 기사 제목·요약 원문, `TC-CHAT-026` 은 OpenAPI 가 세션 상세의 형식 검증 없음·404 로 정함)
+- **화면 규칙 (`ui-audit.mjs`)**: 마지막 빌드에서 사용자 DB 사본 그대로 조합 160, 통과 156, 실패 4(모두 `pictograph`, 사용자 DB 의 옛 세션 제목 `⚡ …`, 관찰 O-1), 건너뜀 0, 종료 1. 같은 사본에서 그 세션 2개만 API 로 지운 뒤 다시 돌리면 160 / 160 통과, 판정 21종 실패 0, 종료 0. 코드 결함은 없다 (1차 회귀도 같은 결과)
+- **자동 테스트 (`make check`)**: 마지막 수정 뒤 실행 종료 0. backend `418 passed in 12.88s`, frontend `Test Files 70 passed (70)`, `Tests 833 passed (833)`, eslint 출력 없음, `tsc --noEmit` 출력 없음. (1차 회귀 실행: 410 / 823, 종료 0)
+- **결함 확인**: v0.4.1 의 미해결 Minor 39건(D-05, D-06, D-16~D-31, D-33~D-53) **모두 해결**. 리뷰 새 지적(N-08~N-12, M003-01, ARCH-03R, CFG-02R, TEST-07·08, FE-36~FE-42)과 1차 회귀의 D-54 도 해결 확인
+- **미해결 결함 (Open Defects)**: **Blocker 0건, Critical 0건, Minor 0건**
+- **범위 밖(수용) 결함**: 5건 (D-01, D-02, D-03, D-04, D-08). 판정에 넣지 않는다 (3.8절)
+- **관찰 (결함 아님)**: 6건 (3.9절). 사용자 DB 데이터 조건 3건과 동작 관찰 3건
 
 ### 1.1 실행 환경
 | 항목 | 값 |
 |---|---|
-| backend | `BACKEND_PORT=18000 make docker-up` → `http://localhost:18000`, healthy. 볼륨 `agentlens-data` 의 DB 에 기사 5건(모두 `huggingface`, `harness` 2·`agent_tech` 3). lifespan 첫 수집은 돌지 않았다 (`last_crawl_status: idle`) |
-| frontend | `http://localhost:3001` (Next.js 프로덕션 빌드), healthy |
-| LLM 없는 backend | 로컬 uvicorn `127.0.0.1:18001`, LLM 키 3개 비움, `OLLAMA_BASE_URL=http://127.0.0.1:9`, DB 는 Docker DB 백업 사본 |
-| Docker backend 의 LLM | `ANTHROPIC_API_KEY`·`GEMINI_API_KEY`·`OLLAMA_BASE_URL` 이 설정돼 있었다 (값은 보지 않고 길이만 확인). 실제 LLM 호출이 나가는 질의는 보내지 않았다 |
-| 브라우저 | Playwright MCP (Chromium) 390x844·1440x900, `ui-audit.mjs` 는 로컬 Chrome 157.0.8103.38 |
-| 호스트 8000 | 다른 세션의 `make dev` backend 가 쓰고 있어 건드리지 않았다 |
-
-### 1.2 하지 않은 동작
-초기화·전체 삭제, 수집(`trigger`, `run-deep`), 브리핑·Notion·이메일·웹훅 발송(유효 URL), 설정 저장, 소스 추가·토글·삭제, 실제 LLM 질의. 해당 결함은 코드로 확인했다.
+| backend | 로컬 `.venv` uvicorn `127.0.0.1:28000` (`cd backend`). DB 는 사용자 `backend/agentlens.db` 를 `sqlite3 .backup` 한 스크래치 사본(1차 `qa.db`: `PRAGMA user_version` 3, `integrity_check` ok, 기사 4,938건, 세션 29개. 마지막 확인은 새로 뜬 `qa2.db`: 기사 4,938건, 세션 30개). 환경 변수로 `ANTHROPIC_API_KEY=`·`OPENAI_API_KEY=`·`GEMINI_API_KEY=` 비움, `OLLAMA_BASE_URL=http://127.0.0.1:9`, `SLACK_WEBHOOK_URL=`·`DISCORD_WEBHOOK_URL=`·`NOTION_API_KEY=`·`SMTP_*=` 비움, `SCHEDULER_ENABLED=false`(시작 로그 `[Scheduler] scheduler.enabled=false, 스케줄러를 띄우지 않는다`), `PUBLIC_WEB_URL=http://localhost:23001`. 수집 잠금 파일은 사본 옆 `qa.db.crawl.lock` 이라 사용자 DB 잠금과 겹치지 않는다 |
+| frontend | 스크래치 사본 `next build`(`INTERNAL_API_URL=http://127.0.0.1:28000`, `NEXT_PUBLIC_API_URL` 없음) → `next start -p 23001 -H 127.0.0.1`. 번들 `.next/static/chunks/*.js` 에 `:8000` 이 든 파일 0개 |
+| 사용자 서버 | `make dev` 의 3000·8000 은 건드리지 않았다 (시작·끝 `lsof` 로 그대로 있음 확인). 3001·18000 도 쓰지 않았다 |
+| 브라우저 | Playwright(Chromium headless shell 1248) 스크립트 `fe36.cjs`·`ui_scen.cjs`·`ui_scen2.cjs`, Playwright MCP 1440x900 스냅샷, `ui-audit.mjs` 는 로컬 Chrome 157.0.8103.39 |
+| 실행하지 않은 동작 | 실제 수집(외부 스크래핑), Notion·메일·웹훅 발송, 실제 LLM 호출, 설정·소스 저장. 쓰기가 나갈 수 있는 화면 요청은 `page.route` 로 막았다. `trigger`·`reset-and-collect`·`make collect` 는 다른 프로세스가 사본의 수집 잠금을 쥔 동안에만 불러 `already_running` 경로만 탔다 (기사 수 4,938 → 4,938) |
 
 ---
 
 ## 2. 세부 테스트 케이스 검증 결과표 (Execution Details)
 
-응답 속도는 스크립트가 잰 왕복 시간(ms)이다. `UI` 는 Playwright, `code` 는 실행하지 않고 코드로 확인한 것이다.
+응답 속도는 스크립트가 잰 왕복 시간(ms)이다. `UI` 는 Playwright, `code` 는 코드로 확인했다는 뜻이다.
 
-### 2.1 NEWS
+### 2.1 스모크 (`qa_runner.py --base-url http://localhost:28000 --frontend-url http://localhost:23001`)
+| 케이스 ID | 테스트 항목 | 실행 결과 | 응답 속도 | 비고 |
+| :--- | :--- | :---: | :---: | :--- |
+| `TC-SMOKE-001` | backend GET 13개 (`/`, `/health`, 뉴스·없는 기사 404·RSS·통계·스케줄 상태·진행·소스·레이더·연동 설정·세션·리서치 상태) | **PASS 13/13** | 0~5ms | 없는 기사 `GET /api/news/999999999` 는 라우트가 지워져 404 `ERR_NOT_FOUND` |
+| `TC-SMOKE-002` | frontend `/api/health`, `/`, `/chat` | **PASS 3/3** | 2~5ms | `/api/health` `version: 0.4.2` |
+
+### 2.2 오류 형식·지운 엔드포인트
 | 케이스 ID | 테스트 항목 | 실행 결과 | 응답 속도 | 발견 결함 / 비고 |
 | :--- | :--- | :---: | :---: | :--- |
-| `TC-NEWS-001` | 목록 기본 조회 | **PASS** | 9ms | 200, `total: 5`, `items` 5건. 첫 실행은 스크립트가 본문 앞 600자만 읽어 `"total"` 을 못 찾았고, 전체 본문으로 다시 확인했다 |
-| `TC-NEWS-002` | 카테고리 필터 | **PASS** | 4ms | 200 |
-| `TC-NEWS-003` | Must-Read 필터 | **PASS** | 3ms | 200 |
-| `TC-NEWS-004` | 키워드 검색 | **PASS** | 3ms | 200 |
-| `TC-NEWS-005` | 정렬 | **PASS** | 2ms | 200 |
-| `TC-NEWS-006` | `page=0` | **PASS** | 1ms | 422 |
-| `TC-NEWS-007` | `size=101` | **PASS** | 1ms | 422 |
-| `TC-NEWS-008` | `page=abc` | **PASS** | 1ms | 422 |
-| `TC-NEWS-009` | `page=999` | **PASS** | 1ms | 200, `items: []` |
-| `TC-NEWS-010` | 없는 카테고리 | **PASS** | 2ms | 200, `total: 0` |
-| `TC-NEWS-011` | 단건 조회 | **PASS** | 1ms | 200 (id 2) |
-| `TC-NEWS-012` | 없는 기사 | **PASS** | 1~2ms | 404 (runner·curl) |
-| `TC-NEWS-013` | 숫자가 아닌 id | **PASS** | 1ms | 422 |
-| `TC-NEWS-014` | RSS (전체·카테고리) | **PASS** | 1~2ms | 200, `<rss`. 채널 링크 3000 포트는 D-26 |
-| `TC-NEWS-015` | 없는 기사에 질문 | **PASS** | 4ms | 404 |
-| `TC-NEWS-016` | 통계·트렌드 레이더 | **PASS** | 1~3ms | 200. 레이더 `total_analyzed: 5` 인데 카테고리별 `count` 가 모두 0 이고 `surging_tags` 가 비어 화면에 레이더 버튼이 없다 (집계 값은 계획 6.7 의 '없음' 공백) |
-| `TC-NEWS-017` | LLM 없을 때 기사 질문 | **PASS** | 13ms / 118ms | `/ask` 200, `/ask/stream` 200 `text/event-stream`, `meta.model: "AgentLens Heuristic Engine"`. FSD BR-NEWS-010-7·BR-NEWS-011-3 의 휴리스틱 답과 같다. 답 머리 `### 🤖 기술 맥락 및 실무 분석` 의 이모지는 D-36 |
-| `TC-NEWS-018` | LLM 없어도 목록 정상 | **PASS** | 2ms | 200 |
-| `TC-NEWS-019` | 피드 표시 | **PASS** | - | 1440x900: 카드 5장, 헤더 56px, 문서 가로 스크롤 없음(`scrollWidth` 1440). 390x844: `scrollWidth` 390, 첫 카드 top 348px. 요약 바 헤드라인이 `Mathematical M...` 로 잘림(D-21) |
-| `TC-NEWS-020` | 카테고리 칩 필터 | **PASS** | - | `하네스 & 벤치마크` 선택 → 카드 2장, 머리줄 `총 2건 (전체 5건)`, 칩 `aria-pressed=true` |
-| `TC-NEWS-021` | 0건 카테고리 | **PASS** | - | `MCP & 생태계` → 카드 0, `조건에 일치하는 소식이 없습니다` |
-| `TC-NEWS-022` | 기사 상세 대화상자 | **PASS** | - | `role=dialog`·`aria-modal=true`·`aria-labelledby`=제목, 탭 `AI 요약 & 시사점`(선택)·`AI 질의응답`, 열면 포커스가 대화상자 안, 본문 `overflow: hidden`. 조작 요소 7개에 Tab 9번 → 포커스가 대화상자 안(`보관하기`, `:focus-visible` 2px solid). Escape → 닫힘, 포커스가 카드 제목 버튼으로 돌아감. 390x844 에서도 전체 화면(0,0,390,844)으로 열리고 Escape 로 닫힘 |
-| `TC-NEWS-023` | 2페이지 이상에서 검색 | **FAIL** (code) | - | D-14. 데이터가 5건(1페이지)이라 실행으로는 재현할 수 없었다 |
-| `TC-NEWS-024` | 바꾼 `BACKEND_PORT` 에서 기사 질문 스트림 | **FAIL** (code·번들) | - | D-41. 실행 중인 frontend 번들에 `${protocol}//${hostname}:8000` 이 들어 있음을 확인했다. 호스트 8000 은 다른 세션 backend 라 실제로 보내지 않았다 |
+| `TC-NEWS-006` | `GET /api/news?page=0` | **PASS** | 5ms | 400 `{"error_code":"ERR_INVALID_PAYLOAD","message":"요청 형식이 올바르지 않습니다.","details":[{"loc":["query","page"],"msg":"Input should be greater than or equal to 1"}]}`. 422 없음 |
+| `TC-NEWS-007` | `size=101` | **PASS** | 1ms | 400 `ERR_INVALID_PAYLOAD`, details `[{loc,msg}]` |
+| `TC-NEWS-008` | `page=abc` | **PASS** | 1ms | 400, 입력값 `abc` echo 없음 |
+| `TC-ERR-001` | 없는 경로 `GET /api/news/123456789` | **PASS** | 1ms | 404 `ERR_NOT_FOUND` `요청한 대상을 찾을 수 없습니다.` |
+| `TC-ERR-002` | 허용 안 된 방식 `PUT /api/news` | **PASS** | 1ms | 405 `ERR_METHOD_NOT_ALLOWED` `허용되지 않는 요청 방식입니다.` |
+| `TC-ERR-003` | `GET /api/does-not-exist` | **PASS** | 1ms | 404 `ERR_NOT_FOUND` |
+| `TC-RM-001` | 지운 `GET /api/chat/search` | **PASS** | 1ms | 404 `ERR_NOT_FOUND` |
+| `TC-RM-002` | 지운 `POST /api/chat/query` (`model_tier:"ultra"`) | **PASS** | 1ms | 404 (v0.4.1 의 500 D-49 경로 없음) |
+| `TC-RM-003` | 지운 `GET /api/news/1` | **PASS** | 1ms | 404 |
+| `TC-RM-004` | 지운 `POST /api/news/1/ask` | **PASS** | 1ms | 404 |
+| `TC-RM-005` | 지운 `DELETE /api/news/all` | **PASS** | 1ms | 404 (사본 기사 수 그대로) |
+| `TC-RM-006` | 지운 `POST /api/research/discover` | **PASS** | 1ms | 404 |
+| `TC-RM-007` | 지운 `POST /api/research/register-candidate` | **PASS** | 1ms | 404 |
+| `TC-RM-008` | 지운 `POST /api/sources/github` | **PASS** (마지막 확인) | 1ms | 마지막 확인: 404 `ERR_NOT_FOUND`, 리다이렉트 없음. 1차 회귀는 FAIL 이었다: 307 `location: /api/sources/github/` (본문 없음) → 따라가면 405. **D-54 해결** |
+| `TC-RM-012` | 끝 슬래시 경로 (마지막 확인) | **PASS** | 1ms | `POST /api/sources/github/` 405, `PATCH /api/sources/github/` 405, `GET /api/news/`·`/api/sources/`·`/api/chat/sessions/` 404, `DELETE /api/sources/github` 404. 모두 `{error_code,message,details}`, 307 없음. 화면 흐름(피드·챗·대화상자)은 끝 슬래시를 쓰지 않아 UI 재실행에서 모두 정상 |
+| `TC-RM-009` | 지운 `GET /api/mcp/info` | **PASS** | 0ms | 404 |
+| `TC-RM-010` | 지운 `POST /api/briefing/generate` | **PASS** | 0ms | 404 |
+| `TC-RM-011` | 지운 `POST /api/webhook/send-briefing` | **PASS** | 0ms | 404 |
+| `TC-API-001` | 런타임 OpenAPI | **PASS** | 1ms | `/openapi.json` 에 `"422"` 없음, `ErrorResponse` 있음, `HTTPValidationError` 없음. 라우트 33개에 지운 11개 없음 (앱 라우트 목록으로도 확인) |
 
-### 2.2 CHAT
+### 2.3 NEWS
+| 케이스 ID | 테스트 항목 | 실행 결과 | 응답 속도 | 발견 결함 / 비고 |
+| :--- | :--- | :---: | :---: | :--- |
+| `TC-NEWS-001` | 목록 기본 | **PASS** | 3ms | 200 `total: 4938` |
+| `TC-NEWS-003` | Must-Read | **PASS** | 2ms | 200 `total: 3849` |
+| `TC-NEWS-004` | 검색 `MCP` | **PASS** | 7ms | 200 `total: 1345` |
+| `TC-NEWS-005` | 정렬 `hot`·`latest`·`score`·`hotness` | **PASS** | 1ms | 200 ×4 |
+| `TC-NEWS-009` | `page=9999` | **PASS** | 8ms | 200 `items: []` |
+| `TC-NEWS-010` | 없는 카테고리 | **PASS** | 2ms | 200 `total: 0` |
+| `TC-TIME-001` | 목록 시각 오프셋 | **PASS** | 3ms | `size=100` 응답의 ISO 시각 200개 모두 `Z`·`+00:00` 오프셋 |
+| `TC-TIME-002` | 최신순 100건 미래 시각 | **PASS** | 2ms | `published_at` 이 지금보다 뒤인 행 0 (사본 DB 전체도 `published_at > now` 0행, N-11) |
+| `TC-TIME-003` | 다른 응답의 시각 오프셋 | **PASS** | 1~6ms | 세션 목록 54개(사본 원본 60개)·세션 상세 4개·출처 상세 2개·스케줄 상태 13개·감사 일지 200개·브리핑·통계·레이더·소스 각 1~5개, 오프셋 없는 시각 0 (N-09) |
+| `TC-NEWS-014` | RSS | **PASS** | 7ms | XML 파싱 성공, 채널 `<link>http://localhost:23001</link>`(= `PUBLIC_WEB_URL`), 항목 50개 |
+| `TC-NEWS-014b` | RSS 카테고리 5종(`a&b<c>` 포함) | **PASS** | 1~6ms | 200 ×5, 모두 XML 유효 |
+| `TC-NEWS-029` | RSS `pubDate` 미래 시각 | **PASS** | - | 0건 |
+| `TC-NEWS-016` | 통계·트렌드 레이더 | **PASS** | 2~5ms | 200, 레이더 `total_analyzed: 500`, 급상승 태그 6개 (화면 `급상승` 줄 표시) |
+| `TC-NEWS-015` | 없는 기사 Ask AI | **PASS** | 1ms | 404 `ERR_NOT_FOUND` `기사를 찾을 수 없습니다.` |
+| `TC-NEWS-017` | LLM 없음 Ask AI 스트림 | **PASS** | 387ms | 200 `text/event-stream; charset=utf-8`, `Cache-Control: no-cache, no-transform`, 이벤트 `meta`(`AgentLens Heuristic Engine`) → `token`… → `done` |
+| `TC-NEWS-025` | 휴리스틱 답 이모지 | **PASS** | 387ms | 기사 4개(id 1, 1361, 1143, 37) 답 335~538자, 그림 이모지 0, 머리 `### 기술 맥락 및 실무 분석` (D-36). 스크립트가 처음에 토큰 필드를 `token` 으로 읽어 0자로 FAIL 을 냈고 `text` 로 다시 셌다 |
+| `TC-NEWS-026` | Ask AI 빈 질문 | **PASS** | 1ms | 400 `ERR_INVALID_PAYLOAD` details `[{loc:["body","question"],…}]` |
+| `TC-NEWS-027` | Ask AI 2001자 | **PASS** | 1ms | 400 `ERR_INVALID_PAYLOAD` |
+| `TC-NEWS-028` | Ask AI 공백만 질문 | **PASS** (관찰) | 391ms | 200 휴리스틱 답. FSD BR-NEWS-010-1 이 "공백만 있는 질문은 막지 않는다" 로 정한 동작이다. 화면은 trim 후 비면 보내지 않는다 |
+| `TC-NEWS-022` | 기사 상세 키보드 | **PASS** | - | UI 1024x768: 카드 제목에서 Enter → 포커스가 대화상자 안, Tab 12번 뒤에도 안, `:focus-visible` `solid 2px`, Escape → 닫히고 포커스가 카드 제목으로 |
+| `TC-NEWS-024` | 기사 Ask AI 연결 주소 | **PASS** | - | 번들에 `:8000` 없음, Ask AI 가 같은 출처(23001 → rewrite → 28000)로 가서 답을 받음 (D-41) |
+| `TC-NEWS-030` | Ask AI 실제 backend 와 배지 (1440·390) | **PASS** | - | 질문 전 배지 `실시간 스트리밍` → 답 뒤 `응답 엔진: AgentLens Heuristic Engine`, 답 `기술 맥락 및 실무 분석`. 390 문서 가로 스크롤 없음(`scrollWidth` 390) (D-25) |
+| `TC-NEWS-031` | Ask AI 끊김 (1440·390) | **PASS** | - | 스트림을 흉내 내 ① 토큰 뒤 `error` 이벤트(`ERR_LLM_STREAM_FAILED`) ② `done` 없이 연결 끝. 둘 다 부분 답 `부분 답 첫 문장입니다.` 가 남고 알림 `답변 생성이 중간에 끊겼습니다. 다시 시도해 주세요.` + `답변 다시 시도`, 끊긴 답의 `복사` 는 `disabled`. `답변 다시 시도` → 실제 backend 답으로 바뀜 (D-47, FE-33) |
+
+### 2.4 CHAT
 | 케이스 ID | 테스트 항목 | 실행 결과 | 응답 속도 | 발견 결함 / 비고 |
 | :--- | :--- | :---: | :---: | :--- |
 | `TC-CHAT-001` | 빈 질문 | **PASS** | 1ms | 400 `ERR_CHAT_PAYLOAD_EMPTY` |
-| `TC-CHAT-002` | 2001자 질문 | **PASS** | 1ms | 400 `ERR_CHAT_PAYLOAD_TOO_LARGE` |
+| `TC-CHAT-002` | 2001자 | **PASS** | 0ms | 400 `ERR_CHAT_PAYLOAD_TOO_LARGE` |
 | `TC-CHAT-003` | 잘못된 scope | **PASS** | 0ms | 400 `ERR_INVALID_SCOPE_PARAM` |
-| `TC-CHAT-004` | scoped 없는 기사 | **PASS** | 1ms | 404 `ERR_HANDOVER_SOURCE_NOT_FOUND` |
-| `TC-CHAT-005` | scoped source_id 없음 | **PASS** | 1ms | 404 |
-| `TC-CHAT-006` | JSON 이 아닌 본문 | **PASS** | 1ms | 400 `ERR_INVALID_PAYLOAD` |
-| `TC-CHAT-007` | 잘못된 모델 티어 | **FAIL** | 5ms | 500 `{"detail":"Internal server error occurred. Please check server logs.","error":"1 validation error for ChatStreamRequest\nmodel_tier\n  Input should be 'haiku', 'sonnet' or 'opus' ..."}`. D-32, D-05 |
-| `TC-CHAT-008` | 동기 질의 빈 질문 | **PASS** | 3ms | 400 |
-| `TC-CHAT-009` | 세션 목록 | **PASS** | 1~2ms | 200 |
-| `TC-CHAT-010` | 없는 세션 | **PASS** | 1ms | 404 |
-| `TC-CHAT-011` | 출처 상세·없는 출처 | **PASS** | 1ms | 200, 404 |
-| `TC-CHAT-012` | 코퍼스 검색 API | **PASS** | 3ms | 200 |
-| `TC-CHAT-013` | LLM 없음 스트림 | **PASS** | 30ms | 503 `ERR_LLM_PROVIDER_UNAVAILABLE` `가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)` |
-| `TC-CHAT-014` | LLM 없음 동기 질의 | **PASS** | 23ms | 503 `ERR_LLM_PROVIDER_UNAVAILABLE` |
-| `TC-CHAT-015` | 챗 화면 기본 | **PASS** | - | 1440x900 다크: 헤더 첫 조작 요소 `피드로 돌아가기`, 모드 `단일 기사`·`전체 소식`, 추천 질문 4개, 입력창 아래 `Sonnet 5.5` 모델 선택 버튼 1개, 자리표시 `수집된 AI 에이전트 소식 전체에 대해 질문하세요`, `0 / 2000`, 빈 기록 `저장된 대화 기록이 없습니다`. 390x844: `scrollWidth` 390, 44px 미만 조작 요소 0, 모델 선택 1개 |
-| `TC-CHAT-016` | 없는 기사로 핸드오버 | **PASS** | - | `/chat?sourceId=999999999` → 알림 `요청하신 기사를 찾을 수 없어 전체 소식 모드로 시작합니다.`, `전체 소식` 선택. 콘솔 오류 1건은 기대한 `GET /api/chat/sources/999999999` 404 |
-| `TC-CHAT-017` | 스트림 중 네트워크 단절 | **BLOCKED** | - | Playwright MCP 에 네트워크 차단 도구가 없어 실행하지 못했다. 관련 결함 D-12 |
-| `TC-CHAT-018` | 모델을 바꾼 직후 전송 | **FAIL** (code, 의심) | - | D-11 |
+| `TC-CHAT-004` | scoped 없는 기사 | **PASS** | 2ms | 404 `ERR_HANDOVER_SOURCE_NOT_FOUND` |
+| `TC-CHAT-005` | scoped source_id 없음 | **PASS** | 1ms | 404 `ERR_HANDOVER_SOURCE_NOT_FOUND` |
+| `TC-CHAT-006` | JSON 아닌 본문 | **PASS** | 1ms | 400 `ERR_INVALID_PAYLOAD` |
+| `TC-CHAT-007` | `model_tier:"ultra"` | **PASS** | 0ms | 400 `ERR_INVALID_MODEL_TIER` |
+| `TC-CHAT-013` | LLM 없음 스트림 | **PASS** | 22ms | 503 `ERR_LLM_PROVIDER_UNAVAILABLE` `가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)` |
+| `TC-CHAT-020` | 배열 본문 | **PASS** | 0ms | 400 `ERR_INVALID_PAYLOAD` `요청 본문은 JSON 객체여야 합니다.` |
+| `TC-CHAT-022` | 스트림 `session_id` UUID 아님 (`not-a-uuid-<script>`) | **PASS** | 1ms | 400 `ERR_SESSION_INVALID_UUID` `유효하지 않은 세션 UUID 형식입니다.`, 입력값 echo 없음 |
+| `TC-CHAT-023` | 37자 `user_message_id` | **PASS** | 0ms | 400 `ERR_INVALID_PAYLOAD` |
+| `TC-CHAT-024` | `session_id: null` | **PASS** | 1ms | 검증 통과 → 503 (LLM 없음). null 은 서버가 만든다 |
+| `TC-CHAT-009` | 세션 목록 | **PASS** | 2ms | 200, 30개, 시각 오프셋 모두 있음 |
+| `TC-CHAT-025` | `limit=0` | **PASS** | 1ms | 400 `ERR_INVALID_PAYLOAD` |
+| `TC-CHAT-026` | 세션 상세 `not-uuid` | **PASS** | 1ms | 404 `ERR_SESSION_NOT_FOUND`. OpenAPI 가 "session_id 형식 검증 없음" 으로 정한 동작 (스크립트 기대값 400 이 틀렸다). 메시지에 경로 값이 들어간다(관찰 O-6) |
+| `TC-CHAT-010` | 없는 세션 | **PASS** | 1ms | 404 `ERR_SESSION_NOT_FOUND` |
+| `TC-CHAT-011` | 출처 상세·없는 출처 | **PASS** | 1ms | 200(시각 오프셋), 404 `ERR_HANDOVER_SOURCE_NOT_FOUND` |
+| `TC-CHAT-027` | 세션 POST 저장·상세 | **PASS** | 6ms | 201, `created_at` 없는 메시지 2개 → `2026-11-10T00:00:00+00:00` 처럼 오프셋, assistant `model_tier: haiku`·`usage {input_tokens:10, output_tokens:20,…}` 저장·반환 (CT-004) |
+| `TC-CHAT-028` | 세션 상세 오프셋 | **PASS** | 1ms | 시각 4개 모두 오프셋 |
+| `TC-CHAT-029` | 다른 세션의 메시지 id | **PASS** | 1ms | 400 `ERR_INVALID_PAYLOAD` `다른 대화에서 이미 쓰는 메시지 id 입니다: qa-u-…`, `details.message_ids: ["qa-u-…"]` (D-52) |
+| `TC-CHAT-029b` | 400 뒤 부분 변경 없음 | **PASS** | 0ms | 거절된 두 번째 세션 `GET` → 404 (ARCH-03R) |
+| `TC-CHAT-030` | 세션 POST 깨진 JSON | **PASS** | 0ms | 400 `ERR_INVALID_PAYLOAD` |
+| `TC-CHAT-031` | 세션 POST `id` UUID 아님 | **PASS** | 0ms | 400 `ERR_SESSION_INVALID_UUID` |
+| `TC-CHAT-032` | 임시 세션 삭제 | **PASS** | 1ms | DELETE 200, 다시 GET 404 |
+| `TC-CHAT-033` | 모바일 챗 긴 답 스크롤 (FE-36) | **PASS** | - | 4개 폭(375x667·390x844·360x780 모바일, 1280x800)에서 90문단 스트림(흉내). 입력창 top 이 9개 시점 내내 557 / 734 / 644 / 705 그대로, `document.scrollingElement.scrollTop` 0, 목록 밖 조상 상자 스크롤 0곳. 스트리밍 중 목록을 위로 올리면 머묾(맨 아래와 거리 3948 / 3718 / 3861 / 2022), 맨 아래로 내리면 다시 따라감(0), 새 질문은 맨 아래로. 완료 sr-only `답변이 완료되었습니다.`, `aria-busy` true → false, 콘솔 경고·오류 0 |
+| `TC-CHAT-034` | 인용 팝오버 키보드 (FE-37) | **PASS** | - | 같은 4개 폭: 배지 Enter → 팝오버(부모 `body`, `position: fixed`, 화면 안) 안 `팝오버 닫기` 에 포커스 → Tab → `원문 보기` → Escape → 닫히고 배지 `출처 1번: 테스트 출처 기사` 로 복귀. 닫기 버튼 모바일 44x44, 데스크톱 32x32 |
+| `TC-CHAT-035` | 가상 키보드 흉내 | **PASS** | - | 390x844 에서 스트림 중 뷰포트를 390x500 으로 줄이고 입력창에 포커스: 입력창 top 390·bottom 436(화면 안), 문서 스크롤 0, 목록 맨 아래 따라감 |
+| `TC-CHAT-036` | 실제 backend LLM 없음 화면 | **PASS** | - | 390x844 `/chat` 질문 → 요청 `POST /api/chat/stream` 1번, 답 자리에 `가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)` + `다시 시도`, 입력창 제자리(734~780) |
+| `TC-CHAT-016` | 없는 기사로 이관 | **PASS** | - | `/chat?sourceId=999999999` → `요청하신 기사를 찾을 수 없어 전체 소식 모드로 시작합니다.` |
+| `TC-CHAT-037` | 이관 기사 조회 실패·성공 (FE-41) | **PASS** | - | 출처 조회 500 흉내 → `기사 정보를 불러오지 못해 전체 소식 모드로 시작합니다. 연결 상태를 확인해 주세요.`. 실제 조회 → 알림 없음, `단일 기사` 칩에 기사 제목 |
 
-### 2.3 COLL
+### 2.5 COLL
 | 케이스 ID | 테스트 항목 | 실행 결과 | 응답 속도 | 발견 결함 / 비고 |
 | :--- | :--- | :---: | :---: | :--- |
-| `TC-COLL-001` | 스케줄 상태 | **PASS** | 1~2ms | `schedule_hours [0,6,12,18]`, `timezone UTC`, `next_run 18:00Z`, `is_running false` |
-| `TC-COLL-002` | 진행률 | **PASS** | 0~1ms | `step_message: 대기 중`, `total_sources: 6` |
-| `TC-COLL-003` | 수집 중 재요청 | **BLOCKED** | - | 수집을 실제로 돌려야 해 실행하지 않았다. 코드: `collect_all` 이 `is_running` 이면 `already_running` (`backend/app/collectors/manager.py:177-180`). 프론트 처리는 `hooks/useCollector.test.ts` 가 검증한다 |
-| `TC-COLL-004` | 수집 소스 오류 | **FAIL** (code) | - | D-18 |
-| `TC-COLL-005` | 빈 DB 로 시작 | **BLOCKED** | - | 외부 수집이 나가 실행하지 않았다. `test_startup_seed.py` 가 검증한다 |
-| `TC-COLL-006` | 헤더 수집 상태 | **PASS** | - | `수집 스케줄 · 다음 수집 4h 3m 후`, `즉시 수집` 버튼 있음 (누르지 않음). `ui-audit` R9 진입점 통과 |
+| `TC-COLL-001` | 스케줄 상태 | **PASS** | 2ms | `schedule_hours [0,6,12,18]`, `timezone UTC`, `last_crawl_time 2026-11-10T05:07:35.230128+00:00` |
+| `TC-COLL-002` | 진행률 | **PASS** | 1ms | `step_message: 대기 중`, 이모지 없음 |
+| `TC-COLL-007` | `recent_logs[].status` | **PASS** | 0ms | 5개 모두 `success` (enum 안) |
+| `TC-COLL-003` | 다른 프로세스 수집 중 `trigger` | **PASS** | 1ms | 별도 python 프로세스가 `qa.db.crawl.lock` 을 `flock(LOCK_EX\|LOCK_NB)` 로 쥐고(쥔 것을 따로 확인) 호출 → 200 `{"status":"already_running","message":"다른 프로세스(MCP 서버·make collect)가 같은 DB 에 수집 중입니다.","other_process":true,…}`. 수집 시작 안 함 (D-40, N-12) |
+| `TC-COLL-008` | 다른 프로세스 수집 중 `reset-and-collect` | **PASS** | 1ms | 200 `{"status":"already_running","message":"현재 수집이 진행 중이므로 초기화할 수 없습니다. 잠시 후 다시 시도해주세요.","deleted_count":0}`. 기사 수 4,938 그대로, 진행 상태 `대기 중` 그대로 |
+| `TC-COLL-009` | 다른 프로세스 수집 중 `make collect` | **PASS** | - | `AGENTLENS_API_URL=http://localhost:28000 COLLECT_MODE=api make collect` → stderr `다른 프로세스(MCP 서버·make collect)가 같은 DB 에 수집 중입니다. 그 수집이 끝난 뒤 다시 실행한다`, 스크립트 종료 1(make 2), 기다리지 않음 (N-12) |
+| `TC-COLL-010` | 스케줄 대화상자 오류·다시 시도 (FE-39) | **PASS** | - | 1440: `/api/schedule/status` 503 흉내 → `스케줄 정보를 불러오지 못했습니다. 백엔드 서버 연결 상태를 확인해주세요.` + `다시 시도` → 실제 응답으로 `수집 주기 (UTC) 00:00 · 06:00 · 12:00 · 18:00 (KST: 09:00, 15:00, 21:00, 03:00)`, Escape 로 닫히고 포커스가 헤더 `수집 스케줄` 버튼으로 |
+| `TC-COLL-011` | 스케줄 수집 시각 없음 | **PASS** | - | `schedule_hours: []` 흉내 → `정해진 수집 시각이 없습니다` |
+| `TC-COLL-006` | 헤더 수집 상태 | **PASS** | - | `수집 스케줄 · 다음 수집 24m 후`, `즉시 수집` 있음 (누르지 않음). 스케줄러를 끈 backend 에서도 다음 시각을 보인다(관찰 O-5) |
 
-### 2.4 BRF
+### 2.6 BRF
 | 케이스 ID | 테스트 항목 | 실행 결과 | 응답 속도 | 발견 결함 / 비고 |
 | :--- | :--- | :---: | :---: | :--- |
-| `TC-BRF-001` | 오늘 브리핑 | **PASS** | 4ms | 200 |
-| `TC-BRF-002` | 연동 설정 조회 | **PASS** | 1ms | 200. 지금 `config.json` 의 비밀값은 모두 비어 있다. 웹훅 URL 을 가리지 않는 동작은 범위 밖 D-04 (OOS-4) |
-| `TC-BRF-003` | 웹훅 테스트 잘못된 URL | **PASS** | 1ms | 400 `유효한 HTTP/HTTPS 웹훅 URL을 입력해주세요.`. 첫 실행은 스크립트가 필드 이름을 `url` 로 보내 422 였고, `webhook_url` 로 다시 확인했다 |
-| `TC-BRF-004` | Notion 발행 잘못된 본문 | **PASS** | 1ms | 422, 발행 없음 |
-| `TC-BRF-005` | 브리핑 대화상자 | **PASS** | - | 탭 `카테고리별 요약`·`마크다운 전문`, 분야 머리글 긴 라벨 4개(`하네스 & 벤치마크`, `MCP & 생태계`, `에이전트 아키텍처`, `최신 AI 동향`), 바닥 `연동 설정` 하나, Escape 로 닫힘. 관찰: 설명이 `[HF Daily] Terminal-style Mathematical M... 및 분야별 핵심 에이전트 기술 동향`(D-21), 마크다운 전문에 `🌅`·`📌`·`🎯`·`💡`·`🔌`·`🤖` 와 backend 분야 이름(D-34) |
-| `TC-BRF-006` | 설정 저장 뒤 발송 값 | **범위 밖** (code 관찰) | - | OOS-5. 관찰: 재시작 전까지 옛 값으로 발송 (D-08, 범위 밖) |
+| `TC-BRF-001` | 오늘 브리핑 | **PASS** | 5ms | 200, 키 `title`·`date`·`headline`·`overview`·`categories`·`action_items`·`markdown_report`·`featured_items_count`·`generated_at` |
+| `TC-BRF-007` | 브리핑 문자열 이모지 | **PASS** | 5ms | backend 고정 문자열(제목 `# 오늘의 AI 브리핑`, `## 오늘의 핵심 테이크어웨이 (Overview)`, 분야 이름·요약 문장)에 이모지 0. 응답에 보이는 `🎨`·`🖥`·`🖼`·`🔥`·`🤖` 는 모두 수집한 GitHub 저장소 설명 원문(`nexu-io/open-design: 🎨 Best DeepSeek Harness…`, `firecrawl/firecrawl … superintelligence. 🔥`)이다. backend·Notion·메일·웹훅 서비스 파일에 그림 이모지 0 (`chat_service.py:225` 의 `🚨` 는 LLM 프롬프트 안이라 화면에 나오지 않음) (D-34) |
+| `TC-BRF-008` | 분야 이름·아이콘 | **PASS** | 0ms | `하네스 & 벤치마크`, `MCP & 생태계`, `에이전트 아키텍처`, `최신 AI 동향`, `icon` = `harness`·`mcp_plugins_skills`·`agent_tech`·`ai_news` |
+| `TC-BRF-009` | 헤드라인·요약 자르기 | **PASS** | - | 헤드라인 `affaan-m/ECC: The agent harness… 및 분야별 핵심 에이전트 기술 동향`, 분야 요약 `'upstash/context7: Context7 Platform --…'` — 공백 경계에서 자르고 `…` (D-21) |
+| `TC-BRF-002` | 연동 설정 조회 | **PASS** | 1ms | `webhooks` 키 `slack_webhook_url`·`discord_webhook_url`·`auto_dispatch_daily_briefing`, `auto_alert_high_signal` 없음 |
+| `TC-BRF-003` | 웹훅 테스트 잘못된 URL | **PASS** | 1ms | 400 `ERR_INVALID_PAYLOAD` `유효한 HTTP/HTTPS 웹훅 URL을 입력해주세요.` (외부 전송 없음) |
+| `TC-BRF-004` | Notion 발행 잘못된 본문 | **PASS** | 1ms | 400 `ERR_INVALID_PAYLOAD` details `[{loc:["body","page_id"],…}]` (발행 없음) |
 
-### 2.5 SRC
+### 2.7 SRC
 | 케이스 ID | 테스트 항목 | 실행 결과 | 응답 속도 | 발견 결함 / 비고 |
 | :--- | :--- | :---: | :---: | :--- |
-| `TC-SRC-001` | 소스 목록 | **PASS** | 1~2ms | 200. 응답에 서버 파일 경로 `sources_file` 이 있다 (D-05) |
-| `TC-SRC-002` | 딥 리서치 상태·감사 일지 | **PASS** | 0~3ms | 200 |
-| `TC-SRC-003` | 카탈로그 후보 탐색 | **PASS** | 1ms | 200 |
-| `TC-SRC-004` | 없는 소스 유형 토글 | **PASS** | 1ms | 404 |
-| `TC-SRC-005` | GitHub `owner/repo` 토글 | **FAIL** | 0ms | 404 (경로가 라우트에 맞지 않음). D-15 재현 |
-| `TC-SRC-006` | 딥 리서치 예외 뒤 재실행 | **FAIL** (code) | - | D-09 |
+| `TC-SRC-001` | 소스 목록 | **PASS** | 2ms | `sources_file: "sources.json"` (경로 없음, D-05) |
+| `TC-SRC-007`~`011` | RSS 추가 검증 위반 5종 (`ftp://` url, 빈 이름, 201자 이름, `category_hint: bogus`, `country: JP`) | **PASS** | 1ms | 모두 400 `ERR_INVALID_PAYLOAD`, details 에 해당 `loc`, 201자 입력 echo 없음. `sources.json` 두 벌·`config.json` md5 그대로 |
+| `TC-SRC-012` | `PATCH /api/sources/github/owner/repo/toggle` | **PASS** | 1ms | 404 `해당 소스를 찾을 수 없습니다.` (D-53. 유형 토글은 `item_id=all` 만) |
+| `TC-SRC-013` | `PATCH /api/sources/reddit/xyz/toggle` | **PASS** | 1ms | 404 |
+| `TC-SRC-004` | 없는 유형 토글 | **PASS** | 1ms | 404 |
+| `TC-SRC-002` | 딥 리서치 상태 | **PASS** | 1ms | 200, 설명 이모지 없음 |
+| `TC-SRC-014` | 감사 일지 200개 | **PASS** | 6ms | 시각 200개 모두 오프셋 |
+| `TC-SRC-015`~`018` | `audit-logs limit` 0·201, `run-deep max_candidates` 0·21 | **PASS** | 1ms | 모두 400 `ERR_INVALID_PAYLOAD` (실행 안 함) |
+| `TC-SRC-019` | 소스 대화상자 오류 (FE-30) | **PASS** | - | `/api/sources` 500 흉내 → `소스 정보를 불러오지 못했습니다. 백엔드 서버 연결 상태를 확인해주세요.` + `다시 시도` |
+| `TC-SRC-020` | 소스 대화상자 받기 전·빈 목록·실행 기록 없음 | **PASS** | - | 응답을 붙잡은 동안 `불러오는 중...`(없다고 말하지 않음) → 빈 목록 흉내 `등록된 RSS 피드가 없습니다.`·`모니터링 중인 GitHub 저장소가 없습니다.`, 딥 리서처 탭 `최근 리서치 일시 실행 기록 없음`, 문구 `키워드 규칙 기반 적합도 점수가 기준을 넘는 피드를…` (D-25) |
 
-### 2.6 MCP
+### 2.8 UI 공통
 | 케이스 ID | 테스트 항목 | 실행 결과 | 응답 속도 | 발견 결함 / 비고 |
 | :--- | :--- | :---: | :---: | :--- |
-| `TC-MCP-001` | MCP 정보 | **PASS** | 0~1ms | 200, `tools` |
-| `TC-MCP-002` | MCP 연동 대화상자 | **PASS** | - | `ui-audit` 의 `feed-*-mcp` 10조합 통과 |
-| `TC-MCP-003` | MCP 수집과 웹 수집 동시 | **FAIL** (code) | - | D-40 |
+| `TC-UI-003` | 없는 경로 | **PASS** | 4ms | `GET http://localhost:23001/no-such-page` → 404 |
+| `TC-UI-006` | 폭·테마별 화면 규칙 21종 | **PASS** (데이터 조건 관찰) | - | 사용자 DB 사본 그대로: 160조합 중 156 통과, 실패 4(`chat-{light,dark}-{1024x768,1440x900}` 의 `pictograph`, 사이드바 세션 제목 `⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...`, 10월 19일 대화). 그 세션 2개만 사본에서 지운 뒤: 160 / 160 통과, 21종 실패 0, 종료 0. `report.json` 은 사용자 데이터 그대로의 실행이다 |
+| `TC-UI-008` | 깨진 저장값 (D-45) | **PASS** | - | `agentlens_bookmarks` = `{"x":1}`, `agentlens_chat_sessions_index` = `"str"` 로 열어도 피드 카드 18장, `/chat` 입력창 그림, 오류 경계 `화면을 그리지 못했습니다` 없음, 콘솔 오류 0 |
+| `TC-UI-007` | 키보드 포커스 표시 | **PASS** | - | `TC-NEWS-022` 와 같은 실행 |
 
-### 2.7 UI·보안
+### 2.9 마지막 수정 확인 (14:57~15:07, 마지막 작업 트리)
+조건은 1차와 같다(28000·23001, DB 새 사본 `qa2.db`, LLM 키 빈 값, 스케줄러 끔, 외부 발송·수집 없음). 1차 회귀 케이스 전부(스모크, `api_scen.py`, 수집 잠금, `fe36.cjs`·`ui_scen.cjs`·`ui_scen2.cjs`)를 다시 돌려 같은 결과를 얻었고(FE-36 입력창 top 557 / 734 / 705 / 644 고정, 문서 스크롤 0, FE-37 팝오버 흐름 같음, 콘솔 오류 0), 아래 케이스를 더했다.
+
 | 케이스 ID | 테스트 항목 | 실행 결과 | 응답 속도 | 발견 결함 / 비고 |
 | :--- | :--- | :---: | :---: | :--- |
-| `TC-UI-001` | frontend 헬스·페이지 | **PASS** | 2~10ms | 200 ×3 |
-| `TC-UI-002` | frontend 프록시 | **PASS** | 11ms | `/api/stats` 200 |
-| `TC-UI-003` | 없는 경로 | **PASS** | 4ms | 404 |
-| `TC-UI-004` | 테마 전환 | **PASS** | - | `테마 선택` 메뉴 `라이트`·`다크`·`시스템`(처음 `시스템` 선택) → `다크` → `html.dark`, `data-theme=dark`, 배경 `rgb(14, 16, 19)`, `agentlens_theme=dark`. `/chat` 으로 이동해도 다크 유지 |
-| `TC-UI-005` | 390x844 피드·상세·챗 | **PASS** | - | 가로 스크롤 없음, 헤더 56px, 44px 미만 조작 요소는 `본문으로 건너뛰기`(1x1 숨김 링크)뿐, viewport `width=device-width, initial-scale=1, interactive-widget=resizes-content`(확대 허용) |
-| `TC-UI-006` | 폭·테마별 화면 규칙 21종 | **PASS** | - | 160조합 중 150 통과, 실패 0, 건너뜀 10(레이더 펼침). 판정별 상태 수: `clip`·`placeholder`·`occluded`·`scrollRow`·`ariaControls`·`keepAll` 150, `terms` 70, `pictograph` 50, `chatScope` 30, `vRhythm`·`toolbarLayout`·`cardMetric`·`feedAreas`·`cardFooter`·`briefing`·`modelPicker`·`chatHeader`·`focusLabels`·`toast` 각 10, `rowAlign` 6, `chatAlign` 4, 모두 실패 0 |
-| `TC-UI-007` | 키보드 포커스 표시 | **PASS** | - | 대화상자 안 Tab 포커스 `:focus-visible`, `outline: solid 2px` |
-| `TC-SEC-001` | 임의 origin CORS preflight | **범위 밖** (관찰) | 1ms | `OPTIONS /api/news/all` (`Origin: https://evil.example`, `Access-Control-Request-Method: DELETE`) → 200, `access-control-allow-origin: https://evil.example`, `access-control-allow-credentials: true`, `access-control-allow-methods: DELETE, GET, ...`. `GET /api/stats` 도 같은 origin 을 돌려준다. OOS-1, D-01 (범위 밖) |
-| `TC-SEC-002` | 500 응답 본문 | **FAIL** | 5ms | `TC-CHAT-007` 의 500 본문 `error` 에 Pydantic 예외 문자열. D-05 |
+| `TC-COLL-012` | `make collect` 직접 모드 경고·잠금 실패 | **PASS** | - | 다른 프로세스가 `qa2.db.crawl.lock` 을 쥔 동안 `DATABASE_URL=<사본> AGENTLENS_API_URL=http://localhost:28000 COLLECT_MODE=direct make collect` → `직접 모드: …/qa2.db`, `경고: http://localhost:28000 에 backend 가 떠 있다. 같은 DB 라면 수집 잠금으로 한 번에 하나만 수집한다. …`, `수집 실패: status=already_running 다른 프로세스가 같은 DB 에 수집 중입니다.`, 스크립트 종료 1(make 2). 기사 수 4,938 그대로. 단위 `test_direct_mode_with_backend_up_reports_lock` |
+| `TC-SRC-021` | `inspect-url` 예외 원문 숨김 | **PASS** | 14ms | 닫힌 루프백 포트 `http://127.0.0.1:9/feed`·`/feed.xml` → 200 `{"status":"error","message":"URL 에 접속하지 못했습니다. 주소와 네트워크를 확인해주세요.","input_url":…}`. 예외 문자열(`ConnectError` 등) 없음 (외부 호스트로는 보내지 않음). 단위 `test_inspect_url_hides_connection_exception_text` |
+| `TC-CHAT-038` | 챗 포커스 필터 라벨 (390·1440) | **PASS** | - | `신호 품질 필터` 의 토글 라벨 `Must-Read 고신호만`, `7.8` 글자 없음 |
+| `TC-SRC-022` | 감사 일지 라벨 | **PASS** | - | 실제 감사 일지 30건에 `판정 사유:` 30번, `AI 판정 사유` 0번 |
+| `TC-NEWS-032` | Ask AI 연결 실패 | **PASS** | - | `page.route` 로 연결 거부 → 알림 `서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.` + `다시 시도` |
+| `TC-NEWS-033` | Ask AI 첫 응답 30초 시간 제한 | **PASS** | 30s | 응답을 붙잡아 두자 30초 뒤 `응답이 늦어 요청을 멈췄습니다. 다시 시도해 주세요.` + `다시 시도` (연결 실패 문구와 다름) |
+| `TC-CHAT-039` | 챗 연결 실패 | **PASS** | - | 390 `/api/chat/stream` 연결 거부 → 답 자리 `서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.` + `다시 시도` |
+| `TC-RM-008`·`012` | D-54 | **PASS** | 1ms | 2.2절 |
+
+- 실행 밖(단위·코드)으로 확인한 마지막 수정: 웹훅 테스트 문구(이모지·`⭐️ Must Read` 제거, 실제 동작 `auto_dispatch_daily_briefing` 안내, 예외 원문 대신 고정 문장 — `backend/app/services/webhook_service.py`, 단위 `test_webhook_test_messages_describe_only_daily_briefing`. 유효 URL 로 보내지 않았다), `category_hint` 를 분류 실패 항목의 기본 카테고리로(`backend/app/collectors/manager.py:163-165`, `collectors/sources/rss.py:80`, 단위 `test_feed_category_hint_is_default_when_classifier_cannot_decide`, `test_rss_items_carry_feed_category_hint`), 딥 리서치 채택 저장 실패 시 WATCHLIST + `last_run_summary.adopt_failed`(`backend/app/services/deep_researcher.py:439`, `:481-483`, `:515`, 단위 `test_deep_research_adoption_write_failure_is_audited`), 지운 경로 리다이렉트 없음(단위 `test_deleted_endpoints_answer_404_or_405_without_redirect`), FE-43 화면 테스트(`make check` 의 frontend 833개에 포함).
 
 ---
 
@@ -159,181 +205,158 @@ pie title v0.4.0 최초 QA 시나리오 케이스 결과 (72건)
 - **심각도 분류** (기준은 계획 3절 7):
   - `Blocker`: 0건
   - `Critical`: 0건
-  - `Minor`: 39건 미해결 (v0.4.1 기준. v0.4.0 은 38건, 그중 9건 해결, 3.7a 10건 추가)
-  - 범위 밖(수용): 5건 (D-01, D-02, D-03, D-04, D-08). 제품 오너 결정(2026-11-09)으로 이 프로젝트는 인증 없음과 CORS 전체 허용, SSRF, 비밀값 평문 저장, 설정 조회로 비밀값 노출, 설정 재적용 누락을 검사하지 않는다 (계획 1.4). 처음 판정에서 이 5건은 Critical 이었다. 결함 사실·근거는 3.8절에 그대로 남긴다. 같은 범주에 드는 다른 결함은 없다 (D-05 예외 문자열·서버 경로 노출, D-06 이메일 HTML 이스케이프는 다섯 항목과 다른 범주라 Minor 로 남긴다)
-- 옛 알려진 문제 목록의 모든 행(보안 6, 데이터·동작 15, 설정 5, 계약 7, UI 2, 테스트·운영 5, 쓰이지 않는 코드 2)을 옮겼고, 이번 실행에서 새로 찾은 것은 D-36 하나다. 근거 `path:line` 은 2026-11-09 코드로 다시 확인했다. "(의심)" 은 코드로 추론했고 실행해 확인하지 않은 것이다.
-- 조치: QA 는 제품 코드를 고치지 않는다. 모든 결함은 미해결이며 수정은 별도 기능 작업(`/triage-signal` → intent)으로 한다.
-- 결함 행의 '검증' 열: `실행` = 이번 QA 에서 재현, `코드` = 코드만 확인.
+  - `Minor`: 0건 미해결. v0.4.1 의 미해결 39건과 1차 회귀에서 새로 찾은 D-54 는 모두 해결
+  - 범위 밖(수용): 5건 (D-01, D-02, D-03, D-04, D-08). 판정에 넣지 않는다 (3.8절, 계획 1.4)
+- 조치: QA 는 제품 코드를 고치지 않는다. 해결 확인 방법은 `실행`(이번 회귀에서 앱으로 확인), `UI`(Playwright), `단위`(`make check` 안의 테스트 이름), `코드`(`path:line`) 중 하나 이상이다.
+- D-07, D-09~D-15, D-32 는 v0.4.1 에서 해결됐고 이번에도 다시 깨지지 않았다(D-09·D-10 `TC-SRC-015`~`018` 주변 코드, D-15 `TC-SRC-012`, D-32 `TC-CHAT-007`).
 
 ### 3.1 보안
-| ID | 심각도 | 결함 | 영향 | 근거 | 재현 절차 | 검증 |
-| :--- | :---: | :--- | :--- | :--- | :--- | :---: |
-| D-05 | Minor | 예외 문자열과 서버 절대 경로가 응답에 나간다 | 내부 정보 노출 | `backend/app/main.py:58-67` (`"error": str(exc)`), `backend/app/api/chat.py:120`, `:272` (`details.error`), `backend/app/api/sources.py:33` (`sources_file`) | `curl -X POST http://localhost:18000/api/chat/stream -H 'Content-Type: application/json' -d '{"question":"x","model_tier":"ultra"}'` → 500, `error` 에 예외 문자열  v0.4.1: `/api/chat/stream` 의 검증 오류는 `details: null` 400 이 됐지만 `POST /api/chat/query` 에 잘못된 `model_tier` 를 보내면 500 `ERR_SERVER_INTERNAL` 의 `details.error` 에 Pydantic 예외 문자열이 그대로 나간다 (회귀 QA 실행) | 실행 |
-| D-06 | Minor | 이메일 HTML 을 이스케이프하지 않는다 | 수집한 제목에 HTML 이 있으면 메일 본문에 그대로 들어간다 | `backend/app/services/email_service.py:58-59` (`{url}`, `{title}` 를 f-string 으로 삽입) | 제목에 `<b>` 가 든 기사가 있는 상태에서 이메일 발송 | 코드 |
+| ID | 심각도 | 결함 | 상태 | 확인 |
+| :--- | :---: | :--- | :---: | :--- |
+| D-05 | Minor | 예외 문자열·서버 절대 경로가 응답에 나간다 | **해결** | 실행: 검증 오류는 모두 `{error_code,message,details}` 400(`TC-NEWS-006`~`008`, `TC-SRC-007`~`011`), `/api/chat/query` 지움(`TC-RM-002`), `sources_file: "sources.json"`(`TC-SRC-001`). 코드: 처리 못 한 예외는 고정 문장 500 (`backend/app/api/errors.py` `_unhandled_exception_handler`), 라우터의 `str(e)` 는 앱이 정한 예외 문장뿐(`backend/app/api/chat.py:121-123` LLM 가용성 예외, `:181`·`:184`·`:202`·`:218` 세션 예외) |
+| D-06 | Minor | 이메일 HTML 을 이스케이프하지 않는다 | **해결** | 코드: `backend/app/services/email_service.py:2` `from html import escape`, `:12-15` `_safe_href`(http/https 만), `:27-37` 날짜·헤드라인·개요·분야 이스케이프 |
 
 ### 3.2 데이터·동작 오류
-| ID | 심각도 | 결함 | 영향 | 근거 | 재현 절차 | 검증 |
-| :--- | :---: | :--- | :--- | :--- | :--- | :---: |
-| D-07 | **해결 (v0.4.1)** | 챗 한 턴을 서버(`persist_turn`)와 프론트(`POST /api/chat/sessions`)가 둘 다 저장한다 (의심) | 첫 턴 중복 저장, 이후 PK 충돌 500 (프론트가 무시) | `backend/app/services/chat_service.py:806-808`, `frontend/src/components/chat/useChatSessions.ts:234` | 새 대화에서 질문 1회 → `GET /api/chat/sessions/{id}` 의 메시지 수와 backend 로그의 500 확인 | 코드 |
-| D-09 | **해결 (v0.4.1)** | 딥 리서치가 예외 뒤 `is_running` 을 되돌리지 않는다 | 재시작 전까지 모든 실행이 `already_running` 으로 거부된다 | `backend/app/services/deep_researcher.py:385-388` (설정), `:486` (정상 종료에서만 해제, try/finally 없음) | 실행 중 예외를 일으킨 뒤 `POST /api/research/run-deep` → `already_running` | 코드 |
-| D-10 | **해결 (v0.4.1, 남은 것 D-50)** | 딥 리서치 후보 컷이 6~8개인데 시드 14개가 앞에 있다 | 기사에서 발굴한 후보는 평가되지 않는다 | `backend/app/services/deep_researcher.py:21-120` (시드 14개), `:394-412` (시드를 먼저 넣고 `[:max_candidates]`), `:376` (기본 8), `backend/app/api/research.py:78` (기본 6) | `POST /api/research/run-deep` 뒤 감사 일지의 후보가 모두 시드인지 확인 | 코드 |
-| D-11 | **해결 (v0.4.1)** | 모델을 바꾼 직후 보내면 이전 티어로 요청이 갈 수 있다 (의심) | 모델 선택 무시 | `frontend/src/components/chat/ChatWorkspace.tsx:246` (`handleSendMessage`), `:508` (의존성 배열에 `selectedTier` 없음), `:287-288`, `:320-321` (`selectedTier` 사용) | 모델을 Haiku 로 바꾸고 바로 전송 → 요청 본문 `model_tier` 확인 | 코드 |
-| D-12 | **해결 (v0.4.1, 남은 것 D-51)** | 스트림이 `done` 없이 끊겨도 완료로 표시하고, 백엔드는 `stop_reason` 을 보지 않는다 | 잘린 답이 완료처럼 보인다 | `frontend/src/components/chat/ChatWorkspace.tsx:340-348`, `:446` (`reader.read()` 의 `done` 으로 끝냄), `backend/app/**` 에 `stop_reason` 이 없다 (`grep -rn stop_reason backend/app` 결과 없음) | 스트림 중 backend 를 내림 → 메시지가 완료 상태로 남는다 | 코드 |
-| D-13 | **해결 (v0.4.1, 남은 것 D-47)** | 기사 Ask AI 스트림 중 Anthropic 실패 시 부분 답 뒤에 대체 답을 이어 붙인다 | 답이 섞여 보인다 | `backend/app/services/llm_processor.py:908-915` (Anthropic 토큰 yield 뒤 `except`), `:950-967` (휴리스틱 `meta`·`token` 을 이어 보냄) | Anthropic 스트림을 중간에 끊음 → 부분 답 + `AgentLens Heuristic Engine` 답 | 코드 |
-| D-14 | **해결 (v0.4.1, 남은 것 D-46)** | 검색어 한 글자마다 피드를 다시 부르고 페이지를 1로 돌리지 않는다 | 2페이지 이상에서 검색하면 빈 결과 | `frontend/src/app/page.tsx:194` (`onSearchChange={setSearch}`), `frontend/src/hooks/useNewsFeed.ts:26`, `:98` (`search` 가 `listKey`·의존성에 있음, `page` 그대로) | 21건 이상에서 2페이지로 이동 → 검색어 입력 → `page=2&search=...` 요청, 빈 목록 | 코드 |
-| D-15 | **해결 (v0.4.1)** | GitHub 저장소 id(`owner/repo`)를 경로 한 구간으로 받는다 | 저장소 토글·삭제가 404 | `backend/app/api/sources.py:77` (`/{source_type}/{item_id}/toggle`), `:85` | `curl -X PATCH http://localhost:18000/api/sources/github/owner/repo/toggle` → 404 | 실행 |
-| D-16 | Minor | `llm_processor.last_usage` 를 요청끼리 공유한다 | 동시 요청의 토큰 사용량이 섞인다 | `backend/app/services/llm_processor.py:122`, `:371`, `:433` | 두 챗 요청을 동시에 보내 저장된 `usage_json` 비교 | 코드 |
-| D-17 | Minor | 평가 캐시가 만료되지 않고 초기화해도 남는다 | 한 번 거부된 제목은 재시작 전까지 계속 거부 | `backend/app/services/llm_processor.py:120`, `:596-597`, `:614` | 거부된 기사 → 초기화·재수집 → 같은 제목이 캐시 판정으로 거부 | 코드 |
-| D-18 | Minor | 크롤 로그가 항상 `success` 이고 `error_message` 를 채우지 않는다 | 소스별 실패를 볼 수 없다 | `backend/app/collectors/manager.py:225-229` | 네트워크를 끊고 수집 → `GET /api/schedule/status` 의 `recent_logs` 가 `success` | 코드 |
-| D-19 | Minor | LLM 평가가 시사점(`why_it_matters`)을 주지 않으면 카테고리별 고정 문장(`CATEGORY_INSIGHTS`, 기술 이름이 있으면 `{기술} 기반 구현에서 ` 를 앞에 붙임)을 저장한다 | 같은 문장이 여러 기사의 카드·상세·챗 출처에 반복된다. 피드 카드는 반복 시사점이면 요약을 대신 보여 완화하지만 상세·챗·브리핑에는 그대로 나온다 | `backend/app/services/llm_processor.py:84-89` (상수), `:742-748` (대체 규칙. 옛 문서의 `:703-709` 는 지금 휴리스틱 평가 결과의 `why_it_matters: None` 자리다) | LLM 이 시사점을 주지 않는 상태로 수집 → 같은 카테고리 기사 상세의 시사점 비교 | 코드 |
-| D-20 | Minor | 수집기가 `raw_score` 에 원천 지표가 아닌 값을 넣는다: RSS 국내 180·그 밖 150 고정, arXiv 120 고정, HuggingFace `numComments + 40`, GitHub 목록 폴백 `stars_hint`(기본 5000)와 포크 수 `int(stars × 0.12)`. 인기 점수는 `min(100, hotness × 8)` 로 포화한다 (2026-11-07 DB 4734건 중 1034건이 100, `rss_kr` 459건 중 373건이 100). 첫 화면 카드의 상대 시간이 모두 같은 값으로 보이는 것은 원인을 확인하지 않았다 (의심) | 카드는 원천 지표가 있는 소스(`github`·`hackernews`·`reddit`)만 `raw_score`·인기 점수를 그려 합성 값을 숨긴다. 지표 소스도 포화하면 100 으로 같고, `추천순`·`인기순` 정렬이 합성 값에 좌우된다. 폴백 `stars_hint`·합성 포크 수는 실제 값과 구별되지 않아 `스타`·`포크` 로 보인다 | `backend/app/collectors/sources/rss.py:75`, `arxiv.py:48`, `huggingface.py:33`, `github.py:61`, `:69-70`, `backend/app/collectors/categorizer.py:147` | `GET /api/news?sort=hotness` 의 `hotness_score` 분포 확인 | 코드 |
-| D-21 | Minor | 브리핑 헤드라인과 분야 요약을 글자 수로 잘라 단어 중간에서 끊는다: 헤드라인 첫 항목 제목 40자, 분야 요약 제목 45자·요약 90자, `...` 를 붙인다. 프론트는 받은 글자를 자르지 않는다 | 요약 바·브리핑 설명·분야 요약·마크다운 전문·Notion·이메일에 잘린 문장 | `backend/app/services/briefing_service.py:86`, `:88`, `:101-102` | `/` 요약 바 → `[HF Daily] Terminal-style Mathematical M... 및 분야별 핵심 에이전트 기술 동향` | 실행 |
+| ID | 심각도 | 결함 | 상태 | 확인 |
+| :--- | :---: | :--- | :---: | :--- |
+| D-16 | Minor | `last_usage` 를 요청끼리 공유 | **해결** | 코드: `grep -rn last_usage backend/app` 0건 |
+| D-17 | Minor | 평가 캐시 만료 없음, 초기화 뒤에도 남음 | **해결** | 코드: `backend/app/services/llm_processor.py:93` `TTLCache`, `:172-174` 질문 1000/6h·평가 5000/24h·Ollama 30s, `:177` `clear_caches`, `backend/app/api/schedule.py` reset 이 `llm_processor.clear_caches()` |
+| D-18 | Minor | 크롤 로그가 항상 `success` | **해결** | 코드: `backend/app/collectors/manager.py:296-310` `partial_failure`·소스별 JSON `error_message`. 실행: `recent_logs[].status` enum 안 (`TC-COLL-007`). 사본의 기존 로그 118행은 옛 수집이라 모두 `success` |
+| D-19 | Minor | 시사점이 없으면 카테고리 고정 문장 저장 | **해결** | 코드: `backend/app/services/llm_processor.py:810-816` LLM 시사점이 10자 넘을 때만, 아니면 빈 값. `CATEGORY_INSIGHTS` 는 휴리스틱 질문 답(`:830`)에만 쓰인다. 기존 행은 `make reset` 전까지 남는다(FSD BR-NEWS-008-3) |
+| D-20 | Minor | 합성 `raw_score`, 인기 점수 포화 | **해결** | 코드: `backend/app/collectors/sources/huggingface.py:33` 실제 upvotes, `stars_hint`·합성 포크 없음(grep 0), `backend/app/services/categorizer.py:150` `min(100, 20·log10(1+hotness))`. 실행(사본 DB, m003 적용 뒤): 인기 점수 100 은 3행, `rss`·`rss_kr` `raw_score` 0 |
+| D-21 | Minor | 브리핑 글자 수 자르기가 단어 중간에서 끊음 | **해결** | 실행 `TC-BRF-009`. 코드 `backend/app/services/briefing_service.py:47-58` `clip_words` |
 
 ### 3.3 설정과 코드 불일치
-| ID | 심각도 | 결함 | 근거 | 재현 절차 | 검증 |
-| :--- | :---: | :--- | :--- | :--- | :---: |
-| D-22 | Minor | 스케줄 시각이 코드에 고정돼 `crawl_hours`·`timezone`·`auto_dispatch_hour`·`auto_briefing_hour` 가 동작에 쓰이지 않는다 (`CRAWL_SCHEDULE_HOURS` 는 다음 실행 시각 계산에만 쓰인다) | `backend/app/scheduler.py:39` (`hour="0,6,12,18"`), `:47` (`"3,15"`), `:55` (`hour="0", minute="15"`), `:9`, `backend/app/config.py:43-44` | `config.json` 의 `crawl_hours` 를 바꾸고 재시작 → 로그 `[Scheduler] Started for Crawl (0,6,12,18 UTC)` 그대로 | 코드 (시작 로그는 실행에서 확인) |
-| D-23 | Minor | 읽는 코드가 없는 설정: `scheduler.enabled`, `LLM_PROVIDER`, `crawler.*`, `CHAT_*` 5개, `CORS_ORIGINS`, `SCRAPER_TIMEOUT_SECONDS`, `auto_alert_high_signal`, `auto_dispatch_daily_briefing`, `ANTHROPIC_COLLECTION_MODEL`, `category_hint` | `backend/app/config.py` (정의), 사용처 `grep` 결과 없음 | 각 값을 바꿔도 동작이 같다 | 코드 |
-| D-24 | Minor | 하이시그널 임계값 기본값이 7.8(`config.py`)과 7.0(`config.json`, `llm_processor`)으로 다르다 | `backend/app/config.py:65`, `config.json:26`, `backend/app/services/llm_processor.py:568`, `:661` | `config.json` 의 `high_signal_threshold` 를 빼고 재시작 → 7.8 적용 | 코드 |
-| D-25 | Minor | 화면 문구와 실제 동작이 다르다: Ask AI 의 "Gemini" 표기(실제 Anthropic → OpenAI → 휴리스틱), 딥 리서치 "LLM 평가"(실제 키워드 규칙), 3줄 요약(규칙 기반), 챗 Notion 동기화(모의 동작. v0.4.1 에서 버튼을 없애 해결, 4.3 `TC-CHAT-019`. 나머지 셋은 남음) | `frontend/src/components/news-detail/AskAiPanel.tsx:107` (`Gemini 실시간 스트리밍 가동`), `frontend/src/components/NewsDetailModal.tsx:143`, `frontend/src/components/NewsDetailModal.tsx:348` (`핵심 요약 3줄`), `frontend/src/components/sources/DeepResearcherTab.tsx:110` (`LLM 기술 적합도 분석`) | 기사 상세 → `AI 질의응답` 탭의 배지 | 코드 |
-| D-26 | Minor | RSS 채널 링크가 3000 포트 고정, Docker 프론트는 3001 | `backend/app/api/news.py:192` | `curl http://localhost:18000/api/news/feed/rss.xml` → `<link>http://localhost:3000</link>` | 실행 |
+| ID | 심각도 | 결함 | 상태 | 확인 |
+| :--- | :---: | :--- | :---: | :--- |
+| D-22 | Minor | 스케줄 시각이 코드에 고정 | **해결** | 코드: `backend/app/scheduler.py:50-66` 수집 `CronTrigger(hour=settings.CRAWL_SCHEDULE_HOURS, minute="0", timezone=tz)`, 브리핑 `BRIEFING_AUTO_DISPATCH_HOUR` 시 15분, 딥 리서치 UTC 3·15. 실행: `SCHEDULER_ENABLED=false` 로 띄우자 스케줄러를 띄우지 않음(시작 로그) |
+| D-23 | Minor | 읽는 코드가 없는 설정 | **해결** | 코드: `CORS_ORIGINS`·`USER_AGENT`·`LLM_PROVIDER`·`ANTHROPIC_COLLECTION_MODEL`·`CHAT_HISTORY_MAX_*`·`AGENTIC_SEARCH_*`·`auto_briefing_hour`·`auto_alert_high_signal`·`crawler.*` 가 `backend/app` 에 0건. 남긴 설정은 사용처 있음: `SCHEDULER_ENABLED`(`scheduler.py:73`), `SCRAPER_TIMEOUT_SECONDS`(`services/scraper.py:116`), `CHAT_SESSION_MAX_LIMIT`(`services/chat_session_service.py:302`), `auto_dispatch_daily_briefing`(`services/briefing_service.py:266-267`), `category_hint`(분류 실패 항목의 기본 카테고리, `collectors/manager.py:163-165`, 마지막 수정) |
+| D-24 | Minor | 하이시그널 임계값 7.8 / 7.0 | **해결** | 코드: `backend/app/config.py` `HIGH_SIGNAL_THRESHOLD` 기본 7.0, `grep 7\.8 backend/app` 0건 |
+| D-25 | Minor | 화면 문구와 실제 동작이 다름 | **해결** | UI: Ask AI 배지 `실시간 스트리밍`/`응답 엔진: …`(`TC-NEWS-030`), 딥 리서치 `키워드 규칙 기반 적합도 점수…`(`TC-SRC-020`). 코드: `frontend/src/components/NewsDetailModal.tsx:338` `핵심 정리 (규칙 기반 자동 추출)`. `Gemini 실시간`·`LLM 기술 적합도`·`핵심 요약 3줄` 0건 |
+| D-26 | Minor | RSS 채널 링크 3000 고정 | **해결** | 실행 `TC-NEWS-014` (`PUBLIC_WEB_URL`) |
 
 ### 3.4 계약 (backend ↔ zod ↔ MSW)
-| ID | 심각도 | 결함 | 근거 | 재현 절차 | 검증 |
-| :--- | :---: | :--- | :--- | :--- | :---: |
-| D-27 | Minor | 오류 형식이 4가지(`detail`, 422, `error_code`, 전역 500)로 섞여 있고, MSW 는 모두 `error_code` 로 흉내 낸다 | `backend/app/main.py:58-67`, `backend/app/api/chat.py:279-400`, FastAPI 422, `HTTPException(detail=...)` | `TC-NEWS-006`(422 `detail` 배열), `TC-BRF-003`(`detail` 문자열), `TC-CHAT-001`(`error_code`), `TC-CHAT-007`(500 `detail`+`error`) 응답 비교 | 실행 |
-| D-28 | Minor | MSW 에만 있는 경로 `GET /api/chat/stream`, MSW 에만 있는 단계 `evaluating_sufficiency`·`agentic_searching`·보충 출처 `[S1]` | `frontend/src/mocks/handlers.ts:480`, backend 는 `POST /api/chat/stream` 만 (`backend/app/api/chat.py:276`) | `GET /api/chat/stream` 은 backend 라우트에 없다 (이번 QA 에서 호출하지 않음) | 코드 |
-| D-29 | Minor | global 모드에서 백엔드는 `sources` 를 토큰 뒤에 보내고 MSW 는 앞에 보낸다 | `backend/app/services/chat_service.py` global 스트림, `frontend/src/mocks/handlers/chat.ts` | global 질문 스트림의 이벤트 순서 비교 | 코드 |
-| D-30 | Minor | zod 에 없는 필드(`ChatSourceDetailResponse.full_content`·`scraped_at`), 백엔드가 안 보내는 필드(`NewsItemSchema` 의 같은 두 필드) | `frontend/src/types/chat.ts`, `frontend/src/types/news.ts`, `backend/app/schemas/` | `GET /api/chat/sources/2` 와 `GET /api/news/2` 의 키 비교 | 코드 |
-| D-31 | Minor | 백엔드가 쓰는 오류 코드 `ERR_INVALID_PAYLOAD`·`ERR_RETRIEVER_INDEX_ERROR` 가 zod 에 없다. `ERR_CLAUDE_API_KEY_MISSING` 은 실제 401 | `backend/app/api/chat.py:285`, `:351-357` | `TC-CHAT-006` → `ERR_INVALID_PAYLOAD` | 실행 |
-| D-32 | **해결 (v0.4.1, `/stream` 만. 남은 것 D-49)** | 잘못된 `model_tier` 가 백엔드에서 500 이 된다 (MSW 는 400) | `backend/app/api/chat.py:406` (`ChatStreamRequest(**body)` 가 검증 전 예외), `backend/app/schemas/chat.py:113` | `TC-CHAT-007` | 실행 |
-| D-33 | Minor | 프론트는 테스트 밖에서 zod `parse` 를 하지 않아 위 불일치가 런타임에 드러나지 않는다 | `frontend/src/lib/api.ts`, `frontend/src/components/chat/*` | — | 코드 |
+| ID | 심각도 | 결함 | 상태 | 확인 |
+| :--- | :---: | :--- | :---: | :--- |
+| D-27 | Minor | 오류 형식 4가지 혼재 | **해결** | 실행 2.2절 전체, `TC-API-001` |
+| D-28 | Minor | MSW 에만 있는 `GET /api/chat/stream`·단계·`[S1]` | **해결** | 코드·단위: `ContractAndMsw.test.ts` 'never emits MSW-only steps, supplementary sources or [S1] citations', `frontend/src/types/chat.ts:260` 4단계 |
+| D-29 | Minor | global `sources` 순서가 backend 와 MSW 에서 다름 | **해결** | 코드: `frontend/src/mocks/handlers/chat.ts:439` global 은 `token*` → `sources` → `done`, `:492` 인용된 출처만 |
+| D-30 | Minor | zod 에 없는·backend 가 안 보내는 필드 | **해결** | 코드: `frontend/src/types/chat.ts:399-400` 출처 상세에 `full_content`·`scraped_at`, `frontend/src/types/news.ts` 에서 두 필드 제거 |
+| D-31 | Minor | backend 오류 코드가 zod 에 없음 | **해결** | 코드: `frontend/src/types/chat.ts:35` `ERR_INVALID_PAYLOAD`, `:48` `ERR_CLAUDE_API_KEY_MISSING`(401), `:59` `ERR_RETRIEVER_INDEX_ERROR` |
+| D-33 | Minor | 런타임 zod 검증 없음 | **해결** | 코드: `frontend/src/lib/contract.ts:20-44` `safeParse`·`readJson`(실패 시 dev 경고 후 원본 사용). UI 실행 중 계약 경고 0 |
 
 ### 3.5 UI·접근성
-| ID | 심각도 | 결함 | 영향 | 근거 | 재현 절차 | 검증 |
-| :--- | :---: | :--- | :--- | :--- | :--- | :---: |
-| D-34 | Minor | backend 브리핑 분야 이름과 이모지 아이콘(`MCP & 도구·스킬 생태계`, `에이전트 아키텍처 & 런타임`, `최신 AI 소식 & 프론티어 모델` 등)이 프론트 긴 라벨과 다르다. 원인은 backend 문자열 | 카테고리별 요약 탭은 긴 라벨·lucide 로 바꿔 그리지만 마크다운 전문·Notion·이메일에는 backend 이름과 이모지(`📌` 포함)가 남는다 | `backend/app/services/briefing_service.py:16-38`, `backend/app/services/notion_service.py:79`, `backend/app/services/email_service.py:120` | `/` → `오늘의 브리핑` → `마크다운 전문` 탭 → `🌅 오늘의 AI 브리핑`, `📌 오늘의 핵심 테이크어웨이`, `🎯`·`💡`·`🔌`·`🤖` | 실행 |
-| D-35 | Minor | 챗 진행 단계 라벨(SSE `status` 의 `label`)에 그림 이모지 | 답변 생성 중 `WorkflowStepTracker` 에 이모지가 그대로 보인다 | `backend/app/services/chat_service.py:614`, `:635`, `:678`, `:693`, `:715`, `:734` | 챗 질문 전송 → 진행 표시의 `🧠 ReAct 추론: ...` | 코드 |
-| D-36 (신규) | Minor | 기사 질문 휴리스틱 답의 첫 머리에 그림 이모지 `🤖` | LLM 이 없을 때 기사 상세 `AI 질의응답` 답에 이모지 제목이 보인다. `pictograph` 판정은 마크다운 본문을 보지 않아 잡지 않는다 | `backend/app/services/llm_processor.py:846` (`### 🤖 기술 맥락 및 실무 분석`) | LLM 없는 backend 에 `POST /api/news/2/ask` → `answer` 가 `### 🤖 기술 맥락 및 실무 분석` 으로 시작 | 실행 |
+| ID | 심각도 | 결함 | 상태 | 확인 |
+| :--- | :---: | :--- | :---: | :--- |
+| D-34 | Minor | backend 분야 이름·이모지가 프론트와 다름 | **해결** | 실행 `TC-BRF-007`, `TC-BRF-008` |
+| D-35 | Minor | 챗 진행 단계 라벨 이모지 | **해결** | 코드: `backend/app/services/chat_service.py:479`, `:500`, `:543`, `:563`, `:590`, `:609` 라벨에 그림 이모지 없음 (파일 안 이모지는 프롬프트 `:225` 하나) |
+| D-36 | Minor | 휴리스틱 답 머리 `🤖` | **해결** | 실행 `TC-NEWS-025` |
 
 ### 3.6 테스트·운영
-| ID | 심각도 | 결함 | 근거 | 재현 절차 | 검증 |
-| :--- | :---: | :--- | :--- | :--- | :---: |
-| D-37 | Minor | 챗 헤더에서 모델 선택을 뺀 뒤에도 `ChatModelSelector` 의 `header-chip`·`header-compact` 변형과 `ChatHeaderProps` 의 `selectedTier`·`onSelectTier` 가 남아 있다. 계약 테스트의 prop 호환 테스트는 컴포넌트가 받지 않는 필드를 단언해 실제 호환을 보장하지 않는다 | `frontend/src/components/chat/ChatModelSelector.tsx:13-14`, `:93`, `frontend/src/types/chat.ts:942-944`, `frontend/src/tests/chat/ContractAndMsw.test.ts:1017` | — | 코드 |
-| D-38 | Minor | 마이그레이션 도구가 없고 `ALTER TABLE` 실패를 조용히 삼킨다 | `backend/app/database.py:49-71` (`except Exception: pass` `:59-60`, `:70-71`) | 컬럼 추가가 실패하는 옛 DB 로 시작 → 로그 없이 진행, 이후 쿼리 오류 | 코드 |
-| D-39 | Minor | DB 경로가 cwd 기준이라 루트와 `backend/` 에 `agentlens.db` 가 둘 있다. MCP 서버는 스키마를 만들지 않는다 | `backend/app/config.py:42` (`sqlite+aiosqlite:///./agentlens.db`), `backend/app/mcp/server.py` 에 `create_all`·`ensure_db_schema` 호출 없음 | 루트와 `backend/` 에서 각각 실행 → 다른 DB | 코드 |
-| D-40 | Minor | 수집 중복 실행 방지 플래그가 프로세스 메모리에만 있어 MCP 서버와 공유되지 않는다 | `backend/app/collectors/manager.py:47`, `:177-180`, `backend/app/mcp/server.py:44-46` | 웹 backend 수집 중 MCP `trigger_agentlens_crawl` → 두 수집이 같은 DB 에 동시에 쓴다 | 코드 |
-| D-41 | Minor | `NEXT_PUBLIC_API_URL` 을 Docker 빌드 단계에서 넘기지 않아 브라우저가 기사 질문 스트림을 `{host}:8000` 으로 직접 보낸다 (옛 문서의 '의심' 을 이번에 확인) | `frontend/src/lib/api.ts:12-23`, `:97-102`, `frontend/Dockerfile` 에 `ARG NEXT_PUBLIC_API_URL` 없음, `docker-compose.yml` frontend `environment` 만 있음(런타임) | `BACKEND_PORT=18000 make docker-up` 뒤 frontend 컨테이너의 `/app/.next/static/chunks/*.js` 에서 `ask/stream` 이 든 파일을 열면 `` `${e}//${s}:8000` `` 이 있다. 기사 상세 `AI 질의응답` 이 18000 이 아니라 호스트 8000(다른 backend)으로 간다 | 실행 (번들 확인) |
+| ID | 심각도 | 결함 | 상태 | 확인 |
+| :--- | :---: | :--- | :---: | :--- |
+| D-37 | Minor | 챗 모델 선택 옛 변형·prop | **해결** | 코드: `ChatModelSelector.tsx`·`ChatHeader.tsx` 에 `variant`·`header-chip`·`header-compact` 0건 |
+| D-38 | Minor | 마이그레이션 도구 없음, 실패를 삼킴 | **해결** | 코드: `backend/app/database.py:78-79` 순서 목록, `:153` `MIGRATIONS` 3개, `:189-198` `PRAGMA user_version`, 실패는 `logger.exception` 후 `raise`. 실행: 사본 `user_version` 3, `integrity_check` ok |
+| D-39 | Minor | DB 경로 cwd 기준, MCP 스키마 없음 | **해결** | 코드: `backend/app/config.py` `DEFAULT_DATABASE_URL`(backend 기준)·`resolve_database_url`, `backend/app/mcp/server.py:22` `ensure_db_schema`. 실행: `mcp` 2.3.0 에서 `app.mcp.server` import 성공, 서버 객체 `MCPServer` |
+| D-40 | Minor | 수집 플래그가 프로세스 메모리에만 | **해결** | 실행 `TC-COLL-003`, `TC-COLL-008`, `TC-COLL-009` |
+| D-41 | Minor | 브라우저가 `{host}:8000` 으로 직접 연결 | **해결** | 실행 `TC-NEWS-024`. 코드: `frontend/src/lib/api.ts:62-67`, `docker-compose.yml:64` `NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}` (Docker 빌드는 이 값을 쓰지 않음) |
 
 ### 3.7 쓰이지 않는 코드
-| ID | 심각도 | 결함 | 근거 | 검증 |
-| :--- | :---: | :--- | :--- | :---: |
-| D-42 | Minor | 프론트: `WebhookSettingsModal`, `ThemeToggle`(테스트만 쓴다), `src/lib/env.ts`, api 함수 `askQuestionAboutNews`·`deleteAllNews`·`discoverSources`·`registerCandidate`·`sendBriefingToWebhook`, 타입 `DailyBriefingSchema`, localStorage 키 `agentlens_webhook_url`, 넘기는 화면이 없는 prop `HotkeyListener` 의 `onCloseOverlays`·`onToggleCommandPalette`·`customHotkeys` 와 `NewsCard`·`NewsDetailModal` 의 `onHandoverToChat` | `frontend/src/components/`, `frontend/src/lib/` | 코드 |
-| D-43 | Minor | 백엔드: `AgenticSearchService`(만들기만 하고 부르지 않음), `generate_structured_summary`, UI 가 부르지 않는 API `/api/chat/query`, `/api/chat/search`, `/api/research/discover`, `/api/research/register-candidate`, `POST /api/sources/github`, `/api/mcp/info`, `/api/webhook/send-briefing`, `/api/briefing/generate`, `GET /api/news/{id}`, `POST /api/news/{id}/ask`, `DELETE /api/news/all` | `backend/app/services/agentic_search.py:221-246`, `backend/app/api/` | 코드 |
+| ID | 심각도 | 결함 | 상태 | 확인 |
+| :--- | :---: | :--- | :---: | :--- |
+| D-42 | Minor | 프론트 미사용 코드 | **해결** | 코드: `WebhookSettingsModal`·`ThemeToggle`·`askQuestionAboutNews`(스트림 아닌 것)·`deleteAllNews`·`discoverSources`·`registerCandidate`·`sendBriefingToWebhook`·`agentlens_webhook_url`·`onHandoverToChat` 0건. `DailyBriefingSchema` 는 이제 `frontend/src/lib/api.ts:119` 응답 검증에 쓰인다 |
+| D-43 | Minor | backend 미사용 코드·API | **해결** | 실행 `TC-RM-001`~`011`. 코드: `backend/app/services/agentic_search.py` 없음, `generate_structured_summary`·`AgenticSearchService` 0건 |
 
-- 결함 수 (v0.4.0): 범위 안 3.1 2건 + 3.2 14건 + 3.3 5건 + 3.4 7건 + 3.5 3건 + 3.6 5건 + 3.7 2건 = 38건, 범위 밖 3.8 5건. 합계 43건 (옛 목록 42건 + 신규 1건).
-- 결함 수 (v0.4.1): 38건 − 해결 9건 + 3.7a 10건 = 미해결 Minor 39건. 범위 밖 5건은 그대로.
+### 3.7a v0.4.1 리뷰 권장 지적에서 옮긴 결함
+| ID | 심각도 | 결함 | 상태 | 확인 |
+| :--- | :---: | :--- | :---: | :--- |
+| D-44 | Minor | 재시도가 실패한 질문을 history 에 다시 넣음 | **해결** | 단위: `frontend/src/tests/chat/ChatStreamTurn.test.tsx` FE-04 (`make check` 통과) |
+| D-45 | Minor | 깨진 localStorage 로 화면이 죽음 | **해결** | UI `TC-UI-008`, 단위 FE-17·FE-18 |
+| D-46 | Minor | 검색 대기 중 바꾼 페이지가 1로 돌아감 | **해결** | 단위 FE-35 (`feed/FeedSearch.test.tsx`) |
+| D-47 | Minor | Ask AI 도중 실패를 완료로 보임 | **해결** | UI `TC-NEWS-031`. 단위 `test_n01_ask_stream_truncated_answer_ends_with_error_event`, `test_n01_ask_stream_error_event_after_tokens_ends_with_error_event`, `test_ask_stream_partial_failure_does_not_append_fallback` |
+| D-48 | Minor | 딥 리서치 태스크 참조·실패 요약 없음 | **해결** | 코드: `backend/app/api/research.py` `_background_tasks` 보관·`add_done_callback(discard)`, `backend/app/services/deep_researcher.py:394` 실패 `last_run_summary` |
+| D-49 | Minor | `/api/chat/query`·`/search` 검증 500 | **해결** | 실행 `TC-RM-001`, `TC-RM-002` (엔드포인트 지움) |
+| D-50 | Minor | 딥 리서치 후보에 시드가 빠지고 등록된 소스를 안 거름 | **해결** | 코드: `backend/app/services/deep_researcher.py:170` 등록된 `site_url` 수집, `:316` 등록 여부 검사. 백엔드 리뷰 11.3절 해결 판정 |
+| D-51 | Minor | 비스트림 Anthropic `stop_reason` 무시 | **해결** | 코드: `backend/app/services/llm_providers/anthropic_provider.py:236` 비스트림 `max_tokens` → 예외, `:333-334` 스트림 |
+| D-52 | Minor | 다른 세션 메시지 id 를 조용히 건너뜀 | **해결** | 실행 `TC-CHAT-029` (400 `details.message_ids`) |
+| D-53 | Minor | `github/{아무 값}/toggle` 이 유형 전체 토글 | **해결** | 실행 `TC-SRC-012`. 코드 `backend/app/services/sources_service.py:209` `item_id == "all"` 만 |
 
-### 3.7a v0.4.1 에서 더한 결함 (리뷰가 남긴 권장 지적과 회귀 QA 관찰)
-리뷰 두 건(`docs/backend-code-reviewer/01_CODE_REVIEW_REPORT.md`, `docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md`)이 APPROVED 로 남긴 권장 지적을 QA 결함으로 옮겼다. 근거·재현은 각 리뷰 보고서의 해당 ID 절에 있고, QA 는 D-49·D-53 만 실행으로 확인했다.
+### 3.7b 리뷰 새 지적 (v0.4.2 재리뷰) 확인
+| 지적 | 상태 | 확인 |
+| :--- | :---: | :--- |
+| N-08 휴리스틱 폴백 답 캐시 | 해결 | 단위 `test_n08_heuristic_fallback_answer_is_not_cached` |
+| N-09 모든 응답 시각 UTC 오프셋 | 해결 | 실행 `TC-TIME-001`, `TC-TIME-003`, `TC-CHAT-027`·`028`, `TC-SRC-014`. 단위 `test_n09_*` |
+| N-10 메일 대시보드 링크 | 해결 | 단위 `test_email_dashboard_link_uses_public_web_url` (메일은 보내지 않음) |
+| N-11 m003 옛 행 보정 | 해결 | 실행(사본): `user_version` 3, 미래 시각 0행, `rss`·`rss_kr` 합성 지표 0, 인기 점수 100 은 3행 |
+| N-12 `make collect` 의 다른 프로세스 | 해결 | 실행 `TC-COLL-009` |
+| M003-01 GitHub 실제 지표 보존 | 해결 | 실행: 사본의 GitHub 카드에 실제 별(예 `affaan-m/ECC` 277,217)·포크가 보인다. 스크래치의 m003 적용 전 사본(`user_version` 2)은 GitHub 2,510행 중 `raw_score=0` 1,567행, 지금 사본은 2,529행 중 1,131행(줄었다). 백엔드 리뷰 11.12절 |
+| ARCH-03R 실패 업서트 뒤 부분 변경 | 해결 | 실행 `TC-CHAT-029b`, 단위 `test_arch03r_*` 2개 |
+| CFG-02R `TESTING` 설정 | 해결 | 코드: `grep TESTING backend/app` 0건, 단위 `test_cfg02r_testing_setting_is_removed` |
+| TEST-07·TEST-08 | 해결 | 코드: `backend/tests/conftest.py:8` 실행마다 `mkdtemp`, `:12-15` 세션 끝에 삭제 |
+| FE-36 모바일 챗 입력창 밀림 | 해결 | UI `TC-CHAT-033`, `TC-CHAT-035` |
+| FE-37 인용 팝오버 키보드 | 해결 | UI `TC-CHAT-034` |
+| FE-38 챗 SSE `any` | 해결 | 코드: `frontend/src/lib/contract.ts` `ChatSsePayloads` |
+| FE-39 스케줄 오류 상태 | 해결 | UI `TC-COLL-010`, `TC-COLL-011` |
+| FE-40 세션 전환 실패 | 해결 | 단위 `chat/ChatSessionParam.test.tsx` FE-40 |
+| FE-41 이관 기사 오류 문구 | 해결 | UI `TC-CHAT-016`, `TC-CHAT-037` |
+| FE-42 Ask AI 파서 `any` | 해결 | 코드: `frontend/src/lib/api.ts:192` 캐스트 없음, `frontend/src/lib/contract.ts:89` 반환 타입 `NewsAskSseEvent \| null` |
+| FE-30 소스 대화상자 Error·Empty | 해결 | UI `TC-SRC-019`, `TC-SRC-020` |
+| TEST-05 (기록) | 조치 없음 | v0.1.0~v0.3.1 의 Red→Green 순서 기록 문제. 결함으로 세지 않는다 |
 
-| ID | 심각도 | 결함 | 근거 | 검증 |
-| :--- | :---: | :--- | :--- | :---: |
-| D-44 | Minor | 재시도가 실패한 질문을 history 에 한 번 더 넣는다 | 프론트 리뷰 FE-04 | 리뷰 |
-| D-45 | Minor | 북마크·세션 목록 localStorage 값이 배열이 아니면 화면이 렌더 오류로 죽는다 | 프론트 리뷰 FE-17, FE-18 | 리뷰 |
-| D-46 | Minor | 검색 디바운스(300ms)를 기다리는 동안 페이지를 옮기면 그 뒤 검색 반영이 페이지를 1로 되돌린다 (D-14 수정의 부수 문제) | 프론트 리뷰 FE-35 | 리뷰 |
-| D-47 | Minor | 기사 Ask AI 스트림이 도중 실패·`max_tokens` 때 `error` 이벤트 없이 끝나 프론트가 받은 글자를 완료된 답으로 보인다 (D-13 수정 뒤 남은 것) | 백엔드 리뷰 N-01, `backend/app/services/llm_processor.py:917-919`, `:950-951` | 리뷰 |
-| D-48 | Minor | 딥 리서치 예외가 호출자로 올라가는데 `run-deep` 이 `asyncio.create_task` 참조를 보관하지 않고 실패 요약을 남기지 않는다 | 백엔드 리뷰 N-02, `backend/app/api/research.py:87` | 리뷰 |
-| D-49 | Minor | `/api/chat/query`·`/api/chat/search` 는 검증 실패가 여전히 500 이다 | 백엔드 리뷰 N-03. 재현: `curl -X POST http://localhost:18000/api/chat/query -H 'Content-Type: application/json' -d '{"question":"x","model_tier":"ultra"}'` → 500 `ERR_SERVER_INTERNAL` | 실행 |
-| D-50 | Minor | 딥 리서치 발굴 후보가 컷보다 많으면 시드가 평가되지 않고, 이미 등록된 소스를 거르지 않는다 (D-10 수정 뒤 남은 것) | 백엔드 리뷰 N-04, `backend/app/services/deep_researcher.py:403-419` | 리뷰 |
-| D-51 | Minor | 비스트림 Anthropic 경로는 `stop_reason` 을 보지 않는다 (D-12 의 스트림 쪽만 해결) | 백엔드 리뷰 N-05 | 리뷰 |
-| D-52 | Minor | 클라이언트 메시지 id 가 다른 세션에 이미 있으면 저장을 건너뛴다 | 변경 요약(BUG-02R 남은 지적) | 리뷰 |
-| D-53 (신규, 회귀 QA) | Minor | `PATCH /api/sources/github/{아무 값}/toggle` 이 `item_id` 를 보지 않고 GitHub 소스 유형 전체(`github_sources.enabled`)를 토글하며, 없는 id 도 `소스 상태가 변경되었습니다 (github / owner/repo)` 200 으로 답한다. v0.4.1 의 `{item_id:path}` 로 슬래시가 든 값도 이 경로에 맞게 됐다 | `backend/app/services/sources_service.py:185-189`, `backend/app/api/sources.py:77-82`. 재현: `curl -X PATCH http://localhost:18000/api/sources/github/owner/repo/toggle` → 200, 루트 `sources.json` 의 `github_sources.enabled` 가 `false` 로 바뀜 (회귀 QA 에서 그 파일만 `git checkout -- sources.json` 으로 되돌림) | 실행 |
+### 3.7c 이번 회귀에서 새로 찾은 결함
+| ID | 심각도 | 결함 | 영향 | 근거 | 재현 절차 (1차 회귀) | 상태 |
+| :--- | :---: | :--- | :--- | :--- | :--- | :---: |
+| D-54 | Minor | 지운 `POST /api/sources/github` 가 404 가 아니라 307 리다이렉트(`location: /api/sources/github/`, 본문 없음)를 주고, 따라가면 405 `ERR_METHOD_NOT_ALLOWED` 였다. FSD 는 404 `ERR_NOT_FOUND` 로 정했다 | 화면은 이 경로를 부르지 않아 사용자 영향은 없었다. 원인은 FastAPI 기본 `redirect_slashes` 가 끝 `/` 를 붙인 경로가 `DELETE /api/sources/{source_type}/{item_id:path}` 에 맞는다고 보고 리다이렉트한 것 | 명세 `docs/spec-writer/fsd/05_SOURCES_AND_RESEARCH_SPECIFICATION.md:381`, 수정 `backend/app/main.py:50-52` `FastAPI(…, redirect_slashes=False)` | `curl -i -X POST http://localhost:28000/api/sources/github -H 'Content-Type: application/json' -d '{}'` → (수정 전) `HTTP/1.1 307` / (수정 뒤) `404 {"error_code":"ERR_NOT_FOUND",…}` | **해결** (실행 `TC-RM-008`·`012`, 단위 `test_deleted_endpoints_answer_404_or_405_without_redirect`) |
+
+- 결함 수: v0.4.1 미해결 Minor 39건 → 해결 39건, 1차 회귀 신규 1건(D-54) → 해결 = **미해결 0건**. 범위 밖 5건은 그대로.
+- 동작 변화 (결함 아님): `redirect_slashes=False` 라 끝 슬래시를 붙인 호출(`GET /api/news/` 등)은 이제 리다이렉트 없이 404 다. 화면·`qa_runner.py`·`scripts/collect.py`·`Makefile` 은 끝 슬래시를 쓰지 않는다.
 
 ### 3.8 범위 밖(수용된 위험)
-제품 오너 결정 (2026-11-09, 계획 1.4): 아래 결함은 검사 범위 밖이며 수용된 위험이다. 심각도를 매기지 않고 판정에 세지 않는다. 사실·근거·재현 절차는 처음 기록 그대로 둔다. 처음 판정의 심각도는 모두 Critical 이었다.
+제품 오너 결정 (2026-11-09, 계획 1.4). 심각도를 매기지 않고 판정에 세지 않는다. 이번 회귀에서 검사하지 않았고, 사실은 아래처럼 남긴다.
 
-| ID | 분류 | 결함 | 영향 | 근거 | 재현 절차 | 검증 |
-| :--- | :---: | :--- | :--- | :--- | :--- | :---: |
-| D-01 | 범위 밖(수용, OOS-1) | 인증이 없고 CORS 가 모든 origin 을 credentials 와 함께 허용한다 | :8000 에 닿는 누구나, 그리고 사용자가 연 아무 웹 페이지의 스크립트가 `DELETE /api/news/all`, `POST /api/schedule/reset-and-collect`, 소스 삭제·토글, 설정 저장을 부르고 응답(설정 포함)을 읽을 수 있다 | `backend/app/main.py:50-56` (`allow_origins=["*"]`, `allow_credentials=True`), `backend/app/api/news.py:96-97`, `backend/app/api/schedule.py:69` | `curl -i -X OPTIONS http://localhost:18000/api/news/all -H 'Origin: https://evil.example' -H 'Access-Control-Request-Method: DELETE'` → 200, `access-control-allow-origin: https://evil.example`, `allow-credentials: true` | 실행 |
-| D-02 | 범위 밖(수용, OOS-2) | 호출자가 준 URL·SMTP 호스트로 서버가 요청을 보낸다 (웹훅 테스트·발송, `inspect-url`, `test/email`) | SSRF. D-01 과 겹쳐 외부 웹 페이지가 서버를 시켜 내부망 주소에 요청하고 `inspect-url` 결과(피드 항목)를 읽을 수 있다 | `backend/app/services/webhook_service.py:17-19` (`http` 로 시작하는지만 봄), `backend/app/api/webhook.py:19-43`, `backend/app/api/research.py:24-33` → `backend/app/services/source_researcher.py:179`, `backend/app/api/briefing.py:102-114` → `backend/app/services/email_service.py:158-164` | `POST /api/research/inspect-url` 에 `{"url":"http://<내부 주소>"}` 를 보내면 서버가 그 주소로 GET 한다 (이번 QA 에서는 외부 호출이라 보내지 않음) | 코드 |
-| D-03 | 범위 밖(수용, OOS-3) | Notion 토큰·SMTP 비밀번호·웹훅 URL 을 git 이 추적하는 `config.json` 에 평문 저장한다 | 비밀값 유출 (화면에서 저장하면 추적 파일에 들어가 커밋될 수 있다). Docker 는 루트 `config.json` 을 rw 로 마운트한다. 지금 커밋된 값은 비어 있다 | `backend/app/api/briefing.py:161-209` (`save_json_config` `:207`), `backend/app/config.py:161-173`, `docker-compose.yml` backend `volumes` | 공유 & 알림 설정에서 Notion 토큰 저장 → `git diff config.json` 에 평문 토큰 (이번 QA 에서는 저장하지 않음) | 코드 |
-| D-04 | 범위 밖(수용, OOS-4) | `GET /api/briefing/settings` 가 웹훅 URL 을 가리지 않고, Notion 토큰 앞뒤 4자를 돌려준다 | 비밀값 노출. D-01 때문에 다른 origin 의 페이지도 읽을 수 있다 | `backend/app/api/briefing.py:128` (`k[:4] + "..." + k[-4:]`), `:154-155` (웹훅 URL 그대로) | 웹훅 URL 을 저장한 상태에서 `curl http://localhost:18000/api/briefing/settings` → `webhooks.slack_webhook_url` 원문 | 코드 (조회는 실행, 지금 값이 비어 있음) |
-| D-08 | 범위 밖(수용, OOS-5) | 브리핑 설정 저장 뒤 `settings.reload()` 가 Notion·SMTP 값을 다시 읽지 않는다 | 화면에는 새 값이 보이지만 재시작 전까지 옛 토큰·수신자로 발송한다 (잘못된 대상 발송) | `backend/app/config.py:80-91` (필드 기본값을 클래스 정의 때 `_json_data` 에서 한 번 계산), `:153-157` (`reload` 는 `_json_data` 만 바꾸고 `__init__` 을 다시 부름) | SMTP 수신자를 A 로 저장해 둔 backend 에서 B 로 바꿔 저장 → `이메일 발송` → A 로 간다 | 코드 |
+| ID | 분류 | 결함 | 이번 회귀의 사실 |
+| :--- | :---: | :--- | :--- |
+| D-01 | 범위 밖(수용, OOS-1) | 인증 없음, CORS 가 모든 origin 을 credentials 와 함께 허용 | `backend/app/main.py` `CORSMiddleware(allow_origins=["*"], allow_credentials=True)` 그대로. 옛 재현 경로 `DELETE /api/news/all` 은 지워졌고(`TC-RM-005`), 초기화(`reset-and-collect`)·소스 변경·설정 저장 경로는 남아 있다 |
+| D-02 | 범위 밖(수용, OOS-2) | 호출자가 준 URL·SMTP 호스트로 서버가 요청 (SSRF) | 웹훅 테스트·`inspect-url`·`test/email` 경로 그대로. 실행하지 않았다 |
+| D-03 | 범위 밖(수용, OOS-3) | Notion 토큰·SMTP 비밀번호·웹훅 URL 을 추적 파일 `config.json` 에 평문 저장 | 그대로. 지금 `config.json` 의 해당 값은 모두 비어 있다(길이만 확인) |
+| D-04 | 범위 밖(수용, OOS-4) | 설정 조회가 웹훅 URL·Notion 토큰 일부를 돌려줌 | 그대로 (`TC-BRF-002` 는 값이 비어 있어 노출 여부를 보지 않음) |
+| D-08 | 범위 밖(수용, OOS-5) | 설정 저장 뒤 Notion·SMTP 값 재적용 누락 | 실행하지 않았다 (설정 저장은 하지 않음) |
 
-### 3.9 결함 외 관찰
-- 트렌드 레이더: `GET /api/trends/radar` 가 `total_analyzed: 5` 인데 카테고리 `count` 가 모두 0 이고 `surging_tags` 가 비어, 화면에 레이더 버튼이 없고 `ui-audit` 의 레이더 펼침 10조합이 건너뛰어졌다. 집계 기준(기간·태그 규칙)이 이 데이터와 맞지 않는 것인지 확인하지 못했다 (집계 값 테스트 공백은 계획 6.7).
-- 챗 추천 질문 4개(`FastMCP로 파이썬 기반 경량 MCP 서버 구축하는 방법` 등)는 수집 데이터와 상관없는 고정 문구다.
-- 하네스 파일 변경 — **결함 아님**: QA 실행 중과 직후에 추적 파일(`.claude/agents/*.md` 10개, `.claude/rules/*.md` 3개, `.claude/skills/*/SKILL.md` 5개, `CLAUDE.md`, `README.md`)이 바뀌었다. 메인 세션의 의도된 작업이다(메인 세션 확인). QA 는 이 파일들을 건드리지 않았고 되돌리지 않았다. 루트 `config.json`·`sources.json`·`backend/app/config/sources.json` 은 바뀌지 않았다.
+### 3.9 관찰 (결함 아님)
+| ID | 구분 | 관찰 | 근거 |
+| :--- | :--- | :--- | :--- |
+| O-1 | 데이터 조건 | 사용자 DB 의 옛 세션 제목 2개 `⚡ 최근 24시간 내 가장 주목받은 에이전트 오픈소스 ...`(10월 19일)가 챗 사이드바에 그대로 보여 `ui-audit` `pictograph` 4조합이 실패한다. 지금 코드는 세션 제목에 이모지를 만들지 않는다(그 두 세션을 사본에서 지우면 160/160 통과). 사용자가 그 대화를 지우면 사라진다 | `ui-audit/report.json` failures 4건, 사본 `chat_sessions` 29행 중 2행 |
+| O-2 | 데이터 조건 | 날짜 없는 피드(요즘IT, `rss_kr` 36행)는 `published_at` 이 수집 시각(마이크로초 단위)이다. 피드 시간 순서가 실제 글 날짜와 다를 수 있다 | 사본 `news_items` `author='요즘IT'` 의 `published_at` ≈ `created_at` |
+| O-3 | 데이터 조건 | 9시간보다 오래된 글만 있는 KST 피드(토스 테크 5행, 네이버 D2 5행, 모두 10행)는 m003 이 KST 로 저장됐는지 판정할 수 없어 보정하지 않았다. 최대 9시간 늦게 보일 수 있다. 미래 시각 행은 0이다 | 변경 요약 N-11, 사본 `rss_kr` 저자별 집계 |
+| O-4 | 데이터 조건 | 수집한 GitHub 저장소 설명 원문에 그림 이모지가 있어(예 `🎨`, `🔥`, `🤯`, `🌊`) 피드 카드 제목·요약과 브리핑 항목에 보인다. backend 고정 문자열은 이모지가 없다 | `TC-BRF-007`, 피드 스냅샷 |
+| O-5 | 동작 | `scheduler.enabled=false` 로 띄워도 헤더·스케줄 대화상자가 `다음 수집 24m 후` 처럼 다음 시각을 보인다. FSD 03 이 "작업이 없으면 `timezone` 기준으로 오늘 남은 첫 시각" 으로 정한 동작이라 결함으로 세지 않는다. 스케줄러를 끈 환경에서는 실제로 수집하지 않으므로 오해할 수 있다 | `docs/spec-writer/fsd/03_COLLECTION_SPECIFICATION.md:1161`, `backend/app/scheduler.py` `get_next_run_time` |
+| O-6 | 동작 | 세션 상세·삭제의 404 메시지에 요청 경로의 세션 id 가 그대로 들어간다 (`ID not-uuid에 해당하는 대화 세션을 찾을 수 없습니다.`). JSON 응답이고 화면은 404 를 `null` 로 처리해 이 문장을 그리지 않는다. 스트림 `session_id` 는 echo 하지 않는다 | `TC-CHAT-026`, `backend/app/api/chat.py:202`, `:218` |
 
----
-
-## 4. v0.4.1 회귀 실행 결과 (Regression)
-
-리뷰 수정(v0.4.1, 커밋 전 작업 트리)을 다시 빌드한 이미지로 확인했다. 변경 요약은 코디네이터가 전달한 v0.4.1 코드 변경 요약(프론트 FE-01·02·03·09·22·33·34, BUG-02R, 백엔드 BUG-02~08)이다.
-
-### 4.1 환경
-| 항목 | 값 |
-|---|---|
-| 빌드 | `make docker-build` (23:47:29~23:47:41) → `BACKEND_PORT=18000 make docker-up`, 두 컨테이너 healthy. 호스트 8000 은 건드리지 않았다 |
-| 코드 일치 | backend 컨테이너 `/app/app` = 작업 트리 `backend/app` (`diff -rq` 차이 없음). frontend 번들 `/app/.next/static` 에 `Notion 동기화` 0개 파일, `응답이 중간에 끊겼습니다` 가 든 파일 1개 |
-| 데이터 | 볼륨 `agentlens-data` 의 기사 5건 그대로 |
-| LLM | Docker backend 에는 LLM 키가 있다. 실제 LLM 호출이 나가는 챗·Ask AI 정상 경로는 보내지 않고, 스트림 경로는 단위 테스트로 근거를 단다 |
-
-### 4.2 스모크·API 시나리오
-| 항목 | 결과 | 응답 속도 | 비고 |
-| :--- | :---: | :---: | :--- |
-| `qa_runner.py --base-url http://localhost:18000 --frontend-url http://localhost:3001` | **PASS 17/17** | 1~11ms | 종료 0 |
-| API 시나리오 스크립트(v0.4.0 과 같은 케이스, 스크립트 버그 2건 고침) | **PASS 48/49** | 0~11ms | 실패 1건은 `TC-SEC-001` 을 헤더 없이 부른 405 (범위 밖, 판정 안 함). `TC-NEWS-001` 은 본문 전체를 읽게 고쳐 PASS, `TC-BRF-003` 은 `webhook_url` 로 고쳐 PASS |
-
-### 4.3 바뀐 동작 회귀 케이스
-| 케이스 ID | 테스트 항목 | 실행 결과 | 응답 속도 | 근거 / 비고 |
-| :--- | :--- | :---: | :---: | :--- |
-| `TC-SRC-005` | GitHub 저장소 `owner/repo` 토글 | **PASS** | 10ms / 8ms | `PATCH /api/sources/github_repo/modelcontextprotocol/servers/toggle` → 200, `enabled: false` → 다시 200, `enabled: true`(원상 복구). 없는 저장소 `github_repo/no/such` → 404 (2ms). 루트 `sources.json` 은 `updated_at` 이 바뀌고, 관찰 D-53 호출로 `github_sources.enabled` 도 `false` 가 돼 그 파일만 `git checkout -- sources.json` 으로 되돌렸다 (md5 `18aaddac…` 처음과 같음). D-15 해결 |
-| `TC-CHAT-007` | 잘못된 `model_tier` → 400 | **PASS** | 8ms | `/api/chat/stream` `{"question":"x","model_tier":"ultra"}` → 400 `{"error_code":"ERR_INVALID_MODEL_TIER","message":"유효하지 않은 모델 티어입니다: ultra","details":null}`. scoped 없는 기사(`source_id: 999999999`)와 함께 보내도 400 `ERR_INVALID_MODEL_TIER` (검증이 기사 확인보다 먼저). D-32 해결(`/stream`). `/api/chat/query` 는 500 (D-49) |
-| `TC-CHAT-020` | 스트림 본문 형식 | **PASS** | 2~3ms | 본문 `[1,2]` → 400 `ERR_INVALID_PAYLOAD` `요청 본문은 JSON 객체여야 합니다.`, 같은 `user_message_id`·`assistant_message_id` → 400 `ERR_INVALID_PAYLOAD`, 37자 id → 400 `ERR_INVALID_PAYLOAD`, 모두 `details: null`. 빈 질문은 여전히 400 `ERR_CHAT_PAYLOAD_EMPTY`. `GET /api/chat/stream` 은 405 (D-28 그대로) |
-| `TC-NEWS-023` | 피드 검색 디바운스·1페이지 | **PASS** | - | Playwright 1440x900, `fetch` 기록. 150ms 간격으로 `M`→`MC`→`MCP` 입력 → 마지막 입력 305ms 뒤 요청 1번 `/api/news?search=MCP&sort=hot&page=1&size=18`. 한 번에 `agent` 입력 → 마지막 입력 311ms 뒤 요청 1번 `page=1`, 카드 3장. 2페이지 이상의 1페이지 복귀는 데이터 5건이라 `feed/FeedSearch.test.tsx`(2개 통과)로 근거. D-14 해결 |
-| `TC-CHAT-019` | 챗 내보내기에 Notion 동기화 없음 | **PASS** | - | 임시 세션(`7a1e0c4e-0000-4000-8000-0000000000a1`, 사용자 질문 1 + 완료 답 1)을 `POST /api/chat/sessions` 로 만들고 `/chat` 에서 열었다. 답 아래 버튼은 `답변 복사`, `마크다운 복사`, `.md 다운로드` 이고 `Notion` 이 든 버튼은 0개. 끝나고 `DELETE /api/chat/sessions/{id}` 200 으로 지웠다(세션 목록 `[]`). `ExportToolbar.test.tsx` 4개 통과 |
-| `TC-CHAT-018` | 모델을 바꾼 직후 전송 | **PASS** (단위 테스트) | - | `chat/ChatStreamTurn.test.tsx` FE-01 통과, 코드 `frontend/src/components/chat/ChatWorkspace.tsx:470` 의존성 배열에 `selectedTier`. D-11 해결 |
-| `TC-CHAT-021` | 끊긴·오류 스트림, 한 턴 저장 | **PASS** (단위 테스트) | - | backend `test_code_review_fixes.py` 27개 통과: `test_chat_stream_truncated_answer_ends_with_error_not_done`, `test_chat_stream_anthropic_error_event_ends_with_error_not_done`, `test_chat_stream_end_turn_still_completes`, `test_stream_with_client_ids_then_session_post_saves_each_turn_once`, `test_stream_after_session_post_with_same_ids_does_not_duplicate`, `test_stream_persists_turn_before_done_event`, `test_session_upsert_with_existing_message_ids_is_idempotent`, `test_ask_stream_partial_failure_does_not_append_fallback` 등. frontend `ChatStreamTurn.test.tsx` 8개(FE-02 POST 1번·StrictMode, FE-03 끊김 저장 안 함, BUG-02R id 두 개·재시도 새 id, FE-33 부분 답 아래 끊김 오류, FE-34 중단) 통과. D-07, D-12, D-13 해결 |
-| `TC-SRC-006` | 딥 리서치 예외 뒤 재실행 | **PASS** (단위 테스트) | - | `test_deep_research_resets_running_flag_on_error`, `test_deep_research_evaluates_mined_candidates` 통과. 코드 `backend/app/services/deep_researcher.py:391-393` (`finally: self.is_running = False`), `:403-419` (발굴 후보 먼저). D-09, D-10 해결 |
-
-- 단위 테스트 실행: `cd backend && ../.venv/bin/pytest -q tests/test_code_review_fixes.py` → 27 passed (1.11s). `cd frontend && pnpm exec vitest run src/tests/chat/ChatStreamTurn.test.tsx src/tests/feed/FeedSearch.test.tsx src/tests/chat/ExportToolbar.test.tsx src/tests/chat/ContractAndMsw.test.ts` → 4 파일 94 passed. 전체 `make check` 는 이번 QA 에서 돌리지 않았다. `pytest --collect-only` 로 backend 244개·파일 22개, frontend 테스트 파일 54개를 셌다.
-- `ui-audit.mjs` 는 회귀에서 다시 돌리지 않았다 (바뀐 화면은 챗 내보내기 도구줄과 끊김 오류 표시뿐이고 둘 다 위에서 확인했다. 최초 QA 의 160조합 결과는 v0.4.0 기준).
-
-### 4.4 해결된 결함
-| ID | 결함 | 확인 방법 |
-| :--- | :--- | :--- |
-| D-07 | 챗 한 턴 중복 저장·PK 충돌 500 | 단위 테스트 (클라이언트 id 공유, 메시지 id 중복 건너뛰기) |
-| D-09 | 딥 리서치 `is_running` 미복구 | 단위 테스트, 코드 |
-| D-10 | 시드가 앞에 있어 발굴 후보 미평가 | 단위 테스트, 코드 (남은 것 D-50) |
-| D-11 | 모델 변경 직후 이전 티어로 전송 | 단위 테스트, 코드 |
-| D-12 | `done` 없는 스트림을 완료로 표시, `stop_reason` 무시 | 단위 테스트 (남은 것 D-51: 비스트림) |
-| D-13 | Ask AI 부분 답 뒤 대체 답 이어 붙임 | 단위 테스트 (남은 것 D-47) |
-| D-14 | 검색 한 글자마다 요청, 페이지 미복귀 | 실행 (Playwright fetch 기록) + 단위 테스트 (남은 것 D-46) |
-| D-15 | `owner/repo` 토글·삭제 404 | 실행 (curl 토글 두 번) + 단위 테스트 |
-| D-32 | 잘못된 `model_tier` 500 | 실행 (`/stream` 400) (남은 것 D-49: `/query`·`/search`) |
-- 부분 해결: D-25 의 챗 `Notion 동기화` 모의 버튼은 사라졌다 (`TC-CHAT-019`). Ask AI "Gemini" 표기, 딥 리서치 "LLM 평가", "핵심 요약 3줄" 은 남았다.
-
-### 4.5 회귀 관찰
-- Docker 는 루트 `sources.json` 을 파일 하나로 bind mount 한다. 호스트에서 `git checkout -- sources.json` 으로 파일을 바꾸면 실행 중인 컨테이너 안 `/app/sources.json` 이 사라졌다(`No such file or directory`). 컨테이너를 다시 띄우면 돌아온다. 이번에는 바로 `make docker-down` 했다.
-- `/chat?sessionId=<id>` 로 열어도 그 세션이 자동으로 선택되지 않아 사이드바에서 눌러 열었다. FSD 02 가 이 쿼리를 정의하는지는 확인하지 않았다.
+- 변경 요약이 적은 다른 관찰(global 모드 출처가 토큰 뒤라 스트리밍 중 `[1]` 을 누를 수 없음, `/api/schedule/status`·`/progress` 의 `is_running` 은 이 프로세스 수집만)도 이번 실행과 맞다(`TC-COLL-003`: 다른 프로세스가 잠금을 쥔 동안 `is_running: false`, `last_crawl_status: idle`).
+- `trigger` 는 `is_busy()` 로 잠금을 잠깐 쥐었다 놓고 백그라운드 `collect_all` 이 다시 쥔다. 그 사이 다른 프로세스가 잠금을 쥐면 API 는 `started` 라고 답하고 실제 수집은 `already_running` 으로 조용히 끝난다 (코드 `backend/app/api/schedule.py`, `backend/app/collectors/manager.py:245-248`. 실행으로 재현하지 않았다). 수집이 겹치지는 않으므로 데이터 영향은 없다.
 
 ---
 
-## 5. 최종 QA 출시 판정 (Sign-off)
+## 4. 최종 QA 출시 판정 (Sign-off)
 
-- **QA 판정 결과**: **RELEASE_APPROVED (출시 승인)** — v0.4.1 회귀 QA 기준
-- **근거**: 범위 안 결함 Blocker 0건, Critical 0건, Minor 39건 미해결(v0.4.0 의 9건 해결, 리뷰 권장 지적 9건·회귀 관찰 1건 추가). 회귀 케이스 8건 모두 PASS, 스모크 17/17, 회귀 대상 단위 테스트 121개 통과. 범위 밖(수용) 5건(D-01 인증 없음·CORS 전체 허용, D-02 SSRF, D-03 비밀값 평문 저장, D-04 설정 조회의 비밀값 노출, D-08 설정 재적용 누락)은 판정에 세지 않는다.
-- **판정 이력**: ① v0.4.0 최초 판정 `RELEASE_BLOCKED` (Critical 5건 = 위 다섯 건). ② 2026-11-09 제품 오너가 이 다섯 항목을 검사 범위 밖(수용된 위험)으로 정해(계획 1.4) v0.4.0 을 `RELEASE_APPROVED` 로 다시 판정 (Minor 38). ③ v0.4.1 회귀 QA 뒤 `RELEASE_APPROVED` 유지 (Minor 39, 해결 9). 실행 결과·결함 사실은 바꾸지 않았다.
-- **소견**: 데이터를 지우거나 밖으로 보내지 않는 범위의 기능 흐름(피드 표시·필터·검색·정렬, 기사 상세, 챗 화면·입력 검증·LLM 없음 503, 브리핑 대화상자, 소스·리서치 조회, MCP 정보, 테마, 5개 폭·두 테마 화면 규칙 21종)은 모두 기대대로 동작했다 (시나리오 58건 통과, 스모크 17/17, `ui-audit` 실패 0). 실패 9건은 모두 Minor 결함(D-05, D-09, D-11, D-14, D-15, D-18, D-32, D-40, D-41)에 대응한다. 미실행 3건(네트워크 단절, 수집 중 재요청, 빈 DB 시작)은 이번 환경에서 검증하지 못했으므로 다음 QA 에서 DB 사본 backend 로 확인하기를 권한다.
-- **수용된 위험에 대한 참고**: D-01 은 실행으로 재현했다 (아무 origin 이 credentials 와 함께 `DELETE /api/news/all` preflight 를 통과). backend 를 신뢰할 수 없는 네트워크에 노출하지 않는 것이 이 수용의 전제다.
+- **QA 판정 결과**: **RELEASE_APPROVED (출시 승인)** — v0.4.2 회귀 QA 기준
+- **근거**: 범위 안 Blocker 0건, Critical 0건, Minor 0건. v0.4.1 의 미해결 Minor 39건, v0.4.2 리뷰 새 지적, 1차 회귀의 D-54, 마지막 수정 항목을 모두 확인했다. 마지막 작업 트리 기준 130건 모두 통과, 스모크 16/16, `make check` 종료 0(backend 418, frontend 833), `ui-audit` 코드 기준 160/160(사용자 데이터 그대로는 데이터 조건 4건, 관찰 O-1). 범위 밖(수용) 5건은 판정에 세지 않는다.
+- **판정 이력**:
+
+| 차수 | 날짜 | 기준 | 판정 | 내용 |
+| :---: | :--- | :--- | :---: | :--- |
+| ① | 2026-11-09 | v0.4.0 최초 QA | `RELEASE_BLOCKED` | Critical 5 (D-01·D-02·D-03·D-04·D-08), Minor 38 |
+| ② | 2026-11-09 | v0.4.0 재판정 | `RELEASE_APPROVED` | 제품 오너가 그 다섯 항목을 검사 범위 밖(수용된 위험)으로 정함. Minor 38 |
+| ③ | 2026-11-09 | v0.4.1 회귀 QA | `RELEASE_APPROVED` | Minor 39 (해결 9, 추가 10) |
+| ④ | 2026-11-10 14:50 | v0.4.2 1차 회귀 QA | `RELEASE_APPROVED` | Minor 39 해결, 신규 Minor 1 (D-54). 122건 중 121 통과 |
+| ⑤ | 2026-11-10 15:07 | v0.4.2 마지막 확인 | `RELEASE_APPROVED` | D-54 해결, 마지막 수정 확인. Minor 0. 130건 모두 통과, `make check` 418 / 833 |
+
+- **소견**: 사용자 보고 FE-36(모바일 챗에서 답이 길어지면 입력창이 밀려 올라감)은 네 폭에서 스트리밍 내내 입력창 위치가 그대로였고, 가상 키보드처럼 뷰포트를 줄여도 입력창이 화면 안에 있었다(마지막 빌드에서 다시 확인). 오류 형식은 확인한 모든 경로에서 `{error_code, message, details}` 로 같았고 422·307 은 없었다. 수집 잠금은 다른 프로세스가 쥔 동안 `trigger`·`reset-and-collect`·`make collect`(API·직접 모드) 모두 수집·삭제 없이 거절했다. 남은 것은 사용자 DB 의 데이터 조건(3.9절)뿐이다.
 
 ---
 
-## 6. 정리 확인
-- `make docker-down` 으로 `agentlens-backend`·`agentlens-frontend` 컨테이너와 `agentlens-network` 를 내렸다. 볼륨 `agentlens-data` 는 남겼다 (기사 5건 그대로).
-- LLM 없는 backend(:18001)를 종료했다. DB 사본과 로그는 스크래치 폴더에만 있다.
-- `git status --porcelain` 을 시작 전과 끝난 뒤 비교했다. 추가된 것은 `?? docs/qa-engineer/`(이 보고서·계획·`ui-audit/report.json`)와 다른 에이전트의 산출물 폴더들, 바뀐 추적 파일은 3.9 의 하네스·문서 파일(메인 세션의 의도된 작업, 결함 아님)뿐이다.
-- v0.4.1 회귀 QA: 시작 전과 `make docker-down` 뒤 `git status --porcelain` 이 같다 (리뷰 수정의 `backend/`·`frontend/` 변경과 하네스·문서 변경은 시작 전부터 있던 다른 세션의 작업). 회귀 중 바뀐 루트 `sources.json` 은 그 파일만 `git checkout -- sources.json` 으로 되돌렸다 (처음 md5 와 같음). 임시 챗 세션은 API 로 지웠다. Docker 볼륨 DB 에는 그 밖의 변경이 없다. 제품 코드·설정 파일 변경은 없다.
-- Playwright 스크린샷·스냅샷은 `.gitignore` 대상인 `.playwright-mcp/` 에 남았다.
+## 5. 정리 확인
+- 두 번의 실행 모두 끝에 backend(28000)·frontend(23001) 프로세스를 내렸다 (`lsof` 로 두 포트 비어 있음 확인, 15:07). 사용자 `make dev` 의 3000·8000 은 그대로 떠 있다 (8000 의 PID 는 다른 에이전트의 코드 변경으로 `--reload` 가 다시 띄운 것이다. QA 는 건드리지 않았다). Playwright 브라우저를 닫았다.
+- 사본 DB 에서 바꾼 것: 임시 세션 생성·삭제(`TC-CHAT-027`·`032`), `ui-audit` 비교용으로 옛 `⚡` 세션 2개 삭제(두 사본 각각). 사용자 `backend/agentlens.db` 는 `.backup` 으로 읽기만 했다.
+- `git status --porcelain` 을 비교했다. 1차 시작 전과 비교해 이 QA 가 바꾼 추적 파일은 `docs/qa-engineer/01_QA_TEST_PLAN.md`, `02_QA_TEST_REPORT.md`, `ui-audit/report.json` 뿐이다(그 밖의 차이는 같은 시간에 다른 에이전트가 고친 `docs/spec-writer/*`, `frontend/src/components/chat/FocusBottomSheet.tsx` 등 마지막 수정이다). 마지막 확인 시작 전(14:57)과 끝난 뒤(15:07)의 `git status --porcelain` 은 같다 (`make check` 두 번 포함). `sources.json`·`backend/app/config/sources.json`(md5 `32ed0854…`)·`config.json`(md5 `0654cac2…`)은 처음과 같다 (사용자·버전 변경은 되돌리지 않았다). 제품 코드는 고치지 않았다.
+- 스크래치에 남긴 것: DB 사본·로그·스크립트(`api_scen.py`, `fe36.cjs`, `ui_scen.cjs`, `ui_scen2.cjs`, `ui_scen3.cjs`)·스크린샷·데이터 정리 뒤 `ui-audit` 결과. 저장소에는 넣지 않았다.

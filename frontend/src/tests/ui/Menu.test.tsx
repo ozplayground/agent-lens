@@ -5,7 +5,6 @@ import { MoreHorizontal } from 'lucide-react';
 import { MenuButton, type MenuItem } from '@/components/ui/Menu';
 import { Popover } from '@/components/ui/Popover';
 import { ThemeMenu } from '@/components/ui/ThemeMenu';
-import ThemeToggle from '@/components/ThemeToggle';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { Dialog } from '@/components/ui/Dialog';
 
@@ -140,16 +139,6 @@ describe('ThemeMenu', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true);
     fireEvent.click(trigger);
     expect(screen.getByRole('menuitemradio', { name: '다크' })).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('ThemeToggle showDropdown renders the theme menu; default stays a single toggle button', () => {
-    const { unmount } = render(<ThemeToggle showDropdown />);
-    expect(screen.getByRole('button', { name: '테마 선택' })).toHaveAttribute('aria-haspopup', 'menu');
-    unmount();
-
-    // ThemeProvider 없이도 그려진다.
-    render(<ThemeToggle />);
-    expect(screen.getByRole('button', { name: '테마 전환' })).toBeInTheDocument();
   });
 });
 

@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import List, Optional, Dict, Any, Union
+from datetime import datetime, timezone
+from typing import List, Optional, Dict, Any, Literal, Union
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 class NewsItemBase(BaseModel):
@@ -29,6 +29,12 @@ class NewsItemResponse(NewsItemBase):
     dedup_hash: str
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator("published_at", "created_at", mode="after")
+    @classmethod
+    def as_utc(cls, v: datetime) -> datetime:
+        """DB 는 UTC 를 오프셋 없이 저장한다. 오프셋을 붙여 보내야 브라우저가 현지 시각으로 읽지 않는다 (BUG-18)."""
+        return v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v.astimezone(timezone.utc)
+
 class NewsListResponse(BaseModel):
     items: List[NewsItemResponse]
     total: int
@@ -37,13 +43,8 @@ class NewsListResponse(BaseModel):
     total_pages: int
 
 class AskQuestionRequest(BaseModel):
-    question: str
-
-class AskQuestionResponse(BaseModel):
-    news_id: int
-    question: str
-    answer: str
-    model_used: Optional[str] = None
+    # 챗과 같은 한도 (PERF-07). 빈 문자열·2000자 초과는 400 ERR_INVALID_PAYLOAD
+    question: str = Field(..., min_length=1, max_length=2000)
 
 class BriefingCategoryItem(BaseModel):
     id: Optional[int] = None
@@ -146,7 +147,10 @@ class StatsResponse(BaseModel):
     last_updated: Optional[str] = None
 
 class ManualCollectResponse(BaseModel):
+    """POST /api/schedule/trigger 응답. other_process 는 already_running 일 때만 싣는다 (라우터가 exclude_unset)."""
+    status: Literal["started", "already_running"]
     message: str
+    other_process: Optional[bool] = None
     total_collected: int
     total_saved: int
     source_results: Dict[str, Any]

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { useOverlayLayer } from '@/lib/overlay-stack';
 import { getFocusableElements } from '@/hooks/useFocusTrap';
@@ -55,10 +56,37 @@ export interface PopoverProps {
   id?: string;
   className?: string;
   children?: ReactNode;
+  /**
+   * true 면 `document.body` 에 `fixed` 로 그리고 위치를 앵커 좌표로 계산한다.
+   * 문단(`<p>`) 안 인용 배지처럼 블록 요소를 둘 수 없거나 스크롤 상자에 잘리는 곳에서 쓴다 (FE-13).
+   */
+  portal?: boolean;
+}
+
+/** 포털 팝오버와 화면 가장자리·앵커 사이 간격 (px). */
+const PORTAL_GAP = 8;
+const PORTAL_VIEWPORT_MARGIN = 16;
+
+/** 앵커 좌표로 포털 팝오버 위치를 정한다. 위쪽에 자리가 없으면 아래로 뒤집고, 가로는 화면 안으로 당긴다. */
+function placePortalPanel(panel: HTMLElement, anchor: HTMLElement, side: PopoverSide, align: PopoverAlign) {
+  const rect = anchor.getBoundingClientRect();
+  const width = panel.offsetWidth;
+  const preferredLeft = align === 'end' ? rect.right - width : rect.left;
+  const maxLeft = window.innerWidth - width - PORTAL_VIEWPORT_MARGIN;
+  panel.style.left = `${Math.max(PORTAL_VIEWPORT_MARGIN, Math.min(preferredLeft, maxLeft))}px`;
+
+  const fitsAbove = rect.top - PORTAL_GAP - panel.offsetHeight >= PORTAL_VIEWPORT_MARGIN;
+  if (side === 'top' && fitsAbove) {
+    panel.style.top = '';
+    panel.style.bottom = `${window.innerHeight - rect.top + PORTAL_GAP}px`;
+  } else {
+    panel.style.bottom = '';
+    panel.style.top = `${rect.bottom + PORTAL_GAP}px`;
+  }
 }
 
 /**
- * 비모달 팝오버. 포털 없이 앵커의 `relative` 부모 안에서 `absolute` 로 그린다.
+ * 비모달 팝오버. 기본은 포털 없이 앵커의 `relative` 부모 안에서 `absolute` 로 그린다 (`portal` 이면 body 에 `fixed`).
  * 오버레이 스택에 `popover` 로 올린다 (Escape 는 맨 위만). 바깥 pointerdown 이면 닫는다.
  * Escape 로 닫거나, 닫힐 때 포커스가 안에 있었으면 앵커로 포커스를 돌려준다.
  */
@@ -74,6 +102,7 @@ export function Popover({
   id,
   className,
   children,
+  portal = false,
 }: PopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -107,9 +136,26 @@ export function Popover({
     };
   }, [open, anchorRef]);
 
+  // 포털이면 열려 있는 동안 앵커를 따라간다 (스크롤·창 크기 변화). 상태 대신 요소 style 을 바로 고친다.
+  useLayoutEffect(() => {
+    if (!open || !portal) return;
+    const place = () => {
+      const panel = panelRef.current;
+      const anchor = anchorRef.current;
+      if (panel && anchor) placePortalPanel(panel, anchor, side, align);
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, portal, side, align, anchorRef]);
+
   if (!open) return null;
 
-  return (
+  const panel = (
     <div
       ref={panelRef}
       id={id}
@@ -117,15 +163,18 @@ export function Popover({
       aria-label={label}
       tabIndex={-1}
       className={cn(
-        'absolute z-40 min-w-48 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-surface p-1 text-fg shadow-overlay outline-none motion-safe:animate-fade-in',
-        side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2',
-        align === 'end' ? 'right-0' : 'left-0',
+        'z-40 min-w-48 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-surface p-1 text-fg shadow-overlay outline-none motion-safe:animate-fade-in',
+        portal
+          ? 'fixed'
+          : cn('absolute', side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2', align === 'end' ? 'right-0' : 'left-0'),
         className
       )}
     >
       {children}
     </div>
   );
+
+  return portal ? createPortal(panel, document.body) : panel;
 }
 
 export default Popover;

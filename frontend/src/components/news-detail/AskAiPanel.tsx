@@ -18,6 +18,7 @@ import { NewsItem } from '@/types/news';
 import MarkdownViewer from '../MarkdownViewer';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { InlineAlert } from '@/components/ui/InlineAlert';
 import { ChipGroup } from '@/components/ui/Chip';
 import { Spinner } from '@/components/ui/Spinner';
 import { TextField } from '@/components/ui/TextField';
@@ -30,6 +31,8 @@ export interface ChatMessage {
   model?: string;
   time: string;
   isStreaming?: boolean;
+  /** 끊기거나 실패한 답의 오류 문구. 있으면 부분 답 아래에 오류와 다시 시도를 보인다. */
+  error?: string;
 }
 
 interface AskAiPanelProps {
@@ -44,6 +47,8 @@ interface AskAiPanelProps {
   onAsk: (queryToAsk?: string) => void;
   onCopy: (text: string, index: number) => void;
   onClearChat: () => void;
+  /** 실패한 답을 같은 질문으로 다시 요청한다. */
+  onRetry?: (index: number) => void;
 }
 
 export const QUICK_PROMPTS = [
@@ -79,8 +84,11 @@ export default function AskAiPanel({
   onAsk,
   onCopy,
   onClearChat,
+  onRetry,
 }: AskAiPanelProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
+  // 머리줄에는 마지막으로 받은 실제 응답 엔진(meta)을 보인다. 아직 없으면 엔진 이름을 짓지 않는다 (D-25).
+  const engine = [...chatHistory].reverse().find((c) => c.model)?.model;
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
   useEffect(() => {
@@ -104,7 +112,7 @@ export default function AskAiPanel({
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Bot aria-hidden="true" className="size-4 shrink-0 text-accent" />
           <span className="text-sm font-semibold text-fg">Deep-Dive AI 대화형 질의응답</span>
-          <Badge tone="success">Gemini 실시간 스트리밍 가동</Badge>
+          <Badge tone="success">{engine ? `응답 엔진: ${engine}` : '실시간 스트리밍'}</Badge>
         </div>
         {chatHistory.length > 0 && (
           <Button variant="ghost" size="sm" leadingIcon={<RotateCcw />} onClick={onClearChat}>
@@ -186,7 +194,7 @@ export default function AskAiPanel({
                           variant="ghost"
                           size="sm"
                           onClick={() => onCopy(c.a, i)}
-                          disabled={c.isStreaming || !c.a}
+                          disabled={c.isStreaming || !c.a || Boolean(c.error)}
                           title="답변 복사"
                           leadingIcon={
                             copyFailedIndex === i ? <TriangleAlert /> : copiedIndex === i ? <Check /> : <Copy />
@@ -210,7 +218,7 @@ export default function AskAiPanel({
                         </span>
                       </div>
                     </div>
-                    {c.isStreaming && !c.a ? (
+                    {c.error && !c.a ? null : c.isStreaming && !c.a ? (
                       <div className="flex items-center gap-2 py-2 text-sm text-fg-muted">
                         <Spinner className="text-accent" />
                         <span>AI가 실시간 스트리밍 답변을 생성하는 중입니다...</span>
@@ -226,6 +234,28 @@ export default function AskAiPanel({
                         )}
                       </div>
                     )}
+                    {c.error ? (
+                      <InlineAlert
+                        tone="danger"
+                        className="mt-2"
+                        action={
+                          onRetry ? (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              leadingIcon={<RotateCcw />}
+                              onClick={() => onRetry(i)}
+                              disabled={asking}
+                              aria-label="답변 다시 시도"
+                            >
+                              다시 시도
+                            </Button>
+                          ) : undefined
+                        }
+                      >
+                        {c.error}
+                      </InlineAlert>
+                    ) : null}
                   </div>
                 </div>
               </div>

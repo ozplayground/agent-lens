@@ -10,7 +10,6 @@ export interface DeleteConfirmPopoverProps {
   onConfirm: () => void;
   onCancel: () => void;
   isDeleting?: boolean;
-  anchorRect?: DOMRect | null;
   /** 트리거(삭제 버튼). 바깥 판정에서 빼고, 닫을 때 포커스를 돌려준다. */
   anchorRef?: RefObject<HTMLElement | null>;
 }

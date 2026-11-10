@@ -1,15 +1,11 @@
 'use client';
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import Header, { CollectorStatusLine } from '@/components/Header';
 import NewsCard from '@/components/NewsCard';
-import NewsDetailModal from '@/components/NewsDetailModal';
-import DailyBriefingModal from '@/components/DailyBriefingModal';
-import ScheduleModal from '@/components/ScheduleModal';
-import McpModal from '@/components/McpModal';
-import SourcesModal from '@/components/SourcesModal';
 import InsightsBar from '@/components/feed/InsightsBar';
 import FeedToolbar from '@/components/feed/FeedToolbar';
 import FeedStatusBar from '@/components/feed/FeedStatusBar';
@@ -19,7 +15,6 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useToast } from '@/components/ui/Toast';
-import { BriefingSettingsModal } from '@/components/BriefingSettingsModal';
 import HotkeyListener from '@/components/HotkeyListener';
 import { useTheme } from '@/context/ThemeContext';
 import { NewsItem } from '@/types/news';
@@ -27,6 +22,17 @@ import { useBookmarks } from '@/hooks/useBookmarks';
 import { useNewsFeed } from '@/hooks/useNewsFeed';
 import { useOverlayOpen } from '@/lib/overlay-stack';
 import { findRepeatedInsights } from '@/lib/feed-insights';
+
+// 처음에 닫혀 있는 대화상자는 첫 번들에서 떼어 낸다 (FE-11). 마크다운 렌더러(react-markdown·remark-gfm)도 함께 빠진다.
+const NewsDetailModal = dynamic(() => import('@/components/NewsDetailModal'), { ssr: false });
+const DailyBriefingModal = dynamic(() => import('@/components/DailyBriefingModal'), { ssr: false });
+const ScheduleModal = dynamic(() => import('@/components/ScheduleModal'), { ssr: false });
+const McpModal = dynamic(() => import('@/components/McpModal'), { ssr: false });
+const SourcesModal = dynamic(() => import('@/components/SourcesModal'), { ssr: false });
+const BriefingSettingsModal = dynamic(
+  () => import('@/components/BriefingSettingsModal').then((m) => m.BriefingSettingsModal),
+  { ssr: false }
+);
 
 export default function HomePage() {
   const router = useRouter();
@@ -223,7 +229,7 @@ export default function HomePage() {
         {!loading && error ? (
           <ErrorState
             title={error}
-            message="백엔드 서버(포트 8000) 연결 상태를 확인해주세요."
+            message="백엔드 서버 연결 상태를 확인해주세요."
             onRetry={() => {
               setError(null);
               loadNews();

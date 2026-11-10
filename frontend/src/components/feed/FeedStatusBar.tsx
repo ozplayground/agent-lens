@@ -1,3 +1,5 @@
+'use client';
+
 import React, { type Ref } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Select, type SelectOption } from '@/components/ui/Select';

@@ -1,3 +1,5 @@
+'use client';
+
 import type { ComponentPropsWithRef, ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';

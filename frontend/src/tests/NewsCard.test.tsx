@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import NewsCard from '@/components/NewsCard';
 import { NewsItem } from '@/types/news';
@@ -460,5 +460,39 @@ describe('NewsCard Component', () => {
       const second = renderSource({ source: 'github' });
       expect(second.container.querySelector('[data-feed-card]')).toHaveAttribute('data-source', 'github');
     });
+  });
+});
+
+describe('상대 시각: backend 가 UTC 오프셋을 붙여 보내는 시각 (v0.4.2 B 조, published_at "…Z")', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([
+    ['Z', '2026-11-10T01:00:00Z'],
+    ['+09:00', '2026-11-10T10:00:00+09:00'],
+  ])('오프셋 %s 가 붙은 published_at 을 같은 순간으로 읽어 "2시간 전" 으로 보인다', (_label, publishedAt) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-10T03:00:00Z'));
+    render(
+      <NewsCard
+        item={{ ...mockItem, published_at: publishedAt }}
+        onSelect={vi.fn()}
+        isBookmarked={false}
+        onToggleBookmark={vi.fn()}
+      />
+    );
+    const time = screen.getByText('2시간 전');
+    expect(time.closest('time')).toHaveAttribute('dateTime', publishedAt);
+  });
+});
+
+describe('제목 버튼 터치 영역 (ui-audit R6, 리뷰 10.7)', () => {
+  it('제목이 한 줄이어도 제목 버튼이 2줄 자리(48px, min-h-12) 전체를 차지해 44px 터치 기준을 넘는다', () => {
+    render(<NewsCard item={{ ...mockItem, title: '짧은 제목' }} onSelect={vi.fn()} isBookmarked={false} onToggleBookmark={vi.fn()} />);
+    const titleButton = screen.getByRole('button', { name: '짧은 제목' });
+    // jsdom 은 높이를 재지 못한다. 실제 높이는 ui-audit R6 에서 잰다. 제목 자리(h3 min-h-12)와 같은 최소 높이를 단언한다.
+    expect(titleButton).toHaveClass('min-h-12');
+    expect(titleButton.closest('h3')).toHaveClass('min-h-12');
   });
 });

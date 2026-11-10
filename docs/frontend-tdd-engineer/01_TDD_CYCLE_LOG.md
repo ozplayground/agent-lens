@@ -5,7 +5,7 @@
 - **문서 버전**: v0.4.1 (as-built. 처음 v0.4.0 의 52개 파일·649개 테스트를 기록했고, v0.4.1 리뷰 수정 사이클(2.6·2.7절)을 더했다. v0.4.1 최종: 54개 파일, 666개 테스트 — 계약 담당이 MSW 저장 순서 테스트 2개를 더해 664 → 666)
 - **상태**: Draft
 - Updated: 2026-11-09
-- 기준: v0.4.1 (main)
+- 기준: v0.4.2 (main)
 
 > 2026-11-09 추가: 코드 리뷰(`docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md`) 머지 전 필수 5건(FE-01·02·03·09·22)을 TDD 로 고친 사이클을 2.6절에 적었다. 이 사이클 뒤 frontend 는 **54개 파일, 654개 테스트**다 (4.5절). 이어서 2.7절 사이클(BUG-02R, FE-33, FE-34) 뒤에는 **54개 파일, 664개**다 (4.6절. 새 테스트 4개 + 계약 담당이 `chat/ContractAndMsw.test.ts` 에 더한 6개). 3절·4.1~4.4절·6.1~6.53절의 나머지 숫자는 사이클 전(52개 파일, 649개) 기록이고, 사이클에서 바뀐 표(3.1, 6.6, 6.12, 6.15)와 새 표(6.54, 6.55)만 고쳤다.
 
@@ -335,6 +335,312 @@ python3 … --phase green -- src/tests/chat/
 - `ChatStreamTurn` 의 `expect(await screen.findByText(x)).toBeInTheDocument()` 7곳을 `await waitFor(() => expect(screen.getByText(x)).toBeInTheDocument())` 로 바꿨다. 찾은 `<p>` 가 완료 렌더에서 새 노드로 바뀌면 떨어진 노드를 단언해 실패하는 경합이 재시도 테스트에서 실제로 났다 (단언 내용은 같다).
 - 스트림 중 `error` 이벤트로 끊긴 답도 같은 경로라, 이제 부분 답 아래에 오류가 보인다 (`chat/ChatWorkspace.test.tsx` 의 mid-stream 오류 테스트는 그대로 통과).
 
+### 2.8 v0.4.2 사이클 — 피드·공통 조 (2026-11-10, 커밋 전)
+
+- **대응**: `docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md` FE-05, FE-06, FE-08(피드·공통 몫), FE-11, FE-17, FE-20, FE-21, FE-23, FE-25(피드·공통 몫), FE-27, FE-30, FE-32(피드·공통 몫), FE-35. `docs/qa-engineer/02_QA_TEST_REPORT.md` D-25, D-41, D-42, D-45(북마크 쪽), D-46.
+- **대상 코드**: `frontend/src/app/page.tsx`, `app/error.tsx`(새 파일), `app/api/health/route.ts`, `lib/env.ts`, `lib/api.ts`(죽은 함수 삭제, 스트림 주소·파서만), `hooks/useBookmarks.ts`, `hooks/useNewsFeed.ts`, `hooks/useCollector.ts`, `components/HotkeyListener.tsx`, `NewsCard.tsx`, `NewsDetailModal.tsx`, `news-detail/AskAiPanel.tsx`, `sources/DeepResearcherTab.tsx`, `ScheduleModal.tsx`, `McpModal.tsx`, `Header.tsx`, `ui/{SearchField,SegmentedControl,Select,Switch,TextField,Textarea,ErrorState}.tsx`, `feed/FeedStatusBar.tsx`, `next.config.ts`, 루트 `.env.example`
+- **지운 파일**: `components/WebhookSettingsModal.tsx`(localStorage `agentlens_webhook_url` 포함), `components/ThemeToggle.tsx`
+- **새 테스트 파일**: `tests/feed/HomePage.test.tsx` (8), `tests/hooks/useBookmarks.test.tsx` (6), `tests/lib/askStream.test.ts` (6), `tests/app/ErrorBoundary.test.tsx` (1), `tests/app/EnvAndHealth.test.ts` (5), `tests/ui/ClientBoundaryGuard.test.ts` (2), `tests/modals/McpModal.test.tsx` (1)
+- **더한 테스트**: `feed/FeedSearch.test.tsx` +2 (FE-35), `hooks/useCollector.test.ts` +1 (FE-20), `AskAiPanel.test.tsx` +2, `modals/NewsDetailModal.test.tsx` +3 (D-25 1, 스트림 끊김 2), `modals/DeepResearcherTab.test.tsx` +1 (D-25), `modals/ScheduleModal.test.tsx` +1 (FE-25), `NewsCard.test.tsx` +2 (UTC 오프셋 시각, 아래 참고)
+- **모의**: `mocks/**` 는 고치지 않았다(계약 담당 몫). 테스트 안 `server.use` 로 `GET */api/news`(지연·500·빈 목록·쿼리 수집), `POST */api/news/:id/ask/stream`(요청 URL 수집, 끝 빈 줄 없는 본문, meta 지연), `POST */api/schedule/reset-and-collect`(응답 붙잡기)를 덮어썼다.
+
+#### 1. RED Phase
+`python3 .claude/skills/frontend-tdd-workflow/scripts/run_frontend_tdd.py --phase red -- <파일>` (저장소 루트). 실패 이유가 리뷰·QA 근거와 같다.
+```
+feed/HomePage.test.tsx
+ × Error: … 문구에 고정 포트를 쓰지 않는다      Unable to find … 백엔드 서버 연결 상태를 확인해주세요.
+ × agentlens_bookmarks 가 객체 이면 …          TypeError: bookmarkedItems.map is not a function
+ × agentlens_bookmarks 가 null 이면 …          TypeError: Cannot read properties of null (reading 'map')
+ × 처음에 닫혀 있는 대화상자 6개를 정적으로 import 하지 않는다
+      Tests  4 failed | 4 passed (8)     (Loading·Empty·Success·깨진 JSON 은 지금 코드도 통과: 공백을 메우는 테스트)
+feed/FeedSearch.test.tsx, hooks/useBookmarks.test.tsx
+ AssertionError: expected [ [ null, '3' ], [ 'mcp', '1' ] ] to deeply equal [ [ 'mcp', '3' ] ]           (FE-35)
+ AssertionError: expected [ [ null, 'true', '1' ], …(1) ] to deeply equal [ [ 'mcp', 'true', '1' ] ]   (FE-35)
+ × 배열이 아닌 값(객체·null·숫자·문자열)이면 북마크 0개로 본다 / × 배열 안 … 원소는 버린다              (FE-17)
+      Tests  7 failed | 3 passed (10)
+lib/askStream.test.ts, AskAiPanel, DeepResearcherTab, NewsDetailModal, useCollector
+ AssertionError: expected 'http://localhost:8000' to be 'http://localhost:3000'                       (D-41)
+ AssertionError: expected { answer: '부분', …(1) } to deeply equal { answer: '부분 답과 나머지', … }       (FE-23 끝 버퍼)
+ AssertionError: expected 'Gemini 3.5 Flash' to be ''                                                  (FE-23)
+ Unable to find … 실시간 스트리밍 / 응답 엔진: claude-sonnet-5-5 / /키워드 규칙 기반 적합도 점수/           (D-25)
+ Unable to find … heading "핵심 정리 (규칙 기반 자동 추출)" / Found multiple elements with the text: /Gemini/  (D-25)
+ AssertionError: expected null to be an instance of Error                                              (FE-20)
+      Tests  9 failed | 29 passed (38)
+app/*, ui/ClientBoundaryGuard.test.ts
+ Failed to resolve import "@/app/error"                                                                (FE-05)
+ AssertionError: expected undefined to deeply equal { …(2) }  /  "version": "0.4.1" ≠ "9.9.9"            (FE-21)
+ allowedDevOrigins 에 "macbookpro.tail304081.ts.net", "*.ts.net", "192.168.1.109"                       (FE-27)
+ + "components/feed/FeedStatusBar.tsx", "components/ui/SearchField.tsx", … "components/ui/Textarea.tsx"  (FE-06, 7개)
+modals/ScheduleModal.test.tsx, modals/McpModal.test.tsx
+ × 수집 시각은 고정 문구가 아니라 스케줄 응답(schedule_hours·timezone)으로 그린다 (FE-25)
+ × 설정 예시의 cwd·command 를 자기 환경 값으로 바꾸라고 안내한다 (FE-25)
+✅ RED 확인
+```
+
+#### 2. GREEN Phase
+- **FE-05**: `app/error.tsx` 라우트 오류 경계. `ErrorState`(제목 `화면을 그리지 못했습니다`, 다시 시도 → `reset`). 예외 원문은 콘솔에만.
+- **FE-06**: 훅·인라인 처리 함수를 쓰는 공용 부품 7개와 `ErrorState` 에 `'use client'`. `ClientBoundaryGuard` 가 `components/**` 전체를 같은 규칙으로 본다.
+- **FE-08·D-42**: `WebhookSettingsModal`·`ThemeToggle` 파일, api 함수 `askQuestionAboutNews`·`deleteAllNews`·`discoverSources`·`registerCandidate`·`sendBriefingToWebhook`·`DiscoveredCandidate`, `HotkeyListener` 의 `onCloseOverlays`·`onToggleCommandPalette`·`customHotkeys`·`HotkeyMapping`, `NewsCard`·`NewsDetailModal` 의 `onHandoverToChat` 를 지웠다. `getDirectApiBase` 는 모듈 안에서만 쓰므로 export 를 뗐다. `testWebhook` 은 `BriefingSettingsModal` 이 써서 남겼다. `DailyBriefingSchema` 는 계약 담당의 런타임 검증(FE-19)이 쓰게 되어 미사용이 아니다. `env.ts` 는 FE-21 로 쓰이게 됐다.
+- **FE-11**: 홈의 대화상자 6개를 `next/dynamic`(`ssr: false`)으로 바꿨다. 보이는 모양·여닫기는 같다. 번들 크기는 재지 않았다.
+- **FE-17·D-45**: `parseBookmarks` 가 배열이 아니면 `[]`, 원소는 숫자 `id`·문자열 `title` 만 남긴다. 북마크 보기 검색은 `summary` 가 없어도 동작한다.
+- **FE-20**: `resetAndCollect` 가 앞선 초기화가 끝나지 않았으면 `이미 초기화 요청을 처리하고 있습니다.` 를 던진다 (확인 창이 그 문구를 보인다). 구독자가 모두 떠난 경우(확인 창도 없음)는 그대로 조용히 끝난다.
+- **FE-21**: `env.ts` 에 `NEXT_PUBLIC_APP_VERSION`·`ALLOWED_DEV_ORIGINS` 를 더하고 `getClientEnv()`·`getServerEnv()` 를 내보낸다. `Header` 배지, `/api/health` 의 `version`(고정 `0.4.1` → 빌드 때 넣는 `package.json` 버전), `lib/api.ts` 의 스트림 주소가 `getClientEnv()` 를 쓴다.
+- **FE-23**: 스트림 파서가 끝날 때 디코더·버퍼를 비워 마지막 이벤트를 처리하고, `meta` 가 없으면 엔진을 `''` 로 둔다 (옛 기본값 `Gemini 3.5 Flash` 삭제).
+- **FE-25·D-25**: Ask AI 머리줄 배지 `Gemini 실시간 스트리밍 가동` → 마지막 답의 meta 엔진 `응답 엔진: {model}` (질문 전 `실시간 스트리밍`), 질문 직후 자리 문구 `Gemini 실시간 스트리밍...` 삭제. 상세 `핵심 요약 3줄` → `핵심 정리 (규칙 기반 자동 추출)`. 딥 리서치 `LLM 기술 적합도 분석` → `키워드 규칙 기반 적합도 점수가 기준을 넘는 피드`. 스케줄 대화상자는 `schedule_hours`·`timezone` 응답으로 시각을 그리고(UTC 면 KST 환산), 설명은 `정해진 시각마다 …`. MCP 모달에 `cwd`·`command` 를 바꾸라는 안내. 홈 오류 문구 `백엔드 서버(포트 8000) …` → `백엔드 서버 연결 상태를 확인해주세요.`
+- **FE-27**: `allowedDevOrigins` 는 `localhost`·`127.0.0.1` + `ALLOWED_DEV_ORIGINS`(쉼표 구분).
+- **FE-30**: `HomePage.test.tsx` 가 홈을 그대로 그려 Loading(MSW 지연)·Error(500, 다시 시도)·Empty·Success 를 본다.
+- **FE-35·D-46**: `useNewsFeed` 의 `setPage`·`setCategory`·`setSource`·`setSort`·`setHighSignalOnly` 가 기다리던 검색어를 먼저 반영한다 (같은 렌더 → 요청 한 번, 타이머가 1페이지로 되돌리지 않음).
+- **D-41**: `getDirectApiBase` 가 `NEXT_PUBLIC_API_URL || getApiBase()`. 브라우저 호스트의 `:8000` 을 짐작하지 않는다. 직접 주소가 같은 출처면 실패해도 같은 곳으로 다시 보내지 않는다.
+```
+python3 … --phase green -- src/tests/feed src/tests/hooks src/tests/lib src/tests/app src/tests/ui src/tests/AskAiPanel.test.tsx src/tests/modals \
+  src/tests/HotkeyListener.test.tsx src/tests/HotkeyGating.test.tsx src/tests/ThemeSystem.test.tsx src/tests/Header.test.tsx src/tests/NewsCard.test.tsx
+ Test Files  38 passed (38)
+      Tests  400 passed (400)
+python3 … --phase green -- src/tests/modals/ScheduleModal.test.tsx src/tests/modals/McpModal.test.tsx
+      Tests  7 passed (7)
+✅ GREEN 확인
+```
+
+#### 3. REFACTOR Phase
+- `useNewsFeed.loadNews` 가 같은 `flushPendingSearch` 를 쓴다. `resetFilters` 는 상태 setter 를 바로 부른다 (검색어를 비우며 반영하므로 flush 불필요).
+- `HotkeyListener` 는 단일 키만 다룬다 (⌘K 는 `Header`, Escape 는 오버레이 스택).
+
+#### 기존 테스트 변경 (의도한 변경)
+- `modals/NewsDetailModal.test.tsx` › shows the summary tab first…: 머리글 기대 `핵심 요약 3줄` → `핵심 정리 (규칙 기반 자동 추출)` (D-25 문구 변경).
+- `modals/ScheduleModal.test.tsx` › is a labelled modal dialog…: 시각 문구를 응답 뒤에 그리므로 `getByText` → `findByText` (기대 문자열은 같다).
+- `HotkeyListener.test.tsx`: 지운 prop 의 테스트 `triggers onCloseOverlays on Escape key`·`triggers onToggleCommandPalette …` 를 지우고 '⌘K 를 처리하지 않는다(기본 동작 막지 않음, 이동 없음)' 로 바꿨다. 입력창 격리 테스트에서 지운 prop 단언 두 줄을 뺐다.
+- `ThemeSystem.test.tsx` › renders ThemeToggle…, `ui/Menu.test.tsx` › ThemeToggle showDropdown…: 컴포넌트 삭제로 지웠다 (테마 메뉴는 `ThemeMenu` 테스트가 계속 본다).
+- `ResponsiveLayout.test.tsx`·`ThemeSystem.test.tsx`: 쓰지 않는 import 정리 (FE-32).
+
+#### D-41 실행 확인 (Docker, 2026-11-10)
+- `BACKEND_PORT=18000 FRONTEND_PORT=3001` 로 이미지를 새로 빌드해 띄운 뒤 확인했고, 끝나고 `make docker-down` 으로 내렸다.
+- 빌드한 frontend 청크(`/app/.next/static/chunks/*.js`)에서 `ask/stream` 을 담은 파일에 `:8000` 이 0건이다. 요청 주소는 `${NEXT_PUBLIC_API_URL||""}/api/news/{id}/ask/stream`(빌드에 값이 없으므로 같은 출처)이다. `/api/health` 의 version 은 `0.4.1`(package.json)이다.
+- 같은 출처 경로는 Next rewrite 를 거친다. Next 서버는 rewrite 응답도 gzip 으로 압축하고(`node_modules/next/dist/server/lib/router-server.js:257-259`), `Cache-Control: no-transform` 이면 건너뛴다. backend 헤더가 `no-cache` 뿐일 때 `localhost:3001` 로 `Accept-Encoding: gzip` 요청을 보내면 `Content-Encoding: gzip` 으로 2조각(0s 10바이트, 16.8s 나머지)에 몰려 왔다. backend 가 `no-cache, no-transform` 을 보낸 뒤에는(backend A 조 변경) 압축 없이 508조각으로 0~18s 사이에 나눠 왔다. 측정 스크립트는 scratchpad 의 `sse_timing.py` 다. 기사 4번에 질문을 보내 실제 LLM 이나 휴리스틱 엔진이 답했다.
+
+#### 추가 사이클: 기사 질문 스트림 끊김 (backend A 조 `error` 이벤트, `done` 없음)
+- RED (`lib/askStream.test.ts` +2, `modals/NewsDetailModal.test.tsx` +2):
+```
+ AssertionError: promise resolved "{ answer: '부분 답', …(1) }" instead of rejecting      (error 이벤트)
+ AssertionError: promise resolved "{ answer: '부분', model_used: 'm' }" instead of rejecting  (done 없음)
+ TestingLibraryElementError: Unable to find role="alert"   × 2  (상세 대화상자: 부분 답을 완료로 보임)
+      Tests  4 failed | 15 passed (19)
+```
+- GREEN: `askQuestionAboutNewsStream` 이 `error` 이벤트면 그 `message` 로, `done` 없이 끝나면 `ASK_STREAM_CUT_MESSAGE`(`답변 생성이 중간에 끊겼습니다. 다시 시도해 주세요.`)로 실패한다 (사용자 중단이면 `AbortError`). `NewsDetailModal` 은 실패한 답에 `error` 를 달고 받은 부분 답을 그대로 둔다. `AskAiPanel` 은 부분 답 아래에 `InlineAlert`(danger, `role="alert"`)와 `답변 다시 시도` 버튼을 그리고 복사를 막는다. 다시 시도는 실패한 답을 지우고 같은 질문을 새로 보낸다. 옛 `AI 응답 생성 실패: …` 본문·`Error` 모델 표기는 없앴다. `Tests 29 passed (29)` ✅
+
+#### 확인 테스트 (지금 코드도 통과)
+- `NewsCard.test.tsx` › 상대 시각: backend 가 `published_at` 에 `Z`·`+09:00` 오프셋을 붙여도 같은 순간으로 읽어 `2시간 전` 을 보인다 (v0.4.2 backend 변경 확인). 상세 대화상자는 날짜를 그리지 않는다.
+
+#### 재리뷰 대응 (리뷰 10.5 FE-39, FE-30 남은 부분, 10.7 ui-audit R6, `getServerEnv`)
+- RED (`--phase red`, 6 실패 / 81):
+```
+ × ScheduleModal › Error: 스케줄 응답이 실패하면 … (FE-39)        Unable to find role="alert"
+ × ScheduleModal › Empty: 정해진 수집 시각이 없으면 …              Unable to find … 정해진 수집 시각이 없습니다
+ × SourcesModal › Error: 불러오기가 실패하면 0건처럼 보이지 않고 …   Unable to find role="alert"
+ × SourcesModal › Empty: 등록된 RSS 피드·GitHub 저장소가 없으면 …   Unable to find … 등록된 RSS 피드가 없습니다.
+ × SourcesModal › Empty: 딥 리서치 이력이 없으면 … 가동됐다고 하지 않는다   Unable to find … 실행 기록 없음
+ × NewsCard › 제목 버튼 터치 영역 (ui-audit R6)                     expect(element).toHaveClass("min-h-12")
+```
+  `DailyBriefingModal` 브리핑 없음(null → 대화상자 없음)과 홈의 브리핑 요청 실패(피드는 그리고 브리핑 버튼 없음)·성공(버튼으로 대화상자 열림)은 지금 코드로 통과했다 (공백을 메우는 테스트).
+- GREEN:
+  - **FE-39**: `useCollector` 스냅샷에 `statusError` 를 더했다. 실패하면 true, 성공하면 false 이고 이전 상태는 지우지 않는다. `reloadStatus` 도 내보낸다. `ScheduleModal` 은 상태를 한 번도 받지 못한 채 실패하면 `InlineAlert`(danger)로 `스케줄 정보를 불러오지 못했습니다. …` 와 `다시 시도` 를 보이고, `schedule_hours` 가 비면 `정해진 수집 시각이 없습니다` 를 보인다.
+  - **FE-30**: `SourcesModal` 은 불러오기에 실패하고 받은 데이터가 없으면 탭 대신 `ErrorState`(`소스 정보를 불러오지 못했습니다.`, 다시 시도)를 보인다. 데이터가 있으면 안내 줄을 보인다. `SourcesListTab` 은 빈 RSS 표·저장소 목록 대신 안내를 보이고, 받기 전에는 `불러오는 중...` 을 보인다. `DeepResearcherTab` 은 실행 시각이 없을 때 `최근 가동됨` 대신 `실행 기록 없음` 을 보인다.
+  - **R6**: `NewsCard` 제목 버튼에 `min-h-12`(48px)를 더했다. 제목 자리(`h3 min-h-12`)와 높이가 같아 보이는 모양은 그대로이고, 한 줄 제목에서도 터치 영역이 44px 를 넘는다. jsdom 은 높이를 재지 못하므로 실제 높이는 ui-audit R6 으로 확인한다 (이번에는 돌리지 않았다).
+  - **`getServerEnv`**: 부르는 곳이 없어 지웠다. 서버 변수(`INTERNAL_API_URL`·`ALLOWED_DEV_ORIGINS`)는 `next.config.ts` 가 빌드·개발 서버 설정으로 직접 읽고, 런타임 코드에는 쓸 곳이 없다. 규칙에 따라 목록은 `serverEnvSchema` 에 남겼다.
+  - `--phase green -- src/tests/modals src/tests/feed/HomePage.test.tsx src/tests/NewsCard.test.tsx src/tests/hooks src/tests/app` → `Tests 133 passed (133)` ✅
+- **간헐 실패 2건의 원인과 수정** (단언은 약하게 하지 않았다):
+  - `ui/ChipGroup.test.tsx` ScrollRow 넘침 표시(①②③, `expected [ 'end' ] to deeply equal []`): 원인은 테스트의 스크롤 흉내다. `scrollTo` 가 입력 신호 없이 `scrollLeft` 만 바꿨다. 그래서 ScrollRow 는 사용자 스크롤이 아니라고 보고, 넘침 상태가 바뀔 때 선택 칩을 다시 보이게 `scrollLeft` 를 옮겼다(600 → 576, 보정 5 ① 의 의도된 동작). jsdom 은 그 이동에 `scroll` 을 보내지 않는다. 상태는 처음 그릴 때 예약한 측정 프레임(`requestAnimationFrame`)이 언제 오느냐에 따라 뒤늦게 `both` 로 바뀌었다. 브라우저에서는 사용자 스크롤에 입력 신호가 앞서고, 코드가 옮긴 스크롤에도 `scroll` 이 오므로 제품 결함은 아니다. 측정 프레임을 붙잡았다가 `start` 단계 뒤에 돌리면 같은 실패가 항상 재현됐다.
+    수정: `scrollTo` 가 `pointerdown` 입력 신호를 먼저 보낸다(사용자 스크롤). 이 describe 안에서는 `requestAnimationFrame` 을 큐로 바꿔 직접 돌리고, 돌린 뒤 `scrollLeft` 가 둔 값 그대로인지와 `data-overflow` 가 같은지 단언을 더했다. 입력 신호를 빼면 이제 ①②③④⑥ 이 매번 실패해 같은 문제를 결정적으로 잡는다.
+  - `feed/HomePage.test.tsx` 브리핑 대화상자 열기: 원인은 dynamic import 가 아니라 목이 없는 요청이었다. 기본 MSW 핸들러에 없는 `GET /api/trends/radar`·`GET /api/schedule/status` 가 `onUnhandledRequest: 'bypass'` 로 실제 `localhost:3000`(띄워 둔 개발 서버)에 나갔다. 요약 바는 stats·브리핑·레이더를 함께 기다리므로(`Promise.allSettled`) 그 응답 시간만큼 브리핑 버튼이 늦게 나타났다. 테스트 `beforeEach` 에서 두 요청을 흉내 내고 대기 시간을 기본값(1초)으로 되돌렸다. dynamic import 미리 읽기는 필요 없어 넣지 않았다. 고친 뒤 목 없는 요청이 0건인 것을 `request:unhandled` 이벤트로 확인했다.
+  - 반복 확인: 두 파일을 6개씩 동시에 5회, 모두 30번 돌려 `Tests 52 passed (52)` 30/30 이다.
+  - 계약 담당에게 넘길 것: 기본 MSW 핸들러에 `GET /api/trends/radar`·`GET /api/schedule/status` 를 더하고, `tests/setup.ts` 의 `onUnhandledRequest` 를 `'error'` 로 바꾸기를 권한다 (지금은 목이 없는 요청이 조용히 실제 서버로 나간다).
+
+#### 마지막 항목 (spec-writer 지적: 문구 2, 기사 질문 스트림 시간 제한)
+- RED (`--phase red`, 3 실패 / 25):
+```
+ × FocusBottomSheet › 고신호 판정 기준 숫자를 라벨에 박지 않는다     Unable to find … Must-Read 고신호만
+ × DeepResearcherTab › 키워드 규칙이 만든 사유를 AI 판정이라고 부르지 않는다   Unable to find … 판정 사유:
+ × askStream › 첫 응답이 30초 안에 오지 않으면 시간 초과 문구로 실패한다   Error: Test timed out in 5000ms (시간 제한이 없어 멈춤)
+```
+- GREEN:
+  - `chat/FocusBottomSheet.tsx`: 라벨 `Must-Read 고신호만 (품질 7.8+)` → `Must-Read 고신호만`. 판정은 backend `is_high_signal` 이 하므로 숫자를 박지 않았다.
+  - `sources/DeepResearcherTab.tsx`: `AI 판정 사유:` → `판정 사유:`.
+  - `lib/api.ts` `askQuestionAboutNewsStream`: 직접·대체 요청 모두 `fetchWithTimeout(…, ASK_STREAM_FIRST_BYTE_TIMEOUT_MS = 30000)` 으로 보낸다(첫 응답까지만, 본문은 제한 없음). 시간이 넘으면 `응답이 늦어 요청을 멈췄습니다. 다시 시도해 주세요.` 로 실패하고, 대체 경로로 다시 보내지 않는다. 화면은 기존 끊김 처리와 같은 오류 알림과 `답변 다시 시도` 를 보인다. 사용자 중단은 그대로 `AbortError` 다(테스트로 확인).
+  - `--phase green` → `Tests 38 passed (38)` ✅. 시간 제한 테스트는 가짜 `setTimeout` 으로 30초를 넘긴다.
+- 기대값을 바꾼 기존 테스트: 없음.
+- 연결 실패 문구 (리뷰어 관찰): RED `NewsDetailModal.test.tsx` › 스트림 연결 자체가 실패하면 … (`HttpResponse.error()`, 받은 글자 `Failed to fetch다시 시도`) → GREEN `askQuestionAboutNewsStream` 이 연결 실패를 `서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.` 로 바꾼다. 사용자 중단(`AbortError`)과 시간 초과 문구는 그대로이고, 직접 주소가 따로 있으면 같은 출처로 다시 시도하는 동작도 그대로다. 챗 `chatApi.ts` 는 연결 실패에 시간 초과 문구(`응답이 늦어…`)를 함께 써서, 사실과 다른 그 문구 대신 연결 실패 전용 문구를 정했다. `Tests 24 passed (24)` ✅
+
+### 2.9 v0.4.2 사이클 — 챗 조 (2026-11-10, 커밋 전)
+
+- **대응**: 사용자 보고 FE-36(모바일 챗 입력창이 밀려 올라감). `docs/frontend-code-reviewer/01_CODE_REVIEW_REPORT.md` FE-04, FE-07, FE-10, FE-12, FE-13, FE-14, FE-15, FE-16, FE-18, FE-24, FE-26, FE-29, FE-32(챗 몫). `docs/qa-engineer/02_QA_TEST_REPORT.md` D-37, D-44, D-45(세션 목록 쪽).
+- **대상 코드**: `frontend/src/components/chat/{ChatMessageList,ChatMessageItem,ChatWorkspace,SessionItemCard,useChatSessions,CitationPopover,ChatModelSelector}.tsx|ts`, `lib/chatApi.ts`(새 파일), `lib/api.ts`(`fetchWithTimeout` export·`signal` 연결만), `components/ui/Popover.tsx`(`portal` 선택 prop 만), `types/chat.ts`(`ChatModelSelectorProps.variant`·`ChatHeaderProps` 의 모델 필드만)
+- **새 테스트 파일**: `tests/chat/ChatStreamRender.test.tsx` (4), `tests/chat/useChatSessions.test.tsx` (7), `tests/chat/ChatSessionParam.test.tsx` (2), `tests/lib/chatApi.test.ts` (13), `tests/design/ThemeColor.test.ts` (2)
+- **더한 테스트**: `chat/ChatMessageList.test.tsx` +4 (FE-36), `chat/ChatStreamTurn.test.tsx` +2 (FE-04), `chat/ChatSidebar.test.tsx` +2 (FE-12·FE-15), `chat/CitationBadge.test.tsx` +3 (FE-13·FE-16), `chat/ChatModelSelector.test.tsx` 헤더 변형 2개 → D-37 2개
+- **모의**: `mocks/**` 는 고치지 않았다. 테스트 안 `server.use` 와 계약 담당의 `mocks/api-error.ts` `apiError()` 로 오류 응답을 만든다.
+
+#### 0. FE-36 원인 (실제 브라우저로 재현)
+`frontend` 를 작업 사본에서 3300 포트로 띄우고(Playwright, 390×844·375×667 모바일 문맥, 긴 SSE 답을 페이지 안 fetch 대역으로 흘림) 측정했다.
+- 고치기 전: 답이 길어지자 메시지 열(`ChatWorkspace` 의 `flex-1 flex flex-col … overflow-hidden`)의 `scrollTop` 이 643 이 되고 입력창 위치가 734 → 91px 로 올라갔다. 메시지 목록 아래는 빈 바탕만 남았다.
+- 원인 두 가지가 겹쳤다. (1) 모바일에서만 `position:absolute` 인 `max-md:sr-only` 라벨(답변 `복사`, 툴바 `마크다운 복사`·`.md 다운로드`)의 기준 상자가 메시지 목록이 아니라 `relative` 인 바깥 열이라, 목록의 스크롤 영역에 갇히지 않고 열의 `scrollHeight` 를 1530px 로 키웠다 (`overflow-hidden` 이어도 스크립트로는 스크롤된다). (2) 자동 스크롤이 `bottomRef.scrollIntoView()` 라 조상 상자까지 스크롤해 그 넘친 열을 밀어 올렸다.
+- 고친 뒤: 열 넘침 0, 조상 `scrollTop` 0, 입력창 위치 고정(734·557px), 스트리밍 중 위로 올리면 그 자리에 머문다. 데스크톱(1280×800)도 같은 모양.
+
+#### 1. RED Phase
+`python3 .claude/skills/frontend-tdd-workflow/scripts/run_frontend_tdd.py --phase red -- <파일>` (저장소 루트에서 `frontend/` 로 실행).
+```
+chat/ChatMessageList.test.tsx (FE-36)
+ × 메시지 목록이 절대 위치 자손(모바일 sr-only 라벨)의 기준 상자라 바깥 열이 넘치지 않는다   ('relative' 없음)
+ × 새 토큰이 오면 목록 상자만 맨 아래로 내리고 … scrollIntoView 는 쓰지 않는다                 (scrollTop 0, scrollIntoView 호출)
+ × 맨 아래 근처로 다시 내려오면 자동으로 따라 내려간다                                          (expected 1490 to be 2000)
+      Tests  3 failed | 6 passed (9)
+chat/ChatStreamRender.test.tsx (FE-10·FE-14)
+ AssertionError: expected [ '이전 답변', '이전 답변', '이전 답변' ] to have a length of 1
+ AssertionError: expected 9 to be 3                     (두 번째 턴 스트리밍 중 첫 답 마크다운을 6번 더 그림)
+ expect(element).toHaveAttribute("aria-busy", "true") / ("aria-busy", "false")
+      Tests  4 failed (4)
+chat/ChatStreamTurn.test.tsx (FE-04)
+ expected [ …(3) ] to deeply equal [ …(2) ]              (+ { role: 'user', content: '재시도 질문' })
+ expected [ { role: 'user', content: '실패할 질문' } ] to deeply equal []
+      Tests  2 failed | 8 passed (10)
+chat/ChatSidebar.test.tsx (FE-12·FE-15)
+ AssertionError: expected 'DIV' to be 'BUTTON'
+ Unable to find … 대화를 삭제하지 못했습니다.  +  Unhandled Rejection: Error: 대화를 삭제하지 못했습니다.
+lib/chatApi.test.ts (FE-07·FE-24)
+ Error: Failed to resolve import "@/lib/chatApi"
+chat/useChatSessions.test.tsx (FE-18·FE-26·FE-07)
+ expected { x: 1 } to deeply equal []  /  TypeError: sessions.map is not a function  /  expected '문자열' to be null
+ expected '{}' to be null (밀려난 상세 캐시, resetSessions)  /  expected '대화 삭제 실패 (500)' to be '삭제 서버 오류'
+      Tests  7 failed (7)
+chat/ChatSessionParam.test.tsx (FE-24)
+ expected [ '/api/chat/sessions/..%2F..%2Fnews' ] to deeply equal []
+chat/CitationBadge.test.tsx (FE-13·FE-16)
+ expected <p><span …(1)>…(2)</span></p> to be null   /   expected null not to be null (IconButton 아이콘 감싸개)
+chat/ChatModelSelector.test.tsx (D-37)
+ tsc: error TS2578: Unused '@ts-expect-error' directive.   (header-chip 을 아직 타입이 받음)
+✅ RED 확인
+```
+
+#### 2. GREEN Phase
+- **FE-36**: `ChatMessageList` 의 `role="log"` 상자에 `relative` 를 달아 절대 위치 자손을 목록 안에 가둔다. 자동 스크롤은 `scrollIntoView` 대신 목록 상자의 `scrollTop = scrollHeight` 만 바꾼다. 맨 아래에서 24px 안을 보고 있을 때만 따라 내려가고, 새 메시지(질문 전송·세션 열기)가 생기면 다시 맨 아래로 붙는다.
+- **FE-10**: `ChatMessageItem` 을 `React.memo` 로 감싸고 마크다운 부품을 `useMemo`(`message.sources`·`onOpenSourceDetail`)로 만든다. `ChatWorkspace` 의 전송·재시도 콜백이 `messages` 를 ref 로 읽어 토큰마다 바뀌지 않는다 (`handleRetryMessage` 는 고정). 빈 함수였던 `onCopyMessage` 를 넘기지 않는다(선택 prop). 토큰마다 부드러운 스크롤을 걸지 않는다.
+- **FE-14**: 로그는 `aria-relevant="additions"`, `aria-busy={isStreaming}`. 답이 끝나면 목록 옆 `role="status"`(sr-only)가 `답변이 완료되었습니다.` 를 한 번 알린다.
+- **FE-04·D-44**: history 는 답이 완료된 턴(완료된 assistant 와 그 바로 앞 user)만 보낸다. 실패·중단 턴의 질문과 재시도 대상 질문이 빠진다.
+- **FE-07**: `lib/chatApi.ts` 에 `fetchChatSessions`·`fetchChatSessionDetail`(404 → null)·`saveChatSession`·`deleteChatSession`·`fetchChatSourceDetail`·`openChatStream`. 모두 `lib/api.ts` 의 `fetchWithTimeout` 을 거친다 (조회·저장·삭제 8초, 스트림은 첫 응답까지 30초·본문 제한 없음). 오류는 `lib/contract.ts` 의 `readErrorMessage` 로 backend `message`, 없으면 정해 둔 문구. 응답은 `readJson` 으로 계약 스키마 확인. `fetchWithTimeout` 이 `options.signal`(사용자 중단)도 따르도록 했다. 챗 컴포넌트의 직접 `fetch` 6곳이 모두 이 함수로 바뀌었다.
+- **FE-12**: 세션 카드를 진짜 `<button>` 으로 바꾸고 삭제 `IconButton` 을 형제로 꺼내 카드 오른쪽에 겹쳐 둔다 (`pr-14 md:pr-12` 로 같은 폭을 비움). 버튼 안은 `span` 만.
+- **FE-15**: 삭제 실패 시 `SessionItemCard` 가 잡아 오류 알림(`danger`)을 띄운다. 목록은 훅이 다시 읽어 되돌린다.
+- **FE-18·D-45**: 세션 목록 저장값이 배열이 아니면 `[]`, id·제목이 문자열이 아닌 항목은 버린다. 서버가 실패하고 쓸 만한 저장 목록도 없으면 오류(backend `message`)를 보인다. 상세 캐시는 문자열 `id` 와 `messages` 배열이 있을 때만 쓴다.
+- **FE-24**: URL `session_id` 는 UUID 모양일 때만 연다. 경로에는 `encodeURIComponent` 로 넣는다.
+- **FE-26**: 30개를 넘겨 목록에서 밀려난 세션의 상세 캐시 키를 지우고, `resetSessions` 는 `agentlens_chat_session_*` 를 모두 지운다.
+- **FE-13**: `Popover` 에 `portal` 선택 prop. 켜면 `document.body` 에 `fixed` 로 그리고 앵커 좌표로 위치를 잡는다(위에 자리가 없으면 아래로, 가로는 화면 안 16px). 인용 팝오버만 켠다. 문단 `<p>` 안 `div` 중첩이 없어지고 메시지 목록 스크롤 상자에 잘리지 않는다.
+- **FE-16**: 인용 팝오버 닫기 버튼을 공통 `IconButton`(`sm`)으로 바꿨다. `layout.tsx` `themeColor` hex 가 `globals.css` `--al-canvas` 와 같은지 `ThemeColor.test.ts` 가 본다(지금 값이 같아 처음부터 통과하는 지킴 테스트).
+- **D-37·FE-29**: `ChatModelSelector` 의 `header-chip`·`header-compact` 변형과 헤더용 팝오버 방향을 지웠다(`variant` 는 `'inline-chip'` 만). `ChatHeaderProps` 의 `selectedTier`·`onSelectTier` 를 지웠다. `ContractAndMsw.test.ts` 의 헤더 prop 객체 리터럴 단언을 지웠다 (헤더에 모델 선택이 없음은 `ChatHeader.test.tsx` R39 가 화면으로 본다).
+- **FE-32(챗 몫)**: `useChatSessions.ts` 미사용 import 2개, `ChatSidebar.test.tsx`·`ChatSessionWorkflow.test.tsx`·`ChatWorkspace.test.tsx`·`WorkflowStepTracker.test.tsx` 의 미사용 import·인자를 정리했다. `ContractAndMsw.test.ts` 의 나머지 7개는 계약 담당 몫으로 남겼다.
+```
+python3 … --phase green -- src/tests/chat/ChatStreamRender.test.tsx src/tests/chat/ChatMessageList.test.tsx src/tests/chat/ChatMessageItem.test.tsx
+python3 … --phase green -- src/tests/chat/ChatSidebar.test.tsx src/tests/chat/ChatSessionWorkflow.test.tsx src/tests/chat/ChatHistoryDrawer.test.tsx   Tests 28 passed
+python3 … --phase green -- src/tests/lib/chatApi.test.ts                     Tests 13 passed
+python3 … --phase green -- src/tests/chat/useChatSessions.test.tsx           Tests 7 passed
+python3 … --phase green -- src/tests/chat/CitationBadge.test.tsx src/tests/chat/ChatModelSelector.test.tsx src/tests/chat/ChatSidebar.test.tsx src/tests/ui   Tests 206 passed
+✅ GREEN 확인
+```
+
+#### 3. REFACTOR Phase
+- 마크다운 부품 생성을 모듈 함수 `buildMarkdownComponents(sources, onOpenSourceDetail)` 로 꺼냈다.
+- `useChatSessions` 의 저장값 읽기를 `readStoredIndex`·`readStoredDetail`·`removeAllStoredDetails` 로 모았다.
+
+#### 기존 테스트 변경 (의도한 변경)
+- `chat/ChatSessionWorkflow.test.tsx` › deletes a session…: 삭제 버튼을 `within(카드)` 에서 찾던 것을 이름 `대화 '…' 삭제` 로 찾는다 (FE-12 로 삭제 버튼이 카드 버튼 밖 형제가 됐다).
+- `chat/ChatStreamTurn.test.tsx` › BUG-02R 재시도: 502 응답을 `{error_code, message}` → `apiError()`(`details: null` 포함, 계약 1.2절 공통 형식)로 만든다. 단언은 같다.
+- `chat/ChatModelSelector.test.tsx`: 지운 변형의 테스트 `renders header-compact variant…`·`renders header-chip variant… downwards` 를 D-37 테스트 2개로 바꿨다.
+- `chat/ContractAndMsw.test.ts` › verifies UI component prop contracts compatibility: 헤더 prop 단언 3줄을 지웠다 (FE-29).
+
+#### 화면 동작 변경 (산출물 반영 필요)
+- 챗 자동 스크롤: 맨 아래를 보고 있을 때만 따라 내려가고, 위로 올려 읽는 중이면 멈춘다. 새 질문을 보내면 다시 맨 아래. 부드러운 스크롤 대신 바로 이동.
+- 답이 끝나면 스크린 리더에 `답변이 완료되었습니다.` 를 한 번 알린다. 스트리밍 중 토큰 글자는 읽지 않는다.
+- 세션 삭제 실패 시 `대화를 삭제하지 못했습니다.`(또는 backend `message`) 오류 알림.
+- 세션 목록·상세·출처 조회가 8초 안에 응답하지 않으면 실패로 끝난다(목록은 오류 상태). 스트림은 30초 안에 첫 응답이 없으면 `응답이 늦어 요청을 멈췄습니다. 다시 시도해 주세요.`
+- 챗 오류 문구가 backend `message` 를 따른다 (옛 `세션 목록 조회 실패 (500)`·`대화 삭제 실패 (500)`·`서버 에러 (502)` 고정 문구 없음).
+- URL `session_id` 가 UUID 가 아니면 무시하고 빈 대화로 시작한다.
+- 인용 팝오버가 body 에 그려져 목록 위쪽 가장자리에서도 잘리지 않는다. 닫기 아이콘이 모바일에서 20px(공통 `IconButton` 규격, 전에는 16px).
+
+#### 덧붙임: FE-08(챗 몫)·FE-25(`ModelTierBadge` 몫)
+- **새 테스트 파일**: `tests/chat/ChatUnusedApi.test.tsx` (5). 지운 prop 8개는 `@ts-expect-error` 로 타입이 받지 않음을 단언한다(`tsc --noEmit` 이 확인).
+- **RED**: `tsc` 의 `Unused '@ts-expect-error' directive` 8건. vitest 3건 실패: `expected 'Haiku 5.5$~0.3s…' not to match /~\s*\d+(\.\d+)?\s*s/`, `expected 'Sonnet 5.5추천$$~0.6s…' to match /상대 비용\s*\$\$(?!\$)/`, Claude 아닌 배지의 `$$` 가 보임. '인용 팝오버에 기사 상세 버튼이 없다' 는 지금 코드도 통과(워크스페이스가 콜백을 넘기지 않아 원래 안 보였다).
+- **GREEN (FE-08)**: 호출처가 없음을 `grep` 으로 확인하고 지웠다.
+  - `onOpenSourceDetail` 사슬: `ChatMessageList`·`ChatMessageItem`·`CitationBadge`·`CitationPopover` 와 팝오버의 `기사 상세` 버튼.
+  - `CitationPopover`·`DeleteConfirmPopover` 의 `anchorRect`.
+  - `ChatWorkspace` 의 `initialSourceId`·`initialQuestion`. 이관은 URL `sourceId`·`q` 로만 받는다.
+  - `HandoverCtaButton` 의 `modal-icon`.
+  - `ModelTierBadge` 의 `variant` prop(`chip`·`footer`·`pill`·`pipeline`). 화면은 한 모양만 쓴다.
+  - `types/chat.ts` 의 옛 `ChatHeaderProps` 중복 정의와, 그것만 쓰던 `NewsItem` import.
+- **GREEN (FE-25)**:
+  - `TIER_META.latencyDesc`(`~0.3s`·`~0.6s`·`~1.8s`, 측정값 아님)를 지웠다. 모델 선택 목록에 지연 수치가 없어졌다.
+  - 비용 기호(`$`~`$$$`)는 같은 세대의 상대 순서로 남기고, 화면 읽기 문구에 `상대 비용` 을 붙였다(sr-only). 트리거 title 은 `Sonnet 5.5 · 상대 비용 $$`.
+  - Claude 가 아닌 모델 배지는 지어낸 `$$` 를 보이지 않는다.
+  - 답변 하단 배지의 지연은 실제 측정값 `latency_ms` 그대로 둔다.
+- **기존 테스트 변경 (의도한 변경)**:
+  - `ChatModelSelector.test.tsx` › opens popover…: `~0.3s`·`~0.6s`·`~1.8s` 단언 → `상대 비용 $`·`상대 비용 $$$` 단언.
+  - ModelTierBadge 테스트 2개에서 지운 `variant` 인자를 뺐다(이름 `renders tier icon, name, and relative cost`, `renders measured latency in milliseconds`).
+  - `CitationBadge.test.tsx` › opens CitationPopover…: 지운 `기사 상세` 버튼 단언과 `onOpenSourceDetail` 인자를 뺐다.
+- **화면 변화**: 모델 선택 목록에서 지연 수치가 사라졌다. 그 밖에는 보이는 모양이 같다(지운 버튼·변형은 원래 화면에 나오지 않았다).
+- **검사**: `pnpm test` 67 파일 782 통과, `pnpm lint` 경고·오류 0, `tsc --noEmit` 종료 0.
+
+#### 덧붙임 2: v0.4.2 재리뷰 FE-37·FE-38, 추가 FE-40·FE-41·`ChatModelSelectorProps.variant`
+- **RED**:
+  - FE-37 `CitationBadge.test.tsx` 'FE-37: 키보드로 연 인용 팝오버는 포커스를 안으로 옮기고…'. 실패 출력은 `expected false to be true`(Enter 로 연 뒤 포커스가 팝오버 밖).
+  - FE-38 새 파일 `tests/lib/chatSsePayload.test.ts` (3). `tsc` 가 `Actual: unknown` 5건을 냈다. 소스 검사는 `ReturnType<typeof JSON.parse>` 가 있어 실패했다.
+  - FE-41 `ChatSessionParam.test.tsx` '서버 오류·연결 실패면 기사가 없다고 하지 않고…'. 문구가 없어 실패했다.
+  - FE-40 `ChatSessionParam.test.tsx` '상세를 불러오지 못하면 지금 대화를 그대로 두고…'. 오류 알림이 없어 실패했다. 코드로는 `setSessionId` 가 상세 조회보다 먼저라 다음 저장이 새 id 로 나간다.
+  - variant `ChatModelSelector.test.tsx` 'D-37: 변형 prop 이 없다'. `tsc` 가 Unused `@ts-expect-error` 를 냈다.
+- **GREEN**:
+  - FE-37: `CitationPopover.tsx` 에 `focusOnOpen`. 열면 닫기 버튼으로 포커스가 가고 Tab 은 팝오버 안의 `원문 보기` 로 간다. Escape 로 닫으면 배지로 돌아온다(공통 `Popover` 동작).
+  - FE-38: `lib/contract.ts` 에 `ChatSsePayloads` 와 `parseChatSsePayload` 이벤트별 오버로드를 더했다. `ChatWorkspace.tsx` 는 이벤트마다 `parseChatSsePayload('status' | 'sources' | 'token' | 'done' | 'error', raw)` 로 타입을 받는다. `as ReturnType<typeof JSON.parse>` 를 지웠다. 화면 타입이 null 을 받지 않아 `primary_count`·`supplementary_count` 의 `null` 은 `undefined` 로 넘긴다. 표시 쪽이 둘을 같게 보므로 동작은 같다.
+  - FE-40: `handleSelectSession` 이 상세를 받은 뒤에 세션을 바꾼다. 받지 못하면(서버 실패·404 이고 쓸 만한 캐시도 없음) 지금 대화와 세션 id 를 그대로 두고 `대화를 불러오지 못했습니다.` 를 알린다. URL `session_id` 로 열 때도 같다.
+  - FE-41: `fetchChatSourceDetail` 은 404 면 `null` 을 돌려주고 연결·서버 오류는 던진다. `?sourceId=` 가 404 면 `요청하신 기사를 찾을 수 없어…`, 그 밖의 실패는 `기사 정보를 불러오지 못해 전체 소식 모드로 시작합니다. 연결 상태를 확인해 주세요.` 를 보인다. `q` 는 전과 같이 전체 소식으로 보낸다.
+  - `ChatModelSelectorProps.variant` 를 지웠다(`types/chat.ts`, `ChatPromptInput.tsx` 의 `variant="inline-chip"`, `ContractAndMsw.test.ts` 리터럴의 한 줄).
+- **기존 테스트 변경 (의도한 변경)**:
+  - `tests/lib/chatApi.test.ts` '기사 상세를 돌려주고, 없으면 message 로 던진다' → '기사가 없으면(404) null, 서버 오류면 message 로 던진다 (FE-41)'.
+  - `ChatModelSelector.test.tsx` D-37 타입 테스트를 variant prop 자체가 없음으로 바꿨다.
+  - `ContractAndMsw.test.ts` 의 `selectorProps` 에서 `variant` 한 줄을 지웠다.
+- **화면 동작 변경**:
+  - 인용 팝오버를 열면 포커스가 팝오버 안(닫기 버튼)으로 간다.
+  - 세션 열기에 실패하면 지금 대화가 남고 오류 알림이 뜬다(전에는 조용히 id 만 바뀌었다).
+  - 이관 기사 조회가 서버·연결 오류로 실패하면 '찾을 수 없다' 대신 '불러오지 못했다' 문구가 뜬다.
+- **검사**: `pnpm test` 68 파일 799 통과, `pnpm lint` 경고·오류 0, `tsc --noEmit` 종료 0.
+
+#### 덧붙임 3: FE-04 재시도 테스트 간헐 실패 (코드의 경쟁 상태)
+- **증상**: `ChatStreamTurn.test.tsx` 'FE-04: 재시도는 실패한 질문을…' 이 가끔 `답3` 을 찾지 못하고 시간 초과로 끝났다.
+- **원인 (코드)**: `ChatWorkspace` 가 `messagesRef`·`sendMessageRef` 를 지연 effect(`useEffect`)에서 맞췄다. 오류가 화면에 그려진 직후, 지연 effect 가 돌기 전에 `다시 시도` 를 누르면 다음 순서로 끝난다.
+  1. `handleRetryMessage` 가 옛 `handleSendMessage` 를 부른다. 그 함수는 `isStreaming=true` 를 쥐고 있다.
+  2. 그래서 실패한 질문·답 쌍만 지우고, 요청은 보내지 않고 끝난다.
+  
+  테스트의 `waitFor` 는 DOM 변화를 보자마자 클릭하므로, 이 순서가 타이밍에 따라 나왔다.
+- **RED (결정적 재현)**: 'FE-04: 오류가 화면에 그려진 바로 그 순간(같은 커밋 직후) 다시 시도를 눌러도 재시도 요청이 나간다'. `MutationObserver` 가 오류 버튼이 DOM 에 들어온 직후(마이크로태스크)에 누른다. 고치기 전 5/5 실패(`Unable to find … 즉시 재시도 답`).
+- **GREEN**: 두 ref 를 `useLayoutEffect` 로 커밋과 같은 때 맞춘다(`ChatWorkspace.tsx`). 새 테스트는 5/5 통과했다. `ChatStreamTurn.test.tsx` 전체를 30번 반복 실행해 0 실패였다(11개 테스트).
+- **화면 동작 변경**: 오류 직후 빠르게 누른 다시 시도가 질문만 지우고 아무 일도 하지 않던 경우가 없어졌다.
+- **검사**: `pnpm test` 69 파일 820 통과, `pnpm lint` 경고·오류 0, `tsc --noEmit` 종료 0.
+
+#### 덧붙임 4: FE-42
+- **RED**: 새 파일 `tests/lib/newsAskSsePayload.test.ts` (3). 실패 출력은 다음 세 가지였다.
+  - `tsc` 의 `Actual: unknown`
+  - `expected { event: 'ping' } to be null`
+  - `api.ts` 에 `ReturnType<typeof JSON.parse>` 가 있음
+- **GREEN**: `parseNewsAskSsePayload` 는 이제 `NewsAskSseEvent | null` 을 돌려준다. 모르는 이벤트와 `event` 가 없는 값은 `null` 이다. `api.ts` 의 기사 Ask AI 파서는 `any` 캐스트를 지우고 `null` 을 건너뛴다. 전에도 모르는 이벤트는 무시했으므로 동작은 같다.
+- **검사**: `pnpm test` 70 파일 823 통과, lint 0, tsc 0.
+
+#### 덧붙임 5: FE-43
+- `modals/NewsDetailModal.test.tsx` 에 화면 테스트 2개를 더했다. 코드가 이미 맞아 처음부터 통과했고, 코드는 고치지 않았다.
+  - 첫 응답 전 시간 초과: MSW 무한 지연 + 가짜 타이머로 30초를 넘긴다. 스피너가 사라지고 `응답이 늦어 요청을 멈췄습니다. 다시 시도해 주세요.` 알림과 `답변 다시 시도` 가 보인다.
+  - 답 없이 연결 실패: 오류 알림과 다시 시도가 보이고, 다시 시도하면 답을 받는다.
+- 파일을 3번 반복 실행해 15/15 통과했다. 전체 `pnpm test` 는 70 파일 831 통과, lint 0, tsc 0.
+
+#### 덧붙임 6: 챗 연결 실패 문구
+- **문제**: `chatApi.ts` 가 연결 자체가 실패해도(fetch TypeError) 시간 초과 문구(스트림)나 작업 문구(조회·저장·삭제)를 썼다.
+- **RED**: `tests/lib/chatApi.test.ts` '연결 자체가 실패하면(조회·저장·삭제·기사·스트림 모두)…'. 실패 출력은 `Received: "대화 목록을 불러오지 못했습니다."`.
+- **GREEN**:
+  - `lib/api.ts` 의 연결 실패 문구를 `CONNECT_FAILED_MESSAGE` 로 내보내 기사 질문과 챗이 같이 쓴다.
+  - `chatApi.ts` 의 `request` 는 사용자 중단을 그대로 올리고, 시간 초과(제한 타이머의 AbortError)는 전과 같은 문구를 쓴다. 그 밖의 실패는 `서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.` 로 바꾼다.
+- **기존 테스트 변경 (의도한 변경)**: '네트워크 오류면 정해 둔 문구를 쓴다'(`대화를 삭제하지 못했습니다.`)를 위 테스트와 상수 확인 테스트로 바꿨다.
+- **검사**: `pnpm test` 70 파일 833 통과, lint 0, tsc 0.
+
 ---
 
 ## 3. UI 5대 상태 (Idle, Loading, Error, Empty, Success) 검증표
@@ -388,8 +694,7 @@ python3 … --phase green -- src/tests/chat/
 
 ### 3.2 5대 상태 공백
 
-- **피드 메인 화면(`app/page.tsx`)의 Loading·Error·Empty 를 그려 보는 테스트가 없다.** 화면은 `NewsCardSkeleton`(`frontend/src/app/page.tsx:218`), `ErrorState`(`:224`), `EmptyState`(`:253`)를 쓰지만 이 페이지를 렌더링하는 테스트가 없다. 상태 전환은 훅 수준(`hooks/useNewsFeed.test.tsx`)에서만 본다.
-- MSW 지연으로 '로딩 표시가 보인다' 를 단언하는 화면 테스트는 없다. 로딩 단언은 모두 props(`isLoading`, `loadingRadar`, `isStreaming`)를 넘기거나 훅의 `loading` 값을 본다.
+- (v0.4.2 해결) 피드 메인 화면(`app/page.tsx`)의 Loading(MSW 지연)·Error(500, 다시 시도)·Empty·Success 는 `feed/HomePage.test.tsx` 가 페이지를 그대로 그려 본다 (2.8절). 이 공백은 닫혔다.
 - 챗 기록 목록의 Loading·Error·Empty 는 `ChatSidebar`·`ChatHistoryDrawer` 에 props 로 넘겨 본다. `useChatSessions` 가 MSW 500(`GET */api/chat/sessions` 500 트리거)을 받아 오류 상태로 바뀌는 화면 흐름은 테스트가 없다 (트리거 자체는 `ContractAndMsw` 가 본다).
 - 소스 대화상자·딥 리서처 탭·스케줄 대화상자·MCP 모달은 Loading·Error·Empty 상태 테스트가 없다 (`modals/SourcesModal` 은 Success 와 확인 창만, `DeepResearcherTab` 은 지표 줄바꿈만).
 - 일일 브리핑 대화상자는 브리핑이 없거나 요청이 실패할 때의 화면 테스트가 없다.

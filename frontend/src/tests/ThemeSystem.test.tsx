@@ -1,8 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { ThemeProvider, useTheme, ThemeMode } from '@/context/ThemeContext';
-import ThemeToggle from '@/components/ThemeToggle';
+import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 
 // Helper component to inspect context values
 function TestConsumer() {
@@ -126,21 +125,6 @@ describe('Global Theme System (Cycle 1 - TDD)', () => {
     });
 
     expect(screen.getByTestId('resolvedTheme').textContent).toBe('dark');
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
-  });
-
-  it('renders ThemeToggle button with proper aria-label and accessible title', () => {
-    render(
-      <ThemeProvider defaultTheme="light">
-        <ThemeToggle size="md" />
-      </ThemeProvider>
-    );
-
-    const button = screen.getByRole('button', { name: /테마 전환/i });
-    expect(button).toBeInTheDocument();
-
-    // In light mode, clicking cycles to dark
-    fireEvent.click(button);
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 });

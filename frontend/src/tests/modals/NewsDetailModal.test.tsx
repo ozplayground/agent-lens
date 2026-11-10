@@ -1,9 +1,20 @@
 import { describe, it, expect, vi, afterEach, onTestFinished } from 'vitest';
 import { useState } from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import NewsDetailModal from '@/components/NewsDetailModal';
 import { mockNewsItems } from '@/mocks/handlers';
 import type { NewsItem } from '@/types/news';
+import { http, HttpResponse, delay } from 'msw';
+import { ASK_STREAM_FIRST_BYTE_TIMEOUT_MS } from '@/lib/api';
+import { server } from '@/mocks/server';
+
+function deferred() {
+  let release: () => void = () => {};
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
@@ -67,13 +78,136 @@ describe('NewsDetailModal', () => {
 
     const panel = within(dialog).getByRole('tabpanel');
     expect(within(panel).getByRole('heading', { name: '개발자 시사점' })).toBeInTheDocument();
-    expect(within(panel).getByRole('heading', { name: '핵심 요약 3줄' })).toBeInTheDocument();
+    expect(within(panel).getByRole('heading', { name: '핵심 정리 (규칙 기반 자동 추출)' })).toBeInTheDocument();
     expect(within(panel).getByRole('heading', { name: '기술 스택' })).toBeInTheDocument();
     expect(within(panel).getByRole('heading', { name: '상세 본문 요약' })).toBeInTheDocument();
     expect(screen.queryByText('3-Bullet Executive TL;DR')).not.toBeInTheDocument();
 
     // 핸드오버 버튼은 하나
     expect(within(dialog).getAllByRole('button', { name: /^AI 챗에서 분석/ })).toHaveLength(1);
+  });
+
+  it('질문 직후 meta 를 받기 전에는 엔진 이름을 지어내지 않고, meta 를 받으면 그 엔진을 보인다 (FE-25, D-25)', async () => {
+    const gate = deferred();
+    server.use(
+      http.post('*/api/news/:news_id/ask/stream', async () => {
+        await gate.promise;
+        const body = [
+          `data: ${JSON.stringify({ event: 'meta', model: 'AgentLens Heuristic Engine' })}\n\n`,
+          `data: ${JSON.stringify({ event: 'token', text: '규칙 기반 답변' })}\n\n`,
+          `data: ${JSON.stringify({ event: 'done', total_text: '규칙 기반 답변' })}\n\n`,
+        ].join('');
+        return new HttpResponse(body, { headers: { 'Content-Type': 'text/event-stream' } });
+      })
+    );
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('tab', { name: /^AI 질의응답/ }));
+    fireEvent.click(screen.getByRole('button', { name: '핵심 원리 및 구조' }));
+
+    expect(await screen.findByText(/핵심 동작 원리와 아키텍처 구조/)).toBeInTheDocument();
+    expect(screen.queryByText(/Gemini/)).not.toBeInTheDocument();
+
+    gate.release();
+    expect(await screen.findByText('응답 엔진: AgentLens Heuristic Engine')).toBeInTheDocument();
+    expect(await screen.findByText('규칙 기반 답변')).toBeInTheDocument();
+    expect(screen.queryByText(/Gemini/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      'error 이벤트',
+      { event: 'error', error_code: 'ERR_LLM_STREAM_FAILED', message: '답변 생성이 중간에 끊겼습니다. 다시 시도해 주세요.', retryable: true },
+    ],
+    ['done 없이 끝남', null],
+  ])('스트림이 끊기면(%s) 부분 답을 완료로 보이지 않고 오류와 다시 시도를 보이며, 다시 시도하면 같은 질문을 새로 보낸다', async (_label, last) => {
+    let calls = 0;
+    server.use(
+      http.post('*/api/news/:news_id/ask/stream', () => {
+        calls += 1;
+        const events: unknown[] =
+          calls === 1
+            ? [{ event: 'meta', model: 'claude-sonnet-5-5' }, { event: 'token', text: '받은 부분 답' }, ...(last ? [last] : [])]
+            : [{ event: 'meta', model: 'claude-sonnet-5-5' }, { event: 'token', text: '완성된 답' }, { event: 'done', total_text: '완성된 답' }];
+        const body = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+        return new HttpResponse(body, { headers: { 'Content-Type': 'text/event-stream' } });
+      })
+    );
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('tab', { name: /^AI 질의응답/ }));
+    fireEvent.click(screen.getByRole('button', { name: '핵심 원리 및 구조' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('답변 생성이 중간에 끊겼습니다. 다시 시도해 주세요.');
+    expect(screen.getByText('받은 부분 답')).toBeInTheDocument();
+    expect(screen.getByTitle('답변 복사')).toBeDisabled();
+
+    fireEvent.click(within(alert).getByRole('button', { name: '답변 다시 시도' }));
+    expect(await screen.findByText('완성된 답')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('받은 부분 답')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/핵심 동작 원리와 아키텍처 구조/)).toHaveLength(1);
+    expect(calls).toBe(2);
+  });
+
+  it('FE-43: 첫 응답 전에 시간 초과로 실패하면 스피너 대신 시간 초과 문구의 오류 알림과 답변 다시 시도를 보인다', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    server.use(
+      http.post('*/api/news/:news_id/ask/stream', async () => {
+        await delay('infinite');
+        return new HttpResponse('');
+      })
+    );
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('tab', { name: /^AI 질의응답/ }));
+    fireEvent.click(screen.getByRole('button', { name: '핵심 원리 및 구조' }));
+    expect(await screen.findByText(/AI가 실시간 스트리밍 답변을 생성하는 중/)).toBeInTheDocument();
+
+    await act(() => vi.advanceTimersByTimeAsync(ASK_STREAM_FIRST_BYTE_TIMEOUT_MS + 10));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('응답이 늦어 요청을 멈췄습니다. 다시 시도해 주세요.');
+    expect(within(alert).getByRole('button', { name: '답변 다시 시도' })).toBeInTheDocument();
+    expect(screen.queryByText(/AI가 실시간 스트리밍 답변을 생성하는 중/)).not.toBeInTheDocument();
+  });
+
+  it('FE-43: 답이 하나도 오지 않은 채 연결이 실패해도 빈 본문 대신 오류 알림과 답변 다시 시도를 보이고, 다시 시도로 답을 받는다', async () => {
+    let calls = 0;
+    server.use(
+      http.post('*/api/news/:news_id/ask/stream', () => {
+        calls += 1;
+        if (calls === 1) return HttpResponse.error();
+        const events = [{ event: 'meta', model: 'claude-sonnet-5-5' }, { event: 'token', text: '다시 받은 답' }, { event: 'done', total_text: '다시 받은 답' }];
+        return new HttpResponse(events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(''), {
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      })
+    );
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('tab', { name: /^AI 질의응답/ }));
+    fireEvent.click(screen.getByRole('button', { name: '핵심 원리 및 구조' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByRole('button', { name: '답변 다시 시도' })).toBeInTheDocument();
+    expect(screen.queryByText(/AI가 실시간 스트리밍 답변을 생성하는 중/)).not.toBeInTheDocument();
+
+    fireEvent.click(within(alert).getByRole('button', { name: '답변 다시 시도' }));
+    expect(await screen.findByText('다시 받은 답')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('스트림 연결 자체가 실패하면 브라우저 원문(Failed to fetch) 대신 정한 문구와 다시 시도를 보인다', async () => {
+    server.use(http.post('*/api/news/:news_id/ask/stream', () => HttpResponse.error()));
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('tab', { name: /^AI 질의응답/ }));
+    fireEvent.click(screen.getByRole('button', { name: '핵심 원리 및 구조' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.');
+    expect(alert).not.toHaveTextContent(/failed to fetch/i);
+    expect(within(alert).getByRole('button', { name: '답변 다시 시도' })).toBeInTheDocument();
   });
 
   it('switches tabs with click and arrow keys', () => {

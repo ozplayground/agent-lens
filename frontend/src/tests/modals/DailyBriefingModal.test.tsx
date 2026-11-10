@@ -72,8 +72,12 @@ describe('DailyBriefingModal settings, headline and category headers (R44, R46, 
   });
 
   it('replaces backend category names in overview lines with the long labels', async () => {
+    // MSW 브리핑은 v0.4.2 backend 처럼 분야 이름이 이미 긴 라벨이다. 다른 이름을 보내는 backend 를 흉내 내려고 분야를 직접 준다
     const { dialog } = await renderBriefing({
       overview: '• **MCP & 플러그인 생태계**: FastMCP 릴리즈\n• **모르는 분야**: 그대로 둔다',
+      categories: [
+        { id: 'mcp_plugins_skills', name: 'MCP & 플러그인 생태계', icon: 'mcp_plugins_skills', summary: 'FastMCP 릴리즈', items: [] },
+      ],
     });
     const panel = within(dialog).getByRole('tabpanel');
     expect(within(panel).getByText('MCP & 생태계:')).toBeInTheDocument();
@@ -90,5 +94,13 @@ describe('DailyBriefingModal settings, headline and category headers (R44, R46, 
       expect(label).toHaveTextContent(/^시사점:$/);
       expect(label.closest('p')!.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     }
+  });
+});
+
+/** UI 5대 상태 (리뷰 FE-30 남은 부분): 브리핑이 없거나 요청이 실패했을 때. */
+describe('DailyBriefingModal — 브리핑 없음', () => {
+  it('Empty·Error: 브리핑이 없으면(null) 대화상자를 그리지 않는다', () => {
+    render(<DailyBriefingModal briefing={null} isOpen onClose={vi.fn()} />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

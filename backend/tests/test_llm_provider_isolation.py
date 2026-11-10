@@ -49,7 +49,7 @@ async def test_t1_claude_key_skips_ollama_probe(llm_sources, fake_llm, gemini_sp
     fake_llm.register_ollama(FAKE_OLLAMA, state="down")
     llm_sources.ollama_url(FAKE_OLLAMA)
 
-    assert llm_processor.has_live_provider() is True
+    assert await llm_processor.has_live_provider() is True
     assert fake_llm.requests("ollama") == []
 
     ans, model = await llm_processor.generate_live_answer("테스트 질문")
@@ -70,7 +70,7 @@ async def test_t2_claude_preferred_over_installed_ollama(llm_sources, fake_llm, 
     fake_llm.register_ollama(FAKE_OLLAMA, state="up", models=[INSTALLED])
     llm_sources.ollama_url(FAKE_OLLAMA)
 
-    assert llm_processor.has_live_provider() is True
+    assert await llm_processor.has_live_provider() is True
     assert fake_llm.requests("ollama", path="/api/tags") == []
 
     ans, model = await llm_processor.generate_live_answer("테스트 질문")
@@ -90,7 +90,7 @@ async def test_t3_no_provider_when_ollama_unreachable(llm_sources, fake_llm, gem
     fake_llm.register_ollama(FAKE_OLLAMA, state="down")
     llm_sources.ollama_url(FAKE_OLLAMA)
 
-    assert llm_processor.has_live_provider() is False
+    assert await llm_processor.has_live_provider() is False
     await _assert_unavailable()
     assert gemini_spy.call_count == 0
 
@@ -101,7 +101,7 @@ async def test_t4_missing_ollama_model_is_unavailable(llm_sources, fake_llm, gem
     llm_sources.ollama_url(FAKE_OLLAMA)
     llm_sources.ollama_model(INSTALLED)
 
-    assert llm_processor.has_live_provider() is False
+    assert await llm_processor.has_live_provider() is False
     await _assert_unavailable()
     assert fake_llm.requests("ollama", path="/api/generate") == []
     assert gemini_spy.call_count == 0
@@ -118,7 +118,7 @@ async def test_t5_installed_ollama_model_used(llm_sources, fake_llm, gemini_spy,
         llm_sources.ollama_model("")
         llm_sources.ollama_model(INSTALLED, source="config")
 
-    assert llm_processor.has_live_provider() is True
+    assert await llm_processor.has_live_provider() is True
 
     ans, _ = await llm_processor.generate_live_answer("테스트 질문")
     assert ans == FAKE_OLLAMA_ANSWER
@@ -139,7 +139,7 @@ async def test_t6_openai_key_only(llm_sources, fake_llm, gemini_spy):
     fake_llm.register_ollama(FAKE_OLLAMA, state="down")
     llm_sources.ollama_url(FAKE_OLLAMA)
 
-    assert llm_processor.has_live_provider() is True
+    assert await llm_processor.has_live_provider() is True
 
     ans, _ = await llm_processor.generate_live_answer("테스트 질문")
     assert ans == FAKE_OPENAI_ANSWER
@@ -157,7 +157,7 @@ async def test_t7_ollama_url_from_config_json_when_settings_empty(llm_sources, f
     llm_sources.ollama_url("")
     llm_sources.ollama_url(FAKE_OLLAMA, source="config")
 
-    assert llm_processor.has_live_provider() is True
+    assert await llm_processor.has_live_provider() is True
 
     ans, _ = await llm_processor.generate_live_answer("테스트 질문")
     assert ans == FAKE_OLLAMA_ANSWER
@@ -182,7 +182,7 @@ async def test_t7b_empty_overrides_disable_openai_and_ollama(llm_sources, fake_l
     llm_sources.ollama_url(FAKE_OLLAMA, source="config")
     llm_sources.override(openai_key="", ollama_url="")
 
-    assert llm_processor.has_live_provider() is False
+    assert await llm_processor.has_live_provider() is False
     await _assert_unavailable()
     assert fake_llm.requests("openai") == []
     assert fake_llm.requests("ollama") == []
@@ -195,7 +195,7 @@ async def test_t8_untagged_model_matches_latest_tag(llm_sources, fake_llm, gemin
     llm_sources.ollama_url(FAKE_OLLAMA)
     llm_sources.ollama_model("llama3.2")
 
-    assert llm_processor.has_live_provider() is True
+    assert await llm_processor.has_live_provider() is True
     ans, _ = await llm_processor.generate_live_answer("테스트 질문")
     assert ans == FAKE_OLLAMA_ANSWER
     assert gemini_spy.call_count == 0
@@ -206,7 +206,7 @@ async def test_ollama_probe_is_single_request_with_1s_timeout(llm_sources, fake_
     fake_llm.register_ollama(FAKE_OLLAMA, state="up", models=[INSTALLED])
     llm_sources.ollama_url(FAKE_OLLAMA)
 
-    llm_processor.has_live_provider()
+    await llm_processor.has_live_provider()
 
     probes = fake_llm.requests("ollama", path="/api/tags")
     assert len(probes) == 1
@@ -223,24 +223,13 @@ def _t4_condition(llm_sources, fake_llm):
 
 
 # R4: API 503
-async def test_api_chat_stream_503_when_ollama_model_missing(llm_sources, fake_llm, gemini_spy):
-    from app.main import app
-
-    _t4_condition(llm_sources, fake_llm)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.post("/api/chat/stream", json={"question": "에이전트 하네스 구조 설명", "scope": "global"})
-    assert res.status_code == 503
-    assert res.json()["error_code"] == "ERR_LLM_PROVIDER_UNAVAILABLE"
-    assert gemini_spy.call_count == 0
-
-
-async def test_api_chat_query_503_when_ollama_model_missing(llm_sources, fake_llm, gemini_spy, caplog):
+async def test_api_chat_stream_503_when_ollama_model_missing(llm_sources, fake_llm, gemini_spy, caplog):
     from app.main import app
 
     _t4_condition(llm_sources, fake_llm)
     caplog.set_level(logging.WARNING, logger="agentlens.llm")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        res = await ac.post("/api/chat/query", json={"question": "에이전트 하네스 구조 설명", "scope": "global"})
+        res = await ac.post("/api/chat/stream", json={"question": "에이전트 하네스 구조 설명", "scope": "global"})
     assert res.status_code == 503
     assert res.json()["error_code"] == "ERR_LLM_PROVIDER_UNAVAILABLE"
     warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]

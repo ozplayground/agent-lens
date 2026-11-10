@@ -13,6 +13,7 @@
 *.db-journal
 *.db-shm
 *.db-wal
+*.crawl.lock
 *.sqlite
 *.sqlite3
 agentlens.db

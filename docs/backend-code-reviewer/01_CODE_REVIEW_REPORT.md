@@ -1,17 +1,17 @@
-# [Backend v0.4.0 as-built 전체 감사] 5-Pillar 코드 품질 감사 및 리뷰 보고서 (Code Review Report)
+# [Backend v0.4.0 as-built 전체 감사 → v0.4.2 재리뷰] 5-Pillar 코드 품질 감사 및 리뷰 보고서 (Code Review Report)
 
-Updated: 2026-11-09
-기준: v0.4.1 (main)
+Updated: 2026-11-10
+기준: v0.4.2 (main)
 
-- **검토일자**: 2026-11-09
+- **검토일자**: 2026-11-09 (최초 감사, 재리뷰 1·2차), 2026-11-10 (v0.4.2 재리뷰)
 - **검토자**: 시니어 백엔드 코드 리뷰어 (`backend-code-reviewer`)
-- **검토 대상 PR / 브랜치**: `main` (`3973ae9` release v0.4.0 위 `9e0c9e5`) 의 backend 전체. 변경 diff 리뷰가 아니라 지금 코드베이스 감사다.
+- **검토 대상 PR / 브랜치**: 최초 감사는 `main` (`3973ae9` release v0.4.0 위 `9e0c9e5`) 의 backend 전체. v0.4.2 재리뷰는 `main` (`4944a5e` release v0.4.1) 위 작업 트리(커밋 전) `git diff HEAD -- backend` 와 새 파일 13개 (`backend/app/api/errors.py`, `backend/app/services/news_service.py`, `backend/tests/test_*.py` 11개), 함께 바뀐 `config.json`·`.env.example`·`backend/.env.example`·`docker-compose.yml`·`.gitignore` (11절)
   - `backend/app/**` (라우터 10개, 서비스 15개, 수집기, 모델, 스키마, 설정, 스케줄러, MCP 서버)
-  - `backend/tests/**` (21개 파일, 217개 테스트)
+  - `backend/tests/**` (v0.4.2: 33개 파일, 384개 테스트)
   - `scripts/*.py` (`scripts/collect.py`)
-- **대조한 산출물**: `docs/system-designer/01_SYSTEM_DESIGN.md` (특히 1.3, 4.2~4.5, 13), `docs/fullstack-architect/01_ARCHITECTURE_ADR.md`, `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` (7절 불일치 목록), `docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md`, 옛 `docs/known-issues.md` 의 backend 행 (그 문서는 곧 지워지므로 backend 결함을 모두 이 보고서의 지적으로 옮겼다. 대응표는 6절)
-- **최종 판정**: **APPROVED** (재리뷰 2차 2026-11-09 기준. 머지 전 필수 0건. 10.8절)
-- **재리뷰**: 2026-11-09, 1차는 backend-tdd-engineer Cycle 6 수정분(작업 트리, 커밋 전, `git diff -- backend/`)과 frontend FE-02 (10.1~10.7), 2차는 BUG-02R 수정분(계약 8.1) (10.8). 판정 이력: 최초 REQUEST_CHANGES → 1차 REQUEST_CHANGES(BUG-02R) → 2차 APPROVED. 1~8절은 최초 감사(수정 전 코드) 기준 기록이고, 줄 번호도 수정 전 파일 기준이다.
+- **대조한 산출물**: `docs/system-designer/01_SYSTEM_DESIGN.md` (특히 1.3, 4.2~4.5, 13), `docs/fullstack-architect/01_ARCHITECTURE_ADR.md`, `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` (v1.3), `docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md` ([Cycle v0.4.2-A/B/C]), `docs/qa-engineer/02_QA_TEST_REPORT.md` 3절, 오케스트레이터 변경 요약(스크래치 `v042-changes.md`), 옛 `docs/known-issues.md` 의 backend 행 (대응표는 6절)
+- **최종 판정**: **APPROVED** (v0.4.2 4차 재리뷰 2026-11-10 기준. 머지 전 필수 0건, 권장 0건. 11.13절)
+- **재리뷰**: 2026-11-09, 1차는 backend-tdd-engineer Cycle 6 수정분(작업 트리, 커밋 전, `git diff -- backend/`)과 frontend FE-02 (10.1~10.7), 2차는 BUG-02R 수정분(계약 8.1) (10.8). 2026-11-10 v0.4.2 재리뷰는 남은 권장 50건 수정분 (11절). 판정 이력: 최초 REQUEST_CHANGES → 1차 REQUEST_CHANGES(BUG-02R) → 2차 APPROVED → v0.4.2 APPROVED → v0.4.2 2차 REQUEST_CHANGES(M003-01) → v0.4.2 3차 APPROVED → v0.4.2 4차 APPROVED. 11.11절은 v0.4.2 2차 수정분, 11.12절은 M003-01 수정분, 11.13절은 4차 수정 5건이다. 1~8절은 최초 감사(수정 전 코드) 기준 기록이고, 줄 번호도 수정 전 파일 기준이다. 10절은 v0.4.1 작업 트리 기준, 11절은 v0.4.2 작업 트리 기준이다.
 - **검사 범위 결정**: 제품 오너 결정(2026-11-09, 오케스트레이터 전달)에 따라 인증 없음·CORS 전체 허용, SSRF, 비밀값 평문 저장, 설정 조회로 비밀값 노출, 설정 재적용 누락은 검사하지 않는다. 이 범주에서 찾은 6건(SEC-01, SEC-02, SEC-04, SEC-05, SEC-06, BUG-01)은 9절 '검사 범위 밖 (수용된 위험)' 에 사실과 근거 `path:line` 만 남기고 판정 근거로 쓰지 않는다.
 
 검토 방법
@@ -25,6 +25,8 @@ Updated: 2026-11-09
 
 ## 1. 5-Pillar 코드 품질 감사 매트릭스 (5-Pillar Audit)
 
+v0.4.2 기준 매트릭스는 11.1절에 있다. 아래 표는 최초 감사(v0.4.0 코드) 기준 기록이다.
+
 | 감사 필라 (Pillar) | 세부 검토 기준 | 평가 점수 (1~5) | 검토 소견 및 발견 사항 |
 | :--- | :--- | :---: | :--- |
 | **Pillar 1: 아키텍처 정합성** | 계층 분리(Router/Service/Model), 설계 문서 일치도 | 3 / 5 | 설계서(`01_SYSTEM_DESIGN.md`)가 지금 코드를 그대로 적어 문서-코드 차이는 작다. 다만 설계서 1.3 이 적은 규약 위반이 그대로 남아 있다: 라우터의 모델 직접 쿼리·삭제(ARCH-01), services ↔ collectors 양방향 의존(ARCH-02), 요청 중간 커밋으로 흩어진 트랜잭션 경계(ARCH-03), 별도 프로세스(MCP·직접 수집)의 중복 방지·스키마 생성 우회(ARCH-04), 운영 코드가 pytest 존재 여부로 분기(ARCH-05) |
@@ -35,7 +37,7 @@ Updated: 2026-11-09
 
 ### 1.1 지적 요약
 
-최초 감사 기준 개수다. 재리뷰 뒤 상태는 10.4절(1차)과 10.8.5절(2차: 필수 0, 해결 8, 권장 50, 범위 밖 6)에 있다.
+최초 감사 기준 개수다. 재리뷰 뒤 상태는 10.4절(1차), 10.8.5절(2차: 필수 0, 해결 8, 권장 50, 범위 밖 6), 11.9절(v0.4.2: 필수 0, 권장 9, 범위 밖 6)에 있다.
 
 | 심각도 | 개수 | ID |
 |---|---|---|
@@ -936,6 +938,26 @@ list body 500 {"detail":"Internal server error occurred. ...","error":"'list' ob
 
 ## 3. 최종 리뷰 판정 및 출시 승인
 
+- **판정 결과 (v0.4.2 4차 재리뷰, 2026-11-10)**: **APPROVED**
+- **v0.4.2 4차 재리뷰 코멘트**: 4차 수정 5건(Slack 테스트 문구, `make collect` 직접 모드 경고·잠금 실패 종료 1, 피드 `category_hint` 기본 카테고리, 탐침 예외 원문 숨김, 자동 채택 저장 실패 처리)과 D-54(`redirect_slashes=False`, 저장소 안에 끝 슬래시로 API 를 부르는 곳이 없음을 확인)가 맞다. `category_hint` 는 관련성 평가를 통과한 항목에만 적용된다(재현). 외부·LLM 호출을 모두 막고 재현했다. 머지 전 필수 0, 권장 0. `make check` 종료 0 (backend `418 passed`, frontend `70 files / 831 tests`). 상세는 11.13절.
+
+이하 v0.4.2 3차 재리뷰 판정:
+
+- **판정 결과 (v0.4.2 3차 재리뷰, 2026-11-10)**: **APPROVED**
+- **v0.4.2 3차 재리뷰 코멘트**: M003-01 이 고쳐졌다. m003 의 GitHub 규칙이 감시 저장소 폴백 행(URL·`stars_hint`·포크 비율이 모두 같은 행)만 0 으로 만들고, 옛 DB 사본에서 0 처리 행이 404 → 8(모두 합성)이 됐다. 옛 규칙을 되살리는 변이를 테스트가 잡는다. 사용자 실제 DB 의 GitHub 지표 복구도 읽기 조회로 확인했다. 머지 전 필수 0, 권장 0. `make check` 종료 0 (backend `410 passed`, frontend `70 files / 823 tests`). 상세는 11.12절.
+
+이하 v0.4.2 2차 재리뷰 판정:
+
+- **판정 결과 (v0.4.2 2차 재리뷰, 2026-11-10)**: **REQUEST_CHANGES**
+- **v0.4.2 2차 재리뷰 코멘트**: 11절 권장 9건은 모두 해결됐고(재현·변이로 확인), ADR Q4·Q11·Q12·Q13, 스트림 `session_id` 검증, `ChatStatusStep` 4값, `ManualCollectResponse` 도 맞다. 그러나 새 마이그레이션 m003 의 GitHub 합성 지표 판정 규칙이 실제 GitHub 검색 결과의 별·포크도 0 으로 지운다(M003-01, 머지 전 필수). 옛 DB 사본에서 404행 중 396행이 실제 값이었고, 사용자 실제 DB 도 이미 적용돼 수백 행이 지워졌을 가능성이 높다(통계 근거, 11.11.3). 되돌릴 수 없는 데이터 손실이라 출시 전에 규칙을 고쳐야 한다. `make check` 종료 0 (backend `410 passed`, frontend `69 files / 820 tests`). 상세는 11.11절.
+
+이하 v0.4.2 1차 재리뷰 판정:
+
+- **판정 결과 (v0.4.2 재리뷰, 2026-11-10)**: **APPROVED**
+- **v0.4.2 재리뷰 코멘트**: 지난 권장 50건 중 47건 해결, 2건 일부 해결(ARCH-03 → ARCH-03R, CFG-02 → CFG-02R), 1건 기록(TEST-05). 머지 전 필수는 0건이다. 새로 찾은 권장 9건(ARCH-03R, CFG-02R, N-08~N-12, TEST-07, TEST-08)은 모두 재현 또는 변이(mutation) 실행으로 확인했고, 각각 권장으로 둔 이유를 11.7절에 적었다. 이번 지시가 "남은 결함 0" 이므로 오케스트레이터가 이 9건을 다시 고치게 하는 것을 권한다. `make check` 종료 0 (backend `384 passed`, frontend `67 files / 783 tests`, eslint 출력 없음, `tsc --noEmit` 출력 없음), 실행 전후 `git status --porcelain`·`git diff HEAD` 해시·`sources.json` 두 벌·`config.json` md5 같음 (11.2절). 수용된 위험 6건(9절)은 이번에도 판정 근거로 쓰지 않았다.
+
+이하 재리뷰 2차 판정 (v0.4.1 기준):
+
 - **판정 결과 (재리뷰 2차, 2026-11-09)**: **APPROVED**
 - **재리뷰 2차 코멘트**: BUG-02R 이 계약 8.1 대로 고쳐졌다. 클라이언트 id 를 싣는 재현(R11)에서 두 턴 = 메시지 4개·`message_count` 4, 역순 저장도 한 벌, id 없는 요청은 서버 UUID 로 하위 호환. 회귀 테스트 9개 추가, `make check` 종료 0 (backend 244, frontend 664). 최초 필수 8건 모두 해결. 남은 것은 권장 50건(새 N-06·N-07 포함)과 수용된 위험 6건이다. 상세는 10.8절.
 
@@ -1549,3 +1571,519 @@ summary message_count [8]
 
 - **판정 결과**: **APPROVED**
 - **근거**: 머지 전 필수였던 BUG-02R 이 계약(8.1)대로 고쳐졌고, 정상 순서·역순·옛 클라이언트 세 경우를 재현으로 확인했다. 회귀 테스트 9개가 실제 스트림 경로와 경계값을 덮는다. 최초 감사의 필수 8건이 모두 해결됐다. 새로 찾은 N-06(다른 세션 id 재사용 시 조용한 누락)·N-07(같은 시각 정렬)은 지금 프론트 id 생성 방식에서 실제로 일어날 가능성이 낮아 권장으로 둔다. N-01~N-05 와 함께 다음 작업에서 다룬다. 수용된 위험 6건(9절)은 판정 근거로 쓰지 않았다.
+
+## 11. v0.4.2 재리뷰 (2026-11-10)
+
+- **대상**: `main` (`4944a5e`) 위 작업 트리(커밋 전). `git diff HEAD -- backend` (60개 파일, +1435/−2908), 새 파일 `backend/app/api/errors.py`, `backend/app/services/news_service.py`, `backend/tests/test_b_collection.py`, `test_b_config_schedule_db.py`, `test_b_news_api.py`, `test_b_sources_research.py`, `test_briefing_output.py`, `test_error_format.py`, `test_input_limits.py`, `test_network_guard.py`, `test_news_service.py`, `test_transactions.py`, `test_v042_llm_chat.py`. 함께 바뀐 `config.json`, `.env.example`, `backend/.env.example`, `docker-compose.yml`, `.gitignore`, `scripts/collect.py`(바뀌지 않음, 새 잠금과의 상호작용만 봤다).
+- **방법**: diff 를 파일별로 읽었다. 쟁점은 스크래치 스크립트로 재현했다(R12~R15, 임시 SQLite, `httpx.ASGITransport` 또는 임시 포트의 uvicorn, 저장소 파일을 쓰지 않음). B 조 TDD 순서 5건은 저장소 밖 사본(`backend/app`·`tests` 복사)에서 코드를 되돌리는 변이(mutation)를 넣고 해당 테스트를 돌렸다(11.4절). 마이그레이션은 루트의 옛 `agentlens.db`(2026-10-19, 지금은 쓰지 않는 파일)를 스크래치로 복사해 돌렸다. 사용자 DB `backend/agentlens.db` 는 `sqlite3 -readonly` 조회만 했다. 코드·사용자 파일은 고치지 않았고 stash·checkout·reset 은 쓰지 않았다.
+- 줄 번호는 이 절에서는 지금 작업 트리 기준이다.
+
+### 11.1 5-Pillar 매트릭스 (v0.4.2)
+
+| 감사 필라 (Pillar) | 세부 검토 기준 | 평가 점수 (1~5) | 검토 소견 및 발견 사항 |
+| :--- | :--- | :---: | :--- |
+| **Pillar 1: 아키텍처 정합성** | 계층 분리(Router/Service/Model), 설계 문서 일치도 | 4 / 5 | 라우터가 모델을 직접 쿼리하지 않는다 (`backend/app/api/` 에 `select(`·`db.get(`·`.execute(` 0건, grep). `NewsService` 로 변환 세 벌을 하나로(`backend/app/services/news_service.py:14-50`). services → collectors import 0건(categorizer 이동). 별도 프로세스 수집 잠금·스키마 생성(`backend/app/collectors/manager.py:49-75`, `backend/app/mcp/server.py:19-23`). 남은 것: 세션 업서트 실패 시 `get_db` 가 부분 변경을 커밋한다(ARCH-03R), `make collect` 와 새 잠금이 맞물리지 않는다(N-12). `docs/system-designer/01_SYSTEM_DESIGN.md` 는 아직 지운 엔드포인트·옛 DB 경로를 적는다(11.6절, 문서 단계에서 고칠 것) |
+| **Pillar 2: 클린코드 & SOLID** | 단일 책임 원칙, 중복 코드 부재, 변수/함수 네이밍 가독성 | 4 / 5 | 오류 응답 하나로(`backend/app/api/errors.py`), 예외→상태 표 `LLM_ERROR_MAP`(`backend/app/api/chat.py:50-57`), 지운 코드·엔드포인트 11개·서비스 1개, FTS DDL 한 곳(`backend/app/database.py:79-109`), 버전 붙은 마이그레이션(`:77`, `:112-123`). 남은 것: ARCH-05 로 읽는 곳이 사라진 `TESTING` 설정(CFG-02R), 이메일의 고정 대시보드 주소(N-10) |
+| **Pillar 3: 보안 & 데이터 무결성**| SQL Injection 방어, 입력값 Sanitization, 권한 검증, 환경변수 유출 방지 | 4 / 5 | 500 은 고정 문장만(재현 R12-C), 검증 실패는 400 `ERR_INVALID_PAYLOAD`·입력 echo 없음, 메일 HTML 이스케이프·http(s) 링크만(`backend/app/services/email_service.py:12-15`, `:27-46`), 입력 한도(질문 1~2000자, 후보 1~20, 로그 1~200). 설정·소스 파일 원자적 교체. 남은 것: 세션 업서트 부분 커밋(ARCH-03R), 기존 DB 의 KST 행이 업그레이드 뒤 9시간 어긋나 보인다(N-11). 수용된 위험 6건은 판정에 넣지 않았다 |
+| **Pillar 4: 성능 & 리소스 최적화**| 불필요한 리렌더 방지, N+1 쿼리 부재, 비동기 논블로킹 준수 | 5 / 5 | Ollama 판정 async + 30초 기억, LLM 평가는 DB 잠금 밖(`manager.py:186-223`), feedparser·본문 추출 `to_thread`, 크기·만료 있는 캐시, 설정·소스 파일 (mtime,size) 캐시, 검색 경로의 FTS 검사·커밋 제거. 새 성능 결함은 찾지 못했다 |
+| **Pillar 5: 테스트 품질 & 커버리지**| Red-Green TDD 준수 여부, 엣지/에러 케이스 커버리지 | 4 / 5 | 새 테스트 167개, 384 passed. A·C 조는 Red 출력과 함께 기록했다. B 조가 순서를 못 지킨 5건은 변이로 확인했고 4건은 동작을 잡는다(11.4절). 외부 네트워크 가드(루프백만), SMTP 흉내, 남은 태스크 취소, pytest-cov. 남은 것: 소스 문자열만 보는 테스트 2건이 동작 회귀를 놓친다(TEST-07, 변이로 확인), 세션 업서트 트랜잭션 테스트가 라우터 경로를 보지 않는다(ARCH-03R), 실행마다 임시 DB 폴더가 남는다(TEST-08) |
+
+### 11.2 `make check` (v0.4.2 재리뷰)
+
+- 실행: 2026-11-10 13:35~13:36 KST, 저장소 루트, 이 검토자가 직접 실행. 종료 코드 **0**.
+```
+cd backend && ../.venv/bin/pytest -v tests/
+platform darwin -- Python 3.11.9, pytest-9.2.0, pluggy-1.7.0
+plugins: cov-7.1.0, anyio-4.16.0, asyncio-1.4.1.post1
+...
+tests/test_v042_llm_chat.py::test_cc02_non_stream_ask_helpers_are_removed PASSED [100%]
+============================= 384 passed in 8.76s ==============================
+cd frontend && pnpm test && pnpm lint && pnpm exec tsc --noEmit
+ Test Files  67 passed (67)
+      Tests  783 passed (783)
+$ eslint
+EXIT=0
+```
+  eslint 는 경고·오류 출력이 없고, `tsc --noEmit` 도 출력 없이 끝났다.
+- 실행 전후: `git status --porcelain` 같음(`diff` 출력 없음), `git diff HEAD | shasum` 같음(`69bf963f…`), 루트 `sources.json`·`backend/app/config/sources.json` md5 `32ed0854…` (사용자 변경 Evil Martians 그대로), `config.json` md5 `5b2bf3b6…` 같음. 테스트 DB 는 `$TMPDIR/agentlens-test-*` 에 생겼다 (TEST-08).
+
+### 11.3 지난 지적 건별 확인 (권장 50건)
+
+| ID | 결과 | 근거 (코드·테스트) |
+|---|---|---|
+| SEC-03 | 해결 | 전역 처리기 3개: HTTPException → 같은 상태·`error_code`, 검증 → 400 `ERR_INVALID_PAYLOAD`·`details [{loc,msg}]`, 그 밖 → 500 고정 문장·`logger.exception` (`backend/app/api/errors.py:51-83`). 챗 세션 500 은 고정 문장(`backend/app/api/chat.py:144-146`, `:175-177`, `:191-193`, `:207-209`). `sources_file` 은 파일 이름만(`backend/app/api/sources.py:37`). `/api/mcp/info` 삭제. 재현 R12-C: 예외 문장에 `SELECT … /Users/abs/path` 를 넣어도 500 본문은 `{"error_code":"ERR_SERVER_INTERNAL","message":"서버 내부 처리 중 오류가 발생했습니다.","details":null}`. 테스트 `test_error_format.py` 21개 |
+| SEC-07 | 해결 | `html.escape` 와 `_safe_href`(http(s) 만, 그 밖 `#`) (`backend/app/services/email_service.py:12-15`, `:27-46`, `:89`). `test_email_html_escapes_collected_strings_and_blocks_non_http_links` |
+| BUG-09 | 해결 | `last_usage` 싱글턴 삭제, `usage_out` 로 호출마다 (`backend/app/services/llm_processor.py:390-430`, `:462-499`, `backend/app/services/llm_providers/anthropic_provider.py:331-332`, `backend/app/services/chat_service.py:620-624`). `test_bug09_*` 3개 |
+| BUG-10 | 해결 | 휴리스틱 폴백 평가는 캐시하지 않는다 (`llm_processor.py:773`), `reset-and-collect` 가 `clear_caches()` (`backend/app/api/schedule.py:77`). `test_bug10_*` 2개. 같은 문제의 기사 질문 쪽은 N-08 (새 지적) |
+| BUG-11 | 해결 | 소스·배치 실패를 `source_results[name].error` 에, `status` success/partial_failure/failed, `error_message` JSON (`backend/app/collectors/manager.py:262-297`). 배치는 롤백 뒤 다시 올린다(`:218-221`). `test_crawl_log_records_*` |
+| BUG-12 | 해결 | NULL summary·published_at·category 이스케이프·`PUBLIC_WEB_URL` (`backend/app/api/news.py:73-88`). `test_rss_feed_survives_null_columns_and_escapes`. 같은 종류의 고정 주소가 메일에 남는다: N-10 |
+| BUG-13 | 해결 | planner·검색 예외 → `event: error` (`chat_service.py:549-556`, `:569-581`), 예외 문자열 없음 (`_sse_error` `:428-439`). `test_bug13_*` 2개 |
+| BUG-14 | 해결 | `ChatStreamRequest.model` 기본 `None` (`backend/app/schemas/chat.py:31`). `test_bug14_*` 2개 |
+| BUG-15 | 해결 | `clip_words` 공백 경계 + `…` (`backend/app/services/briefing_service.py:47-58`, 사용 `:103`, `:105`, `:116`). `test_clip_words_*` 3개 외 2개 |
+| BUG-16 | 해결 | 분야 이름 = 프론트 긴 라벨, `icon` = 분야 id, 마크다운·Notion·메일·웹훅·챗 진행 라벨 이모지 삭제. `test_briefing_output.py`, `test_d35_*` |
+| BUG-17 | 해결 | LLM 시사점이 없으면 `why_it_matters = ""` (`llm_processor.py:810-812`). `test_bug17_*` 2개 |
+| BUG-18 | 해결 (데이터 제외) | RSS·arXiv `raw_score` 0, HF 실제 upvotes, GitHub 감시 저장소는 API 실제 값 또는 건너뜀(`backend/app/collectors/sources/github.py:50-78`), 인기 점수 `20·log10(1+h)`, 저장 UTC(`manager.py:151-155`, `backend/app/collectors/sources/rss.py:27-40`), 응답 `Z`(`backend/app/schemas/news.py:32-36`). 테스트 8개. 이미 저장된 행은 보정하지 않았다: N-11 |
+| BUG-19 | 해결 | `DELETE /api/news/all` 삭제 (재현 R12-D 404) |
+| BUG-20 | 해결 | `SourcesWriteError` → 500 (`backend/app/services/sources_service.py:156`, `backend/app/api/sources.py:19-24`), RSS id 슬러그 + 겹치면 `_<sha1[:8]>` (`sources_service.py:35-41`), 입력 검증(`sources.py:9-16`). 테스트 11개 |
+| BUG-21 | 해결 | 깊은 사본(`backend/app/api/briefing.py:139`), 임시 파일 → `replace`, 실패 시 제자리 쓰기, 임시 파일 항상 삭제 (`backend/app/config.py:181-202`). `test_settings_save_failure_keeps_memory_and_file`, `test_save_json_config_writes_via_temp_file_and_keeps_original_on_failure` |
+| CFG-01 | 해결 | `add_jobs` 가 `crawl_hours`·`timezone`·`briefing.auto_dispatch_hour` 로 cron (`backend/app/scheduler.py:47-70`), `SCHEDULER_ENABLED` (`:72-75`). 테스트 4개 |
+| CFG-02 | 일부 해결 | 지운 설정 9개, 연결 4개 (`config.py:62-121`, `test_dead_settings_are_removed` 외 6개). 이번 ARCH-05 수정으로 `TESTING` 이 새로 읽는 곳 없는 설정이 됐다: CFG-02R |
+| CFG-03 | 해결 (테스트 약함) | 기본 7.0 하나 (`config.py:89`), `getattr` 폴백 삭제 (`llm_processor.py:634`, `:726`). 테스트가 소스 문자열만 본다: TEST-07 |
+| CFG-04 | 해결 | `run-deep` 설명 '키워드 규칙 점수'(`backend/app/api/research.py:45`), docstring 3곳. `test_cfg04_*` |
+| ARCH-01 | 해결 | 뉴스·통계·스케줄 라우터가 `NewsService` 만 부른다, `collector_manager.reset_progress` (`manager.py:91-97`). `test_news_service.py` 8개 |
+| ARCH-02 | 해결 | `app/services/categorizer.py` 로 이동, services → collectors import 0건(grep). `test_categorizer_lives_in_services_not_collectors` |
+| ARCH-03 | 일부 해결 | 세션 업서트 = flush·`commit=False`·커밋 한 번(`backend/app/services/chat_session_service.py:230-304`), 스크래퍼는 자기 세션(`backend/app/services/scraper.py:170-182`), 삭제는 서비스 한 커밋. 그러나 라우터가 예외를 잡아 정상 반환하면 `get_db` 가 부분 변경을 커밋한다: ARCH-03R (재현 R12-B) |
+| ARCH-04 | 해결 | DB 경로 `backend/` 기준(`config.py:49-58`, `:159`), 비차단 `flock`(`manager.py:49-75`, `:225-231`, `:319-321`), MCP 도구 첫 호출 때 `ensure_db_schema`. 재현 R12-G·R14. `make collect` 와의 상호작용은 N-12 |
+| ARCH-05 | 해결 | `is_test_environment` 삭제, planner 는 라이브 공급자 여부로만(`chat_service.py:333-334`), `except TypeError` 재호출 삭제. `test_arch05_*` 3개 |
+| CC-01 | 해결 | `error_response`·`ApiError`·`LLM_ERROR_MAP`, `api/chat.py` 에 `"error_code":` 리터럴 0건. `test_chat_router_has_no_model_query_and_no_repeated_error_blocks` |
+| CC-02 | 해결 | 엔드포인트 11개·`AgenticSearchService`·`generate_structured_summary`·`answer_question(_with_meta)`·`add_github_repo`·`discover_sources`·`register_candidate` 삭제. 재현 R12-D: 11개 모두 404 `ERR_NOT_FOUND` (단 `POST /api/sources/github` 은 307 → `/api/sources/github/` 로 슬래시 리다이렉트된다. `{item_id:path}` 가 빈 값과 맞기 때문이며 해당 경로에 POST 처리기는 없다). 프론트·`.claude`·`scripts`·`Makefile` 에 남은 호출 0건(grep) |
+| CC-03 | 해결 | FTS DDL `database.FTS_DDL` 한 곳, 검색은 만들거나 커밋하지 않음 (`backend/app/services/retriever.py:478-480`). `test_retriever_does_not_create_fts_or_commit` |
+| CC-04 | 해결 | 모델 `index=True` 삭제, `_m002_drop_duplicate_indexes` (`database.py:68-72`). 재현 R13: 옛 DB 사본에서 5개 인덱스가 지워짐 |
+| CC-05 | 해결 | `POST /api/briefing/generate` 삭제 |
+| CC-06 | 해결 | `MIGRATIONS` + `PRAGMA user_version`, 실패는 로그 후 raise (`database.py:75-134`). 재현 R13 |
+| CC-07 | 해결 | verdict 주석(`backend/app/models/news.py:62`), 스케줄 로그가 설정값(`scheduler.py:18-20`), docstring 우선순위 |
+| PERF-01 | 해결 | `_ollama_status` async + `_ollama_cache` 30초 (`llm_processor.py:174`, `:225-250`), `has_live_provider`·`check_provider_available` async. `test_perf01_*` |
+| PERF-02 | 해결 | `_prepare_row` 는 잠금 밖, 저장만 잠금 안 한 트랜잭션 (`manager.py:122-223`). `test_llm_evaluation_runs_outside_db_lock` |
+| PERF-03 | 해결 | feedparser·본문 추출 `asyncio.to_thread` 4곳. 변이로 4곳 모두 테스트가 잡음 (11.4절) |
+| PERF-04 | 해결 | `load_json_config`·`load_sources` 가 (mtime_ns,size) 같으면 깊은 사본만 (`config.py:28-47`, `sources_service.py:55-68`). 변이로 확인 (11.4절) |
+| PERF-05 | 해결 | `TTLCache` 평가 5000/24h·질문 1000/6h·Ollama 8/30s (`llm_processor.py:93-132`, `:172-174`), 스크래퍼 잠금 `WeakValueDictionary`(`scraper.py:77`, `:83-90`, 지역 변수가 강한 참조를 쥐므로 사용 중 사라지지 않는다). `test_perf05_*` 2개 |
+| PERF-06 | 해결 | 검색 경로의 `_ensure_fts_table` 삭제. rebuild 판정은 시작 때 `news_fts_docsize` 로 (`database.py:101-109`) |
+| PERF-07 | 해결 (속도 제한 제외) | 질문 1~2000자(`schemas/news.py`), `max_candidates` 1~20·`limit` 1~200 (`research.py:32`, `:42`). 재현 R12-C 400. 속도 제한은 넣지 않았다. 근거(인증 없는 단일 사용자 로컬 앱, 요청당 비용은 길이·범위로 묶임, 수집·딥 리서치는 동시에 하나)를 받아들인다 |
+| TEST-02 | 해결 | 버전 = 루트 `config.json` `app.version`, reset 은 `started`·삭제 행 수·삭제 뒤 0·수집 1회, 업서트 `== 201`, 딥 리서치 판정 점수 구간 |
+| TEST-03 | 해결 | 전송 계층 가드가 루프백 밖 요청을 막고 teardown 에서 실패시킴, `register_web`, autouse `fake_smtp`·`cancel_leftover_tasks`. `test_network_guard.py` 8개. 이번 `make check` 는 외부 호출 없이 통과했다 |
+| TEST-04 | 해결 | `tempfile.mkdtemp` (`backend/tests/conftest.py:8`). 폴더를 지우지 않아 쌓인다: TEST-08 |
+| TEST-05 | 기록 (조치 없음) | 지난 이력. 이번 작업은 A·C 조 Red 출력 기록, B 조는 5건 순서 위반을 스스로 적었다 (11.4절) |
+| TEST-06 | 해결 | `pytest-cov>=5.0.0` (`backend/requirements.txt`), planner JSON·`ACTION:`·잘못된 JSON 테스트 4개 |
+| N-01 | 해결 | 토큰 뒤 실패·`max_tokens` → `{"event":"error","error_code":"ERR_LLM_STREAM_FAILED",…,"retryable":true}`, done·캐시 없음 (`llm_processor.py:136-142`, `:945`, `:978`). `test_n01_*` 2개 |
+| N-02 | 해결 | `last_run_summary {status:"error",…}` 후 raise (`backend/app/services/deep_researcher.py:392-401`), `_background_tasks` (`research.py:24`, `:51-53`). 테스트 2개 |
+| N-03 | 해결 | `/api/chat/query`·`/api/chat/search` 삭제 |
+| N-04 | 해결 | 등록 url·site_url 제외, 발굴·시드 번갈아 (`deep_researcher.py:410-431`), `max_candidates` 1~20. `test_deep_research_interleaves_seeds_and_skips_monitored` |
+| N-05 | 해결 | 비스트림 `stop_reason == "max_tokens"` → `AnthropicStreamError` (`anthropic_provider.py:236-238`). `test_n05_*` |
+| N-06 | 해결 | 다른 세션 id → `MessageIdConflictException`, 업서트는 아무것도 바꾸기 전에 검사(`chat_session_service.py:240-241`, `:412-422`), 세션 POST 400 `details.message_ids` (`chat.py:173-174`). `test_n06_*` |
+| N-07 | 해결 | 받은 `created_at` 또는 서버 시각 + 순서 µs (`chat_session_service.py:397`). `test_n07_*` |
+
+### 11.4 B 조가 TDD 순서를 지키지 못한 5건: 테스트가 동작을 잡는가
+
+저장소 밖 사본(`scratchpad/mut/`)에서 구현을 되돌리는 변이를 하나씩 넣고 해당 테스트만 돌렸다. 실패하면 테스트가 그 회귀를 잡는다는 뜻이다.
+
+| 항목 | 테스트 | 변이 | 결과 | 판단 |
+|---|---|---|---|---|
+| CFG-03 | `test_high_signal_threshold_has_single_default` (`test_b_config_schedule_db.py:157-161`) | 기본값 7.0 → 7.8 | `1 failed` | 잡는다 |
+| | 같은 테스트 | 문자열 `"high_signal_threshold", 7.0)` 는 남기고 키가 없을 때 7.8 이 되게 식을 바꿈 | `1 passed` | **동작이 아니라 소스 문자열을 본다** (TEST-07) |
+| ARCH-04 (DB 경로) | `test_relative_sqlite_path_resolves_against_backend_dir` (`:168-179`) | `merge_json_and_env` 의 `resolve_database_url` 호출 삭제 | `1 failed` | 잡는다 (`Settings(DATABASE_URL=…)` 동작 단언) |
+| PERF-04 (config) | `test_load_json_config_rereads_only_when_file_changes` (`:182-197`) | 캐시 조건을 `if True:` 로 | `1 failed` | 잡는다 (`json.load` 횟수) |
+| PERF-04 (sources) | `test_sources_file_rereads_only_when_file_changes` (`:200-218`) | 캐시 조건 `if True:` / 깊은 사본 대신 원본 반환 | `1 failed` / `1 failed` | 잡는다 (횟수와 사본 둘 다) |
+| PERF-03 | `test_rss_feed_is_parsed_off_the_event_loop`, `test_scraper_extraction_runs_off_the_event_loop`, `test_research_feed_parsing_runs_off_the_event_loop` ×2 | 네 곳의 `to_thread` 를 직접 호출로 | 네 경우 모두 해당 테스트 `1 failed` | 잡는다 (메인 스레드 여부) |
+| CFG-02 단언 | `test_collection_evaluation_has_no_unused_category_hint` (`test_b_collection.py:344-348`) | `category_hint` 인자 되살림 | `1 failed` | 잡는다 (시그니처) |
+| (참고) CFG-02 | `test_chat_session_retention_uses_configured_limit` (`test_b_config_schedule_db.py:116-119`) | 문자열은 남기고 `max_limit=settings.CHAT_SESSION_MAX_LIMIT and 30` (늘 30) | `1 passed` | **소스 문자열만 본다** (TEST-07) |
+
+결론: 5건 중 ARCH-04·PERF-04·PERF-03·CFG-02 단언은 실제 동작을 잡는다. CFG-03 은 지금 코드를 되돌리면 실패하지만 소스 문자열 검사라 동작 회귀를 놓칠 수 있다(TEST-07).
+
+### 11.5 중점 확인 항목
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| 오류 처리기·500 경로 | 맞음 | 재현 R12-C: 없는 경로 404 `ERR_NOT_FOUND`, 잘못된 메서드 405 `ERR_METHOD_NOT_ALLOWED`, 본문·쿼리 검증 400 `details [{loc,msg}]`(입력값 없음), 처리 못 한 예외 500 고정 문장. `HTTPStatus(exc.status_code)` 는 표준이 아닌 상태(529)에서 `ValueError` 를 내지만 529 는 `error_response` 로만 나가고 `HTTPException(529)` 를 던지는 곳은 없다(grep) |
+| 삭제한 엔드포인트의 남은 참조 | 없음 (코드) | 11.3 CC-02. 문서는 남았다(11.6) |
+| 수집 잠금(flock)·reset | 맞음 (backend 안), N-12 (`make collect`) | 재현 R12-G: 다른 프로세스가 `<db>.crawl.lock` 을 쥐면 `trigger` → `already_running`, `reset-and-collect` → `already_running`·`deleted_count 0`(지우지 않음). reset 은 잠금을 쥔 채 삭제·커밋 후 풀고 재수집을 띄운다(`schedule.py:72-86`). 해제와 재수집 시작 사이에 다른 프로세스가 잠금을 잡으면 재수집이 `already_running` 으로 끝나지만 그 프로세스가 수집하므로 데이터 문제는 없다. 재현 R14: `make collect`(API 모드)는 다른 프로세스가 잠금을 쥐면 끝날 때까지 기다리다 시간 초과로 실패한다(N-12) |
+| DB 경로·마이그레이션 | 안전 | 재현 R13: 옛 `agentlens.db` 사본(`user_version` 0, 기사 4355건)에 `ensure_db_schema` 두 번 → `user_version` 2, 기사 4355·FTS 색인 4355, `PRAGMA integrity_check` ok, 중복 인덱스 5개 삭제, 두 번째 실행 무변경. 사용자 DB `backend/agentlens.db` 는 이미 `user_version` 2(읽기 조회). 로컬 `.env`·`backend/.env` 의 `DATABASE_URL=sqlite+aiosqlite:///./agentlens.db` 는 `backend/agentlens.db` 로 풀리고, 이전에도 `make dev`(cwd `backend/`)는 같은 파일을 썼다. Docker `./data/agentlens.db` 는 `/app/data/agentlens.db` 로 같다 |
+| UTC 시각 저장·응답 | 뉴스는 맞음, 챗·로그 시각은 오프셋 없음(N-09), 옛 행(N-11) | 저장은 `astimezone(utc)`, 뉴스 응답 `Z`. 재현 R12-A: `GET /api/chat/sessions` 의 `updated_at` 이 `2026-11-10T04:40:35.198027`(오프셋 없음) → KST 브라우저에서 9시간 전으로 읽힘(R15) |
+| TTLCache | 맞음 | 크기 초과 시 가장 오래 안 쓴 것부터, 만료는 `time.monotonic()`. 이벤트 루프 안에서만 쓴다. 기사 질문 캐시가 휴리스틱 폴백 답도 6시간 기억한다: N-08 |
+| async Ollama 판정 | 맞음 | `httpx.AsyncClient(timeout=1.0)`, 결과 30초 기억(실패도 기억, 30초 뒤 다시 판정) |
+| 설정 캐시(mtime)·원자적 쓰기 | 맞음 | 캐시는 깊은 사본을 돌려 호출자 변경이 새지 않는다(변이로 확인). 쓰기는 임시 파일 → `replace`, `OSError` 면 제자리 쓰기, `finally` 에서 임시 파일 삭제. 쓰기와 교체 사이에 `await` 가 없어 같은 프로세스의 동시 저장이 섞이지 않는다 |
+| MCP 서버 mcp 2.x 호환 | 맞음 | 재현 R14-MCP: 설치된 `mcp` 2.x 에서 `python -m app.mcp.server` 를 stdio 클라이언트(`mcp.client.stdio`)로 띄워 `initialize` → 도구 4개 목록 → `search_agent_news` 호출 `[]`, 임시 DB 에 스키마 생성 확인. stdout 에 `print` 하는 경로는 수집·도구 경로에 없다(`app/` 의 `print` 는 `config.py:199`, `main.py:21`, `:35`, `scheduler.py` 뿐) |
+| 테스트 네트워크 가드 | 맞음 | 루프백 밖 httpx 요청은 막히고 teardown 에서 실패. SMTP 는 autouse 흉내. 이번 `make check` 384 통과 |
+
+### 11.6 준수 확인
+
+| 항목 | 결과 |
+|---|---|
+| 계약 | `docs/contract-integrator/01_CONTRACT_AND_MSW_SPEC.md` v1.3 이 오류 형식, News 날짜 오프셋(1.4절 `:102-103`), 지운 엔드포인트, `/ask/stream` `error` 이벤트를 적는다. 챗 시각은 "오프셋이 없을 수 있다" 로 적혀 있다(N-09 를 고치면 함께 고친다) |
+| 설정 | 새 `PUBLIC_WEB_URL`·`SCHEDULER_ENABLED` 가 `config.py`·`.env.example`·`backend/.env.example`·`docker-compose.yml` 에 있다. 지운 설정은 세 파일에서 모두 빠졌다(`test_dead_settings_are_removed`) |
+| 문서 | **아직 반영 안 됨**: `docs/system-designer/01_SYSTEM_DESIGN.md` 가 지운 엔드포인트(`:614`, `:620-621`, `:628`, `:646`), `GET /api/mcp/info`(`:175`), cwd 상대 DB 경로를 적는다. `docs/devops-engineer/01_DEPLOYMENT_SPEC.md` 가 `TESTING`·`is_test_environment`(`:155`, `:188`, `:512`)를 적는다. 오케스트레이터 변경 요약이 "문서 반영용" 이므로 문서 단계에서 고칠 것으로 보고 지적 수에 넣지 않았다. 출시 전에 반영돼야 한다 (`CLAUDE.md` '지금 시스템 문서') |
+| 버전 | backend 코드에서 버전을 바꾸지 않았다(`config.py:64` 기본값 0.4.1, `config.json` 그대로). 릴리스 단계에서 `docs/releases.md` '버전 문자열 위치' 대로 바꾼다 |
+
+### 11.7 새 지적 (모두 권장)
+
+모두 머지를 막을 결함은 아니라고 판단했다(각 항목의 '권장 이유'). 이번 지시가 "남은 결함 0" 이므로 같은 릴리스에서 고치기를 권한다.
+
+#### [권장] ARCH-03R 세션 업서트가 실패해도 라우터가 정상 반환해 `get_db` 가 부분 변경을 커밋한다
+- **위치**: `backend/app/api/chat.py:168-177`(`except Exception` → `error_response(500)` 을 돌려줄 뿐 롤백하지 않음), `backend/app/database.py:31-35`(`get_db` 는 처리기가 정상 반환하면 커밋), `backend/app/services/chat_session_service.py:273`(세션 행 `flush`), 테스트 `backend/tests/test_transactions.py:84-86`(서비스를 직접 부르고 테스트가 `s.rollback()` 을 손으로 불러 라우터 경로를 보지 않음)
+- **근거**: 재현 R12-B — 세션(제목 '원래 제목')을 만든 뒤 `append_messages_batch` 가 `RuntimeError` 를 내게 바꾸고 `POST /api/chat/sessions {"title":"바뀐 제목", messages:[…]}` → `500 ERR_SESSION_CREATE_FAILED`. 그런데 이어서 `GET /api/chat/sessions/{id}` 의 `title` 이 `바뀐 제목` 이다. 서비스 안 "한 트랜잭션" 은 맞지만 HTTP 경로에서는 실패 응답 뒤 부분 변경이 커밋된다. flush 자체가 DB 오류로 실패하면 세션이 비활성이 돼 `get_db` 의 커밋이 실패하고 롤백되므로, 남는 경우는 flush 뒤의 DB 밖 예외(직렬화·코드 오류 등)다. 삭제(`:203-209`)도 같은 모양이다.
+- **권장 이유**: 지금 코드에서 flush 뒤 DB 밖 예외가 날 경로가 드물고, 남는 것은 세션 제목·필터 같은 메타 변경이다. ARCH-03 의 목표(실패하면 아무것도 남지 않음)를 HTTP 경로에서 지키려면 고친다.
+- **개선 제안 (Diff)**:
+```diff
+--- a/backend/app/api/chat.py
+     except InvalidSessionUUIDException as e:
++        await db.rollback()
+         return error_response(400, "ERR_SESSION_INVALID_UUID", str(e))
+     except MessageIdConflictException as e:
++        await db.rollback()
+         return error_response(400, "ERR_INVALID_PAYLOAD", str(e), {"message_ids": e.message_ids})
+     except Exception:
+         logger.exception("chat session upsert failed")
++        await db.rollback()
+         return error_response(500, "ERR_SESSION_CREATE_FAILED", "대화 세션을 저장하지 못했습니다.")
+--- a/backend/tests/test_transactions.py
++async def test_session_upsert_failure_over_http_keeps_title(monkeypatch):
++    # POST 로 세션 생성 → append_messages_batch 가 RuntimeError → POST 500 → GET 상세 title == '원래 제목'
+```
+  삭제 경로의 `except Exception` 에도 `await db.rollback()` 을 넣는다.
+
+#### [권장] CFG-02R ARCH-05 수정으로 `TESTING` 설정이 읽는 곳 없이 남았다
+- **위치**: `backend/app/config.py:87`(`TESTING: bool = False`), `:150-151`(환경 변수 해석). 유일한 사용처였던 `is_test_environment()` 를 이번에 지웠다(`git diff HEAD -- backend/app/services/llm_processor.py`)
+- **근거**: `grep -rn "TESTING" backend/app` → `config.py` 세 줄뿐. `docs/devops-engineer/01_DEPLOYMENT_SPEC.md:155`, `:188` 은 아직 이 설정이 동작을 바꾼다고 적는다.
+- **권장 이유**: 동작 영향은 없고, CFG-02 가 지운 다른 설정과 같은 "읽지 않는 설정" 이다.
+- **개선 제안 (Diff)**:
+```diff
+-    TESTING: bool = False
+ ...
+-        if "TESTING" in os.environ:
+-            self.TESTING = os.environ.get("TESTING", "").lower() in ("true", "1", "yes")
+--- a/backend/tests/test_b_config_schedule_db.py
+-DEAD_FIELDS = ("CORS_ORIGINS", ..., "AGENTIC_SEARCH_MAX_QUERIES")
++DEAD_FIELDS = ("CORS_ORIGINS", ..., "AGENTIC_SEARCH_MAX_QUERIES", "TESTING")
+```
+
+#### [권장] N-08 기사 Ask AI 스트림이 휴리스틱 폴백 답도 6시간 캐시한다
+- **위치**: `backend/app/services/llm_processor.py:1003-1005`(`if full_text:` 면 폴백 답도 `_qa_cache` 에 저장), 캐시 읽기 `:890-901`
+- **근거**: 재현 R15-A — Anthropic·OpenAI 를 쓸 수 없게 한 뒤 질문 → `meta: AgentLens Heuristic Engine`. 이어서 Anthropic 을 되살리고(흉내 스트림) 같은 질문 → `meta: AgentLens Heuristic Engine (캐시됨)`. LLM 이 잠깐 안 될 때의 규칙 기반 답이 6시간(TTL) 동안 같은 기사·질문의 LLM 답을 막는다. BUG-10 이 평가 캐시에서 고친 것과 같은 문제다.
+- **권장 이유**: TTL 로 6시간 뒤 풀리고(전에는 재시작까지), `reset-and-collect` 가 비운다. 사용자가 질문을 조금 바꾸면 피할 수 있다.
+- **개선 제안 (Diff)**:
+```diff
++        used_fallback = False
+         if not stream_succeeded or not full_text.strip():
++            used_fallback = True
+             fallback_ans, fallback_model = self._generate_heuristic_answer(
+ ...
+         if full_text:
+-            self._qa_cache[cache_key] = (full_text, sanitize_model_identifier(model_used))
++            if not used_fallback:  # 폴백 답은 LLM 이 잠깐 안 될 때의 답일 수 있어 캐시하지 않는다 (BUG-10 과 같은 규칙)
++                self._qa_cache[cache_key] = (full_text, sanitize_model_identifier(model_used))
+             yield {"event": "done", "total_text": full_text}
+```
+  테스트: 폴백 답 뒤 LLM 을 살리고 같은 질문 → `meta.model` 에 `(캐시됨)` 없음, LLM 토큰.
+
+#### [권장] N-09 챗 세션·메시지 시각이 UTC 오프셋 없이 나가 KST 화면에서 9시간 전으로 보인다
+- **위치**: `backend/app/services/chat_session_service.py:105-106`(목록 `created_at`·`updated_at`), `:158`(메시지 `created_at`), `:184`, `:215-216`(상세), `backend/app/services/chat_service.py` `get_source_detail` 의 `published_at`·`created_at`·`scraped_at` `isoformat()`, `backend/app/services/news_service.py:130-131`(수집 로그 시각), 소비처 `frontend/src/components/chat/SessionItemCard.tsx:20-22`(`new Date(문자열)`), `frontend/src/types/chat.ts:661`(`updatedAt: summary.updated_at`)
+- **근거**: SQLite `DateTime` 열은 tz 를 저장하지 않아 읽으면 naive UTC 다. 재현 R12-A — 세션을 막 만든 뒤 `GET /api/chat/sessions` 의 `updated_at` 은 `2026-11-10T04:40:35.198027`. 재현 R15-B — `TZ=Asia/Seoul node` 에서 `new Date("2026-11-10T04:40:35.198027")` 는 `2026-11-09T19:40:35.198Z` 로 읽혀 지금과 9.0시간 차이다. 사이드바 세션 카드(`formatRelativeTime`)가 새로 고친 뒤 막 만든 세션을 '9시간 전' 으로 보인다. 이번 릴리스가 뉴스 응답에만 `Z` 를 붙였고(BUG-18), 계약 v1.3 은 챗 시각에 "오프셋이 없을 수 있다" 고 적었다(`01_CONTRACT_AND_MSW_SPEC.md:103`).
+- **권장 이유**: v0.4.2 이전부터 있던 동작이라 회귀가 아니다. 대상 사용자(KST)에게 사이드바 상대 시각이 모두 틀리게 보이므로 이번 릴리스에서 같이 고치기를 강하게 권한다.
+- **개선 제안 (Diff)**:
+```diff
+--- a/backend/app/services/news_service.py
++def iso_utc(dt) -> Optional[str]:
++    """DB 의 naive UTC → 오프셋 있는 ISO. tz 가 있으면 UTC 로 바꾼다."""
++    if dt is None:
++        return None
++    return (dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)).isoformat()
+--- a/backend/app/services/chat_session_service.py
+-            created_str = s.created_at.isoformat() if hasattr(s.created_at, "isoformat") else str(s.created_at)
+-            updated_str = s.updated_at.isoformat() if hasattr(s.updated_at, "isoformat") else str(s.updated_at)
++            created_str = iso_utc(s.created_at)
++            updated_str = iso_utc(s.updated_at)
+```
+  메시지·소스 상세·수집 로그도 같은 함수를 쓴다. 계약 `:103` 을 "모든 시각은 UTC 오프셋 있음" 으로 고치고 zod 를 `z.iso.datetime({ offset: true })` 로 맞추는 것은 contract-integrator·frontend 가 함께 한다. 테스트: 세션 POST 뒤 목록·상세의 `updated_at`·메시지 `created_at` 이 `+00:00` 또는 `Z` 로 끝난다.
+
+#### [권장] N-10 브리핑 메일의 '대시보드 바로가기' 링크가 `http://localhost:3001` 고정이다
+- **위치**: `backend/app/services/email_service.py:144`
+- **근거**: BUG-12 를 고치며 `PUBLIC_WEB_URL`(`backend/app/config.py:67`, 기본 `http://localhost:3000`)을 만들었는데 메일 본문은 쓰지 않는다. `make dev` 의 프론트는 :3000 이라 로컬 기본 설정에서 메일 링크가 열리지 않는다. `grep -rn localhost backend/app` 로 남은 고정 주소는 이것 하나다.
+- **권장 이유**: 메일 본문의 보조 링크 하나이고 내용 전달에는 영향이 없다.
+- **개선 제안 (Diff)**:
+```diff
+-                        <a href="http://localhost:3001" style="color: #0969da; text-decoration: none;">대시보드 바로가기</a>
++                        <a href="{_safe_href(settings.PUBLIC_WEB_URL)}" style="color: #0969da; text-decoration: none;">대시보드 바로가기</a>
+```
+
+#### [권장] N-11 기존 DB 의 KST 피드 행이 업그레이드 뒤 9시간 늦은 시각으로 보인다
+- **위치**: 응답 `backend/app/schemas/news.py:32-36`(`Z` 를 붙임), 보정 없음 `backend/app/database.py:77`(`MIGRATIONS`), 기록 `docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md` [Cycle v0.4.2-B] '남은 것'
+- **근거**: 옛 수집기는 `+09:00` 피드 시각을 벽시계 그대로 저장했다. 사용자 DB 읽기 조회: `published_at > created_at` 인 행이 `rss_kr` 395건(전체 4899건). 이전에는 응답에 오프셋이 없어 KST 브라우저가 현지 시각으로 읽어 이 행들이 맞게 보였고, 이제는 `Z` 가 붙어 9시간 늦게(최근 행은 미래로) 보인다. 즉 이 릴리스로 기존 데이터의 표시가 바뀐다. TDD 기록은 "어느 행이 어긋났는지 다 가려낼 수 없어 보정하지 않았다, `make reset` 으로 다시 수집" 으로 적었다.
+- **권장 이유**: `make reset` 으로 바로잡히고(재수집), 새로 수집한 행은 맞다. 다만 사용자가 모르면 피드 상대 시각이 틀려 보인다.
+- **개선 제안**: 최소한 릴리스 노트와 `docs/devops-engineer/01_DEPLOYMENT_SPEC.md` 업그레이드 절에 "v0.4.2 로 올린 뒤 `make reset` 권장(국내 피드 시각 보정)" 을 적는다. 확실히 어긋난 행만 고치는 마이그레이션을 더할 수도 있다(발행 시각이 수집 시각보다 늦은 행은 KST 벽시계로 저장된 행이다):
+```diff
++def _m003_fix_kst_wall_clock_rows(connection) -> None:
++    """옛 수집기가 +09:00 시각을 벽시계로 저장한 행 중 확실한 것(발행 > 수집)만 9시간 당긴다."""
++    connection.execute(text(
++        "UPDATE news_items SET published_at = datetime(published_at, '-9 hours') "
++        "WHERE source = 'rss_kr' AND published_at > created_at"))
++
+-MIGRATIONS = [_m001_add_v24_columns, _m002_drop_duplicate_indexes]
++MIGRATIONS = [_m001_add_v24_columns, _m002_drop_duplicate_indexes, _m003_fix_kst_wall_clock_rows]
+```
+  (`datetime()` 은 소수 초를 버리므로 정렬에는 영향이 없다. 어느 쪽을 택할지는 오케스트레이터가 정한다.)
+
+#### [권장] N-12 다른 프로세스가 수집 잠금을 쥐면 `make collect`(API 모드)가 시간 초과까지 기다리다 실패한다
+- **위치**: `scripts/collect.py:73-74`(`already_running` 이면 "끝날 때까지 기다린다"), `:93-104`(이 backend 의 `is_running`·`last_crawl_time` 만 본다), `backend/app/api/schedule.py:43-50`(다른 프로세스가 쥐어도 `already_running`, 구분 정보 없음), `backend/app/collectors/manager.py:109-120`(`get_progress` 는 이 프로세스 상태만)
+- **근거**: 재현 R14 — 임시 DB 로 uvicorn(:18765, `SCHEDULER_ENABLED=false`)을 띄우고 다른 프로세스가 `<db>.crawl.lock` 을 쥔 상태에서 `COLLECT_MODE=api COLLECT_TIMEOUT=8 python scripts/collect.py` → `이미 진행 중인 수집이 있다. 그 수집이 끝날 때까지 기다린다` → `대기 중` → `수집이 8초 안에 끝나지 않았다`, 종료 1, 8초. 기본 시간 초과는 1800초라 MCP 서버가 수집하는 동안 `make collect` 를 부르면 30분을 기다린 뒤 실패한다. 다른 프로세스의 수집이 끝나도 이 backend 의 `last_crawl_time` 은 바뀌지 않으므로 끝을 알아채지 못한다. 이번 D-40 수정(잠금)으로 생긴 상호작용이다(전에는 backend 가 따로 수집했다).
+- **권장 이유**: MCP 수집과 `make collect` 를 동시에 쓰는 드문 경우에만 나고 데이터는 상하지 않는다.
+- **개선 제안 (Diff)**: trigger 응답에 다른 프로세스 여부를 싣고 스크립트가 바로 알린다.
+```diff
+--- a/backend/app/api/schedule.py
+-    if collector_manager.is_busy():
++    if collector_manager.is_busy():
++        other = not collector_manager.is_running
+         return {
+             "status": "already_running",
+-            "message": "이미 수집이 진행 중입니다.",
++            "message": "다른 프로세스(MCP 서버·make collect)가 같은 DB 에 수집 중입니다." if other else "이미 수집이 진행 중입니다.",
++            "other_process": other,
+--- a/scripts/collect.py
+     if status == "already_running":
++        if trig.get("other_process"):
++            _err(f"{trig.get('message')} 끝난 뒤 다시 실행한다")
++            return 1
+         _out("이미 진행 중인 수집이 있다. 그 수집이 끝날 때까지 기다린다")
+```
+  계약(`/api/schedule/trigger` 응답 필드 추가)과 `test_collect_script.py` 를 함께 고친다.
+
+#### [권장] TEST-07 소스 문자열만 보는 테스트 2건이 동작 회귀를 놓친다
+- **위치**: `backend/tests/test_b_config_schedule_db.py:157-161`(CFG-03: `'"high_signal_threshold", 7.0)' in cfg_src`), `:116-119`(CFG-02: `body.count("max_limit=settings.CHAT_SESSION_MAX_LIMIT") == 2`)
+- **근거**: 11.4절 변이 — 문자열을 남긴 채 동작만 바꾸면(키가 없을 때 7.8, 한도를 늘 30) 두 테스트 모두 `1 passed`. 계층 규칙(라우터에 `select(` 없음 등)은 소스 검사가 맞지만, 값·동작은 동작으로 단언해야 한다.
+- **권장 이유**: 지금 코드는 맞고, 이 테스트들은 지금 코드를 되돌리는 회귀는 잡는다.
+- **개선 제안 (Diff)**:
+```diff
+-def test_high_signal_threshold_has_single_default():
+-    cfg_src = (BACKEND_DIR / "app" / "config.py").read_text(encoding="utf-8")
+-    assert '"high_signal_threshold", 7.0)' in cfg_src
++def test_high_signal_threshold_has_single_default(monkeypatch):
++    monkeypatch.setattr(app_config, "_json_data", {"llm": {}})
++    assert Settings().HIGH_SIGNAL_THRESHOLD == 7.0
++    # 평가 경로가 settings 값을 쓰는지: 임계값을 9.9 로 두면 8.0 점이 하이시그널이 아니다
+ ...
+-def test_chat_session_retention_uses_configured_limit():
+-    body = (...).read_text(...)
+-    assert body.count("max_limit=settings.CHAT_SESSION_MAX_LIMIT") == 2
++async def test_chat_session_retention_uses_configured_limit(monkeypatch):
++    monkeypatch.setattr(settings, "CHAT_SESSION_MAX_LIMIT", 2)
++    # 세션 3개 업서트 → 목록 2개, 가장 오래된 것이 지워짐
+```
+
+#### [권장] TEST-08 테스트 DB 임시 폴더를 지우지 않아 실행마다 쌓인다
+- **위치**: `backend/tests/conftest.py:8`(`tempfile.mkdtemp(prefix="agentlens-test-")`, 정리 없음)
+- **근거**: 2026-11-10 13:4x 기준 `$TMPDIR/agentlens-test-*` 폴더 157개, `du -sch` 합계 249M (이 날의 여러 에이전트 실행이 남긴 것, 이 검토자의 `make check` 1회 포함). TEST-04 를 고치며 생긴 부작용이다.
+- **권장 이유**: OS 임시 폴더라 재부팅·정리 주기에 지워지고 결과에는 영향이 없다.
+- **개선 제안 (Diff)**:
+```diff
++import atexit, shutil
+ TEST_DB_FILE = Path(tempfile.mkdtemp(prefix="agentlens-test-")) / "test_agentlens.db"
++atexit.register(shutil.rmtree, TEST_DB_FILE.parent, ignore_errors=True)
+```
+
+### 11.8 재현 R12~R15
+
+2026-11-10, 지금 작업 트리 코드, `backend/` 에서 `../.venv/bin/python -I` + 스크래치 스크립트(`scratchpad/repro/r12.py`, `r12b.py`, `r13.py`, `mcp_probe.py`), `DATABASE_URL` 은 모두 임시 폴더. 저장소 파일을 쓰는 엔드포인트(소스 추가·설정 저장)는 부르지 않았다.
+
+| ID | 절차 | 결과 |
+|---|---|---|
+| R12-A | 세션 POST → `GET /api/chat/sessions` | `updated_at` `2026-11-10T04:40:35.198027` (오프셋 없음, N-09) |
+| R12-B | 세션 생성('원래 제목') → `append_messages_batch` 가 `RuntimeError` → 업서트 POST('바뀐 제목') → 상세 | POST `500 ERR_SESSION_CREATE_FAILED`, 상세 `title` `바뀐 제목` (ARCH-03R) |
+| R12-C | `GET /api/nope`, `PUT /api/news`, `POST /api/news/1/ask/stream` `{}`·2001자, `GET /api/news?page=0`, `GET /api/research/audit-logs?limit=0`, `NewsService.stats` 가 경로·SQL 문장을 담은 예외 | 404 `ERR_NOT_FOUND`, 405 `ERR_METHOD_NOT_ALLOWED`, 400 `ERR_INVALID_PAYLOAD` `details [{loc:["body","question"],msg}]` ×2, 400 `[{loc:["query","page"]…}]`, 400 `[{loc:["query","limit"]…}]`, 500 `{"error_code":"ERR_SERVER_INTERNAL","message":"서버 내부 처리 중 오류가 발생했습니다.","details":null}` |
+| R12-D | 지운 엔드포인트 11개 | 10개 404 `ERR_NOT_FOUND`, `POST /api/sources/github` 307 (`/api/sources/github/` 로 슬래시 리다이렉트, 처리기 없음) |
+| R12-F | 수집 로그 1행 → `GET /api/schedule/status` | `current_time`·`next_run` `+00:00`, `last_crawl_time` 오프셋 없음 (N-09 범위, 화면은 이 값을 쓰지 않는다 grep) |
+| R12-G | 다른 프로세스가 `<db>.crawl.lock` `LOCK_EX` → `POST /trigger`, `POST /reset-and-collect` | `already_running`, `{"status":"already_running",…,"deleted_count":0}` |
+| R13 | 옛 루트 `agentlens.db` 사본에 `ensure_db_schema()` 두 번 | `user_version` 0→2, 기사 4355·FTS 4355, `integrity_check ok`, `ix_news_items_id`·`ix_crawl_logs_id`·`ix_source_research_logs_id`·`ix_chat_sessions_updated_at`·`ix_chat_messages_session_id` 삭제 |
+| R14 | uvicorn(임시 DB, :18765) + 다른 프로세스 잠금 → `COLLECT_MODE=api COLLECT_TIMEOUT=8 scripts/collect.py` | `대기 중` → `수집이 8초 안에 끝나지 않았다`, 종료 1 (N-12) |
+| R14-MCP | `python -m app.mcp.server` (mcp 2.x) 를 stdio 클라이언트로 | 도구 4개, `search_agent_news` → `[]`, 임시 DB 생성 |
+| R15-A | 공급자 없음 → 질문, 공급자 복구 → 같은 질문 | `AgentLens Heuristic Engine` → `AgentLens Heuristic Engine (캐시됨)` (N-08) |
+| R15-B | `TZ=Asia/Seoul node -e 'new Date("2026-11-10T04:40:35.198027")'` | `2026-11-09T19:40:35.198Z`, 9.0시간 차이 (N-09) |
+
+### 11.9 v0.4.2 지적 수
+
+| 심각도 | 개수 | ID |
+|---|---|---|
+| 머지 전 필수 | 0 | — |
+| 해결 (지난 권장) | 47 | 11.3절 '해결' 행 |
+| 일부 해결 → 새 지적으로 이어짐 | 2 | ARCH-03 → ARCH-03R, CFG-02 → CFG-02R |
+| 기록 | 1 | TEST-05 |
+| 권장 (새로) | 9 | ARCH-03R, CFG-02R, N-08, N-09, N-10, N-11, N-12, TEST-07, TEST-08 |
+| 범위 밖 (수용된 위험) | 6 | SEC-01, SEC-02, SEC-04, SEC-05, SEC-06, BUG-01 (9절. 이번 diff 로 바뀐 것: SEC-04 응답에서 `auto_alert_high_signal` 만 빠짐, 판정에 넣지 않음) |
+
+### 11.10 v0.4.2 재리뷰 판정
+
+- **판정 결과**: **APPROVED**
+- **근거**: 머지 전 필수 0건. 지난 권장 50건 중 47건이 테스트와 함께 해결됐고, 2건(ARCH-03, CFG-02)은 대부분 해결되고 남은 부분을 새 지적(ARCH-03R, CFG-02R)으로 넘겼다. 오류 형식·삭제 엔드포인트·수집 잠금·DB 경로와 마이그레이션·MCP 2.x·네트워크 가드를 재현으로 확인했고 회귀는 찾지 못했다. B 조의 순서 위반 5건 중 4건은 변이로 동작을 잡음을 확인했고, CFG-03 테스트는 소스 문자열 검사라 TEST-07 로 넘겼다. `make check` 종료 0, 실행 전후 추적 파일 변화 없음.
+- **남긴 권장 9건과 이유**: 11.7절 각 항목의 '권장 이유'. 그중 N-09(챗 사이드바 상대 시각 9시간 차이)는 대상 사용자에게 바로 보이므로 이번 릴리스에서 고치기를 가장 먼저 권하고, N-11 은 최소한 릴리스 노트·배포 명세에 `make reset` 안내를 넣어야 한다. 시스템 설계서·배포 명세의 옛 내용(11.6절)은 문서 단계에서 고친다.
+- 수용된 위험 6건(9절)은 판정 근거로 쓰지 않았다.
+
+### 11.11 v0.4.2 2차 재리뷰 (2026-11-10, 11절 권장 9건과 ADR 열린 질문 수정분)
+
+- **대상**: 작업 트리(커밋 전) backend 2차 수정분. 오케스트레이터 변경 요약 '2차 수정' 절, `docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md` [Cycle v0.4.2-A] '4. 2차 사이클'·[Cycle v0.4.2-B] '2차 수정'. 새 파일 `backend/app/time_utils.py`, `backend/tests/test_v042_a_round2.py`(18개), `backend/tests/test_b_round2.py`(7개). 바뀐 곳 `backend/app/database.py`(m003), `backend/app/api/chat.py`, `backend/app/api/errors.py`, `backend/app/api/schedule.py`, `backend/app/collectors/manager.py`, `backend/app/services/*`(iso_utc), `backend/app/schemas/chat.py`·`news.py`, `backend/requirements.txt`, `scripts/collect.py`, `backend/tests/conftest.py`.
+- **방법**: diff 를 읽고 재현 R16~R18 을 돌렸다(임시 SQLite, `httpx.ASGITransport`). m003 은 사본으로만 검증했다: 루트의 옛 `agentlens.db`(v0.4.0 이전 수집분, m003 미적용 진짜 값) 사본, 스크래치의 `agentlens-before.db`(TDD 가 실제 DB 에서 되짚어 만든 적용 전 사본) 사본, 실제 DB 지금 상태 사본. 실제 `backend/agentlens.db` 는 `sqlite3 -readonly` 조회만 했다. TEST-07 새 테스트는 저장소 밖 사본에서 11.4절과 같은 변이를 넣어 확인했다. 코드는 고치지 않았다.
+- **주의 (이 검토자의 부작용)**: R16-C 에서 `POST /api/chat/stream` 을 UUID·생략 `session_id` 로 두 번 불렀는데, 로컬 `.env` 에 Anthropic 키가 있어 응답 본문을 읽는 동안 실제 Anthropic 호출이 일어났다(질문 "hi", planner + 답 생성, 2회). 저장은 임시 DB 에만 했다.
+
+#### 11.11.1 `make check` (2차 재리뷰)
+
+- 실행: 2026-11-10 14:12~14:13 KST, 저장소 루트, 이 검토자가 직접 실행. 종료 코드 **0**.
+```
+cd backend && ../.venv/bin/pytest -v tests/
+...
+tests/test_v042_llm_chat.py::test_cc02_non_stream_ask_helpers_are_removed PASSED [100%]
+============================= 410 passed in 11.67s =============================
+cd frontend && pnpm test && pnpm lint && pnpm exec tsc --noEmit
+ Test Files  69 passed (69)
+      Tests  820 passed (820)
+$ eslint
+EXIT=0
+```
+  eslint 출력 없음, `tsc --noEmit` 출력 없음.
+- 실행 전후: 이 실행 도중(14:12:22~35) 다른 에이전트가 버전 올리기로 `config.json`(`app.version` 0.4.2)·`frontend/package.json`·`docs/releases.md` 를 바꿔 `git status` 가 달라졌다. 그래서 backend pytest 를 다시 따로 돌려 전후를 비교했다: `410 passed in 11.01s`, `git status --porcelain` 같음, `git diff HEAD | shasum` 같음, `sources.json`·`backend/app/config/sources.json`(md5 `32ed0854…`, Evil Martians 사용자 변경 그대로)·`config.json` md5 같음. 테스트 DB 임시 폴더는 실행 뒤 지워졌다(TEST-08).
+
+#### 11.11.2 11절 권장 9건과 추가 항목 확인
+
+| ID | 결과 | 근거 |
+|---|---|---|
+| ARCH-03R | 해결 | 세션 POST 의 세 오류 분기와 DELETE 의 500 분기에서 `await db.rollback()` (`backend/app/api/chat.py:180`, `:183`, `:188`, `:221`). 재현 R16-B: 실패 업서트 POST 500 뒤 상세 `title` `원래 제목`. 테스트 `test_arch03r_failed_upsert_over_http_keeps_previous_title`, `…_failed_delete_over_http_keeps_session` (HTTP 경로) |
+| CFG-02R | 해결 | `TESTING` 필드·해석 삭제 (`grep -rn TESTING backend/app` 0건). `test_cfg02r_testing_setting_is_removed` |
+| N-08 | 해결 | `used_fallback` 이면 캐시하지 않음 (`backend/app/services/llm_processor.py:982-983`, `:1006`). `test_n08_heuristic_fallback_answer_is_not_cached` |
+| N-09 (ADR Q11) | 해결 | `iso_utc` (`backend/app/time_utils.py:6-21`). `.isoformat()` 이 남은 곳은 모두 tz 있는 값(`datetime.now(timezone.utc)`, `last_run_time`, `last_crawl_time`)이라 `+00:00` 이 붙는다(grep 확인). `source_researcher.inspect_url` 의 `published` 는 외부 피드 원문 문자열이라 대상이 아니다. 재현 R16-A: 세션 POST·목록의 `created_at`·`updated_at`·`messages[].created_at`·`active_source.published_at`, `GET /api/chat/sources/1`, `GET /api/schedule/status` `last_crawl_time`·`recent_logs[].started_at`, `GET /api/research/audit-logs` `logs[].created_at` 모두 `+00:00`. 빠뜨린 응답 시각은 찾지 못했다 |
+| N-10 | 해결 | `_safe_href(settings.PUBLIC_WEB_URL)` (`backend/app/services/email_service.py:144`). `test_email_dashboard_link_uses_public_web_url` |
+| N-11 | 해결했으나 새 필수 결함 | m003 (`backend/app/database.py:94-144`). KST 시각 보정은 맞다(아래 11.11.3). 같은 마이그레이션의 GitHub 규칙이 실제 값을 지운다: M003-01 |
+| N-12 | 해결 | trigger `already_running` 에 `other_process` (재현 R16-E: `{'status':'already_running','message':'다른 프로세스(MCP 서버·make collect)가 같은 DB 에 수집 중입니다.','other_process':True,…}`), `scripts/collect.py:73` 이 기다리지 않고 종료 1. `test_api_mode_other_process_running_exits_without_waiting` |
+| TEST-07 | 해결 | 두 테스트가 동작을 단언한다. 11.4절의 변이(키가 없을 때 7.8, 한도 `… and 30`)를 사본에 넣으면 각각 `1 failed` |
+| TEST-08 | 해결 | `pytest_sessionfinish` 가 폴더 삭제 (`backend/tests/conftest.py:12-15`). 이 검토자의 실행 두 번 뒤 새 폴더가 남지 않았다 |
+| ADR Q4 | 해결 | `google-genai` 가 `backend/requirements.txt` 에서 빠졌고 import 0건(grep). Gemini 는 httpx REST |
+| ADR Q12 (Windows 대체 잠금) | 맞음 | `fcntl` import 실패 시 `None` (`backend/app/collectors/manager.py:23-26`), `threading.Lock` 비차단 + 표지 객체(`:63-92`). 재현 R16-F (`fcntl=None` 흉내): 첫 획득 성공, 두 번째 `None`, 쥔 동안 `is_busy() True`, 해제 뒤 재획득 성공·`is_busy() False`. 다른 프로세스와는 공유되지 않음을 주석과 ADR 이 적는다. `test_manager_imports_without_fcntl` 이 하위 프로세스에서 `fcntl` 없이 import 를 확인한다 |
+| ADR Q13 (런타임 OpenAPI 400 치환) | 맞음 | `_install_openapi` (`backend/app/api/errors.py:94-119`). 재현 R16-D: `/openapi.json` 응답 코드에 `422` 0개, `400` 19개, `HTTPValidationError`·`ValidationError` 컴포넌트 없음, `ErrorResponse` 는 `error_code`·`message` 필수·`details` 설명. 이미 400 이 있는 경로는 덮지 않는다(`setdefault`) |
+| 스트림 `session_id` | 맞음 | `uuid.UUID()` 로 해석되지 않으면 400 `ERR_SESSION_INVALID_UUID`, 입력 echo 없음 (`backend/app/api/chat.py:101-106`). 재현 R16-C: `not-a-uuid` → 400, UUID·생략 → 스트림. 세션 POST 와 같은 규칙이라 `uuid.UUID` 가 받는 다른 표기(대시 없는 32자 hex 등)도 받는다. 프론트는 표준 UUID 만 보내므로 지적하지 않는다 |
+| `ChatStatusStep` 4값 | 맞음 | `thinking`·`tool_calling`·`extracting_source`·`synthesizing` (`backend/app/schemas/chat.py:54-59`), `chat_service.py` 가 보내는 `step` 값과 같다(grep). `test_chat_stream_status_events_fit_status_payload` |
+| `ManualCollectResponse` | 맞음 | `response_model=ManualCollectResponse, response_model_exclude_unset=True` (`backend/app/api/schedule.py:39`), `status` Literal, `other_process` 선택. started 응답에는 `other_process` 가 붙지 않는다(`test_trigger_response_bodies_are_unchanged`) |
+
+#### 11.11.3 m003 판정 규칙과 안전성
+
+| 확인 | 결과 | 근거 |
+|---|---|---|
+| KST 피드 시각 보정 | 맞음 | 실제 DB 의 m003 전 상태 사본(`agentlens-before.db`)에 돌리면 429행(AI타임스 241, GeekNews 188)이 9시간 당겨지고 `published_at > created_at` 0. 실제 DB 지금 상태도 0, `rss_kr` 피드별 미래 행 0. m003 뒤 수집(crawl 118, 05:01 UTC)의 GeekNews 2행은 발행이 수집보다 1.87·3.23시간 앞이라 두 번 당겨지지 않았다 |
+| RSS 150·180, arXiv 120, HF `댓글+40`, 시드 | 맞음 | 옛 수집기는 이 소스의 모든 행에 이 값을 넣었다(`git show HEAD:backend/app/collectors/sources/*.py`). 사본에서 HF 612행 모두 `raw = comments + 40` |
+| 트랜잭션·무결성 | 맞음 | `_apply_schema` 가 한 `engine.begin()` 안에서 단계와 `PRAGMA user_version` 을 함께 커밋한다. 옛 DB 사본 0→3: 기사 4355 유지, `integrity_check ok`. 같은 사본에 m003 을 한 번 더 돌려도 같은 해시 |
+| hotness 재계산 | 맞음 | 기준 시각 `created_at`, 100 점 행 961 → 3 (옛 DB 사본) |
+| 재실행 | 주의 | `user_version` 3 이라 다시 돌지 않는다. 다만 docstring 의 "다시 돌려도 결과가 같다" 는 업그레이드 전 데이터에서만 맞다. 실제 DB 지금 상태 사본에 `user_version=2` 로 되돌려 다시 돌리면 crawl 118 의 실제 GitHub 행 5개 `raw_score` 가 0 이 되고 hotness 82행이 바뀐다 (M003-01 과 같은 원인) |
+| **GitHub 합성 지표 규칙** | **결함** | M003-01 |
+
+##### [머지 전 필수] M003-01 m003 의 GitHub 규칙이 실제 검색 결과의 별·포크를 0 으로 지운다
+- **위치**: `backend/app/database.py:124-128`
+```sql
+UPDATE news_items SET raw_score = 0, comments_count = 0 WHERE source = 'github' AND raw_score > 0
+AND comments_count = CAST(raw_score * 0.12 AS INTEGER)
+AND abs(julianday(created_at) - julianday(published_at)) < 1.0 / 24
+```
+  테스트 `backend/tests/test_b_round2.py:71-73` 은 "실제 검색 결과는 그대로" 를 별 321·포크 12·3시간 전으로만 본다. 이 값은 비율 조건부터 맞지 않아 규칙을 시험하지 않는다.
+- **근거**:
+  - 옛 GitHub 검색 수집기(`git show HEAD:backend/app/collectors/sources/github.py:22-45`)는 `sort=updated` 로 방금 갱신된 저장소를 받고 `published_at` = 저장소 `updated_at`, `raw_score` = 실제 별, `comments_count` = 실제 포크를 넣었다. 그래서 검색 결과 대부분이 발행·수집 1시간 안이다. 별이 1~8 이고 포크가 0 이면 `CAST(별 × 0.12)` = 0 = 포크라 비율 조건도 맞는다. 별 512·포크 61 처럼 우연히 맞는 큰 저장소도 있다.
+  - 재현 R17 (임시 DB, `_m003_fix_legacy_news_rows` 직접 호출): 검색 결과 (별 3, 포크 0, 10분 전) → `(0, 0)`, (8, 0) → `(0, 0)`, (512, 61, 5분 전) → `(0, 0)`, 감시 저장소 폴백 (5000, 600) → `(0, 0)`, (3, 0, 90분 전) → `(3, 0)`.
+  - 재현 R18-a: 루트의 옛 `agentlens.db` 사본(m003 미적용 진짜 값)에서 m003 이 지운 GitHub 행 404개 중 감시 저장소 별 힌트 값(18500·4200·7900·14300·36500·26000·3100·34000)인 합성 행은 8개뿐이고 396개는 실제 별 1~512 였다.
+  - 재현 R18-b (사용자 실제 DB, 읽기 조회): 발행·수집 1시간 안 GitHub 행의 별 분포가 m003 전 수집분과 후 수집분에서 크게 다르다.
+
+    | DB·구간 | 행 | 별 0·포크 0 | 별 1~8·포크 0 | 별 > 8 |
+    |---|---|---|---|---|
+    | 옛 루트 DB (m003 미적용) | 2074 | 812 | 368 | 694 |
+    | 실제 DB, m003 전 수집분 (`created_at < 04:50 UTC`) | 2308 | 1366 | **1** | 721 |
+    | 실제 DB, m003 뒤 수집분 (crawl 118) | 18 | 4 | 4 | 7 |
+
+    m003 전 수집분에서만 '별 1~8·포크 0' 이 거의 없고 '별 0' 이 많다. 실제 DB 에서도 수백 행의 실제 별·포크가 0 으로 바뀌었을 가능성이 높다 (추정, 적용 전 원본이 없어 행 단위로 확정할 수 없다). TDD 기록의 "GitHub 폴백 8" 은 실제 DB 에서 되짚어 만든 적용 전 사본으로 셌는데, 그 사본은 지워진 실제 값을 복원할 수 없으므로 이 결함을 드러내지 못한다.
+- **필수 판단 이유**: 마이그레이션은 한 번 돌고 되돌릴 수 없다. 원천 지표(별·포크)는 `추천순` 정렬과 인기 점수의 입력이고, 지워진 값은 같은 저장소가 다시 수집될 때만 돌아온다(`manager.py` 의 `max(existing, new)`). 이 릴리스를 받는 다른 설치(Docker `/app/data/agentlens.db` 등)에서 같은 손실이 난다.
+- **수정 제안**: 규칙을 감시 저장소 폴백 행으로 좁힌다. 폴백 행은 URL 이 `https://github.com/{repo}`(감시 목록)이고 별이 그 저장소의 `stars_hint`(없으면 5000) 그대로다.
+```diff
+-    connection.execute(text(
+-        "UPDATE news_items SET raw_score = 0, comments_count = 0 WHERE source = 'github' AND raw_score > 0 "
+-        "AND comments_count = CAST(raw_score * 0.12 AS INTEGER) "
+-        "AND abs(julianday(created_at) - julianday(published_at)) < 1.0 / 24"
+-    ))
++    from app.services.sources_service import sources_service
++    for repo in sources_service.get_github_config().get("monitored_repos", []):
++        name = repo.get("repo")
++        if not name:
++            continue
++        stars = int(repo.get("stars_hint", 5000) or 5000)
++        # 옛 폴백이 만든 값과 정확히 같은 행만 (별 = stars_hint, 포크 = int(별 × 0.12))
++        connection.execute(text(
++            "UPDATE news_items SET raw_score = 0, comments_count = 0 WHERE source = 'github' "
++            "AND url = :u AND raw_score = :s AND comments_count = :f"
++        ), {"u": f"https://github.com/{name}", "s": stars, "f": int(stars * 0.12)})
+```
+  `sources.json` 을 읽고 싶지 않으면 최소한 `AND raw_score >= 1000` 을 더한다(합성 값은 3100 이상, 위 표의 오탐 396행은 모두 512 이하). 회귀 테스트에 (별 3, 포크 0, 10분 전)·(별 512, 포크 61, 5분 전) 검색 결과가 그대로 남는 경우를 더한다.
+  - 사용자 실제 DB 는 이미 `user_version` 3 이고 KST·HF·RSS 보정은 맞으므로, m003 을 같은 번호로 고쳐도 그 DB 에는 다시 돌지 않는다(m004 불필요). 그 DB 의 지워진 GitHub 지표를 되살리려면 `make reset` 으로 다시 수집하는 수밖에 없다. 할지는 사용자가 정한다.
+
+#### 11.11.4 재현 R16~R18
+
+2026-11-10, 지금 작업 트리 코드, `backend/` 에서 `../.venv/bin/python -I` + 스크래치 스크립트(`scratchpad/repro/r16.py`, `scratchpad/m003/`), `DATABASE_URL` 은 임시 폴더.
+
+| ID | 절차 | 결과 |
+|---|---|---|
+| R16-A | 세션 POST(`active_source_id` 1, 메시지 1) → 목록, `GET /api/chat/sources/1`, `/api/schedule/status`, `/api/research/audit-logs` | 모든 시각 `+00:00` (예 `2026-11-10T05:16:22.451154+00:00`, 받은 `created_at` `Z` → `2026-11-10T00:00:00+00:00`) |
+| R16-B | `append_messages_batch` 가 `RuntimeError` → 업서트 POST('바뀐 제목') → 상세 | 500, `title` `원래 제목` |
+| R16-C | 스트림 `session_id` `not-a-uuid` / 대시 없는 32자 hex / 생략 | 400 `ERR_SESSION_INVALID_UUID` / 200 / 200 (뒤 둘은 실제 Anthropic 호출이 일어났다, 위 '주의') |
+| R16-D | `GET /openapi.json` | `422` 0개, `400` 19개, `HTTPValidationError`·`ValidationError` 없음 |
+| R16-E | 다른 프로세스 `flock` → `POST /api/schedule/trigger` | `already_running`, `other_process: True`, 다른 문장 |
+| R16-F | `manager.fcntl = None` 흉내 → 획득·재획득·`is_busy` | 성공 / `None` / `True` / 해제 뒤 성공·`False` |
+| R17 | 임시 DB 에 GitHub 행 5개 → `_m003_fix_legacy_news_rows` | 검색 결과 (3,0)·(8,0)·(512,61) 와 폴백 (5000,600) 이 `(0,0)`, 90분 전 (3,0) 만 그대로 |
+| R18-a | 옛 루트 DB 사본 0→3 | GitHub 404행 0 처리 중 합성 8, 실제 396 |
+| R18-b | 실제 DB 읽기 조회 (위 표) | m003 전 수집분의 '별 1~8·포크 0' 1행 (옛 DB 368, m003 뒤 수집분 4/18) |
+| R18-c | 실제 DB 지금 상태 사본에 `user_version=2` 로 m003 재실행 | `raw_score` 5행·hotness 82행 바뀜 (crawl 118 의 실제 GitHub 행 포함) |
+
+#### 11.11.5 2차 재리뷰 지적 수
+
+| 심각도 | 개수 | ID |
+|---|---|---|
+| 머지 전 필수 | 1 | M003-01 |
+| 해결 (11절 권장) | 9 | ARCH-03R, CFG-02R, N-08, N-09, N-10, N-11(KST 보정), N-12, TEST-07, TEST-08 |
+| 해결 (추가 항목) | 6 | ADR Q4·Q12·Q13, 스트림 `session_id`, `ChatStatusStep`, `ManualCollectResponse` (Q11 은 N-09 와 같다) |
+| 권장 | 0 | — |
+| 범위 밖 (수용된 위험) | 6 | 9절, 바뀌지 않음 |
+
+#### 11.11.6 2차 재리뷰 판정
+
+- **판정 결과**: **REQUEST_CHANGES**
+- **근거**: 11절 권장 9건과 ADR 열린 질문·계약 정리 항목은 모두 해결됐고 회귀는 없다(`make check` 종료 0, 410 + 820). 남은 것은 M003-01 하나다. 업그레이드 마이그레이션이 실제 GitHub 별·포크를 되돌릴 수 없게 지운다(옛 DB 사본에서 404행 중 396행 오탐, 실제 DB 도 영향 추정). `backend/app/database.py:124-128` 의 규칙을 감시 저장소 폴백 행으로 좁히고 오탐 회귀 테스트를 더하면 APPROVED 로 바꿀 수 있다. 사용자 실제 DB 의 지표 복구(`make reset`)는 사용자 결정이다.
+- 수용된 위험 6건(9절)은 판정 근거로 쓰지 않았다.
+
+### 11.12 v0.4.2 3차 재리뷰 (2026-11-10, M003-01 수정분)
+
+- **대상**: `backend/app/database.py` `_m003_fix_legacy_news_rows`(GitHub 규칙), `backend/tests/test_b_round2.py`, 사용자 실제 DB 의 GitHub 지표 복구 결과(B 조 `scratchpad/m003fix/restore_github_metrics.py`, 원본 `scratchpad/m003fix/pre_m003_copy.db`). 코드는 고치지 않았다. 실제 DB 는 `sqlite3 -readonly … ".backup"` 으로 떠서 사본만 조회했다. 재현에서는 LLM 을 부르지 않았다(마이그레이션 함수 직접 호출, `ANTHROPIC_API_KEY` 를 지운 환경).
+
+| 확인 | 결과 | 근거 |
+|---|---|---|
+| 규칙 | 맞음 | `sources.json` 감시 저장소마다 `url = https://github.com/{repo}`, `raw_score = stars_hint`(없으면 5000), `comments_count = int(별 × 0.12)` 가 모두 같은 행만 0 (`backend/app/database.py` m003 의 GitHub 블록). 옛 폴백 코드(`git show HEAD:backend/app/collectors/sources/github.py:49-70`)가 만든 값과 정확히 같은 조건이다 |
+| 재현 R19 (임시 DB, 함수 직접 호출) | 맞음 | 검색 결과 (3,0)·(8,0)·(512,61)·감시 목록 밖 (5000,600) 은 그대로, `modelcontextprotocol/servers` (18500,2220)·`jlowin/fastmcp` (3100,372) 는 `(0,0)`, `jlowin/fastmcp` (3101,372) 는 그대로 |
+| 옛 루트 DB 사본 0→3 | 맞음 | GitHub 0 처리 404행 → 8행(모두 별 힌트 값 ≥ 3100), `integrity_check ok` |
+| 테스트가 결함을 잡는가 | 잡는다 | 사본에 옛 비율 규칙을 다시 더하면 `tests/test_b_round2.py` `1 failed, 6 passed` (원래 `7 passed`). 테스트에 (3,0)·(8,0)·(512,61)·(900,108) 오탐 행과 `stars_hint` 있는/없는 폴백 (1234,148)·(5000,600) 이 있다 |
+| 실제 DB 복구 | 맞음 | 원본 사본(`pre_m003_copy.db`)은 `user_version` 2, GitHub 2510행 중 별 1~8·포크 0 이 438행이라 m003 전 진짜 값으로 보인다. 지금 실제 DB(백업 사본)에서 원본에 값이 있었는데 0 인 GitHub 행은 8개(id 3476~3483, 감시 저장소 별 힌트 값 18500·4200·7900·14300·36500·26000·3100·34000)뿐이다. 원본과 별·포크가 다른 그 밖의 5행(id 335, 381, 517, 1917, 3433)은 모두 원본보다 큰 값이라 원본 뒤 재수집(`max(기존, 새 값)`)으로 보인다. 발행·수집 1시간 안 GitHub 행 분포가 '별 0' 918 / '별 1~8·포크 0' 416 / '별 > 8' 754 로 옛 DB(812/368/694)와 같은 모양이 됐다(2차 때는 1366/1/721). `PRAGMA integrity_check ok`, `user_version` 3 |
+| hotness | 맞음 | m003 전 수집 GitHub 2510행 중 2503행이 복구된 지표·`created_at` 기준 새 식과 같다. 다른 7행(id 27, 381, 573, 574, 1276, 4927, 4998)은 원본 뒤 재수집 때 수집기가 그 시각 기준으로 다시 계산한 값으로 보인다(381 은 위 재수집 행) |
+
+- **`make check`**: 2026-11-10 14:2x KST, 이 검토자가 직접 실행, 종료 **0**.
+```
+============================= 410 passed in 10.85s =============================
+ Test Files  70 passed (70)
+      Tests  823 passed (823)
+$ eslint
+EXIT=0
+```
+  eslint·`tsc --noEmit` 출력 없음. 실행 전후 `git status --porcelain`·`sources.json` 두 곳(Evil Martians 그대로)·`config.json` md5 같음. `git diff HEAD` 해시만 달라졌는데 다른 에이전트가 같은 시각에 파일을 고치고 있었다. 그래서 backend pytest 를 다시 따로 돌려(`410 passed in 10.73s`) 바뀐 파일 전부의 md5 를 전후 비교했고 같았다.
+- **지적 수**: 머지 전 필수 0, 권장 0 (M003-01 해결). 범위 밖 6건(9절)은 판정에 넣지 않았다.
+- **판정 결과**: **APPROVED**
+
+### 11.13 v0.4.2 4차 재리뷰 (2026-11-10, spec-writer 지적 5건 + D-54)
+
+- **대상**: `docs/backend-tdd-engineer/01_TDD_CYCLE_LOG.md` [Cycle v0.4.2-B] '4차 수정', `backend/tests/test_b_round4.py`, D-54 (`backend/app/main.py` `redirect_slashes=False`), `backend/app/services/webhook_service.py`, `scripts/collect.py`, `backend/app/collectors/manager.py`, `backend/app/collectors/sources/rss.py`, `backend/app/services/source_researcher.py`, `backend/app/services/deep_researcher.py`. 코드는 고치지 않았다.
+- **재현 R20** (`scratchpad/repro/r20.py`): 임시 SQLite. `httpx` 동기·비동기 전송을 모두 예외(`secret-detail …`)로 바꿔 외부 요청이 나갈 수 없게 했고, LLM 키 환경 변수를 지웠다. 평가 함수와 채택 저장(`add_rss_source`)은 흉내로 바꿔 `sources.json` 을 쓰지 않았다.
+
+| # | 항목 | 결과 | 근거 |
+|---|---|---|---|
+| 1 | Slack 테스트 문구 | 맞음 | `build_test_payload("slack")` 에 `Must Read` 없음. 대신 일일 브리핑 자동 발송(`auto_dispatch_daily_briefing`) 안내만 있다(`backend/app/services/webhook_service.py:44-50`). 화면 메뉴 이름 '공유 & 알림'(`frontend/src/components/Header.tsx:88`)과 같다 |
+| 2 | `make collect` 직접 모드 | 맞음 | 경고가 잠금 동작을 설명한다(`scripts/collect.py:139-140`). 잠금을 못 쥐면 `collect_all` 이 `already_running` 을 돌려주고, 기존 분기(`status != "success"`)가 `수집 실패: status=already_running …` 를 stderr 로 내고 종료 1. `test_collect_script.py::test_direct_mode_with_backend_up_reports_lock` |
+| 3 | `category_hint` 기본 카테고리 | 맞음, 평가 통과 항목에만 | 적용 위치가 평가 탈락 `return None` 뒤다(`backend/app/collectors/manager.py:150-165`). 평가가 통과하는데 범주가 `unrelated` 인 경우는 LLM 평가가 통과를 줬지만 범주 이름이 4종 밖일 때뿐이다(휴리스틱 폴백은 범주가 `unrelated` 면 탈락, 사전 필터도 탈락. `llm_processor.py` 평가 함수). 재현 R20-3 (분류기 `unrelated` 인 제목): 평가 탈락 + hint → 저장 안 함, 평가 통과·LLM 범주 무효 + hint `agent_tech` → `agent_tech`, 평가 통과·LLM 범주 `harness` + hint → `harness`(hint 무시), hint 가 4종 밖 → 저장 안 함. RSS 항목에 피드 `category_hint` 를 싣는다(`rss.py:80`). 다른 수집기 항목에는 hint 가 없어 동작이 같다. 참고: 테스트(`test_b_round4.py:33-51`)는 통과 경우만 보고 '평가 탈락 + hint → 걸러짐' 단언은 없다. 코드 순서로 보장되고 재현으로 확인해 지적하지 않는다 |
+| 4 | 접속 예외 원문 숨김 | 맞음 | `inspect-url` 은 `URL 에 접속하지 못했습니다. 주소와 네트워크를 확인해주세요.`·`피드를 내려받지 못했습니다.`(`source_researcher.py:62-65`, `:130-131`), 딥 리서치 탐침은 `연결 실패`·`피드 다운로드 실패`(`deep_researcher.py:229-230`, `:276-277`). 원문은 `logger.warning` 에만 있다. 재현 R20-4: 응답에 `secret-detail` 없음, 로그에만 있음. 감사 기록 사유는 `기술 실증 실패: {message}` 라 고정 문장만 들어간다. 두 파일에 응답으로 가는 `{e}`·`str(e)` 0건(grep, 남은 두 곳은 로그) |
+| 5 | 자동 채택 저장 실패 | 맞음 | `SourcesWriteError` → `verdict = "WATCHLIST"`, 사유 '채택 기준을 넘었으나(점수 …) sources.json 저장에 실패해 등록하지 못했습니다.', `adopt_failed += 1`, 다음 후보 계속(`deep_researcher.py:466-483`), 요약에 `adopt_failed`(`:512-518`). 재현 R20-5: 요약 `{'evaluated_total': 1, 'auto_adopted': 0, 'adopt_failed': 1}`, 결과·감사 기록 `WATCHLIST`·위 사유, `auto_adopted_count` 0 그대로. 저장 실패 시 `load_sources` 캐시는 파일이 그대로라 바뀌지 않는다 |
+| 6 | D-54 `redirect_slashes=False` | 맞음, 깨지는 호출처 없음 | `FastAPI(..., redirect_slashes=False)` (`backend/app/main.py:52`). 런타임 OpenAPI 경로 30개 중 끝이 `/` 인 것은 루트 `/` 하나뿐이다. 재현 R21 (`follow_redirects=False`): `GET /api/news` 200, `GET /api/news/`·`/api/sources/`·`/api/stats/`·`/health/` 404(전에는 307 → 슬래시 없는 경로), `POST /api/sources/github` 404(전에는 307). 호출처 확인(grep): `frontend/src`(테스트·목 제외)의 API URL 템플릿 34개가 모두 슬래시 없이 경로와 정확히 같다(`lib/api.ts`, `lib/chatApi.ts` 등). 빈 `itemId` 로 `/api/sources/{type}/` 가 되는 경우도 `{item_id:path}` 가 빈 값과 맞아 리다이렉트와 상관없다. `frontend/next.config.ts` 는 `trailingSlash` 를 두지 않아 Next 기본값(끝 슬래시 URL 을 슬래시 없는 URL 로 리다이렉트한 뒤 rewrite)이고, rewrite 는 `/api/:path*` → `${backendUrl}/api/:path*` 라 슬래시를 붙이지 않는다. `Makefile`·`scripts/collect.py`·Docker healthcheck 는 `/health`·`/api/schedule/{progress,trigger,reset-and-collect}` 만 부르고, `collect.py:186`·`qa_runner.py:59-61` 은 기준 URL 끝 슬래시를 지운다. `qa_runner.py` 점검 경로 13개도 슬래시 없음(`/api/news/999999999` 는 404 기대, 지금도 404). MCP 서버는 HTTP 를 부르지 않는다(DB 직접). 정적 명세 `docs/system-designer/02_OPENAPI_SPEC.yaml` 에도 끝 슬래시 API 경로가 없다. 그래서 저장소 안에서 리다이렉트에 기대던 호출은 없다. 저장소 밖 사용자 스크립트가 `/api/news/` 처럼 끝 슬래시로 부르던 경우만 404 로 바뀐다(동작 변경, `docs/devops-engineer/01_DEPLOYMENT_SPEC.md` 나 릴리스 노트에 한 줄 적기를 권하지만 지적 수에는 넣지 않는다). `test_deleted_endpoints_answer_404_or_405_without_redirect` 가 지운 11개 경로의 404·405 를 `follow_redirects=False` 로 확인한다 |
+
+- **`make check`**: 이 검토자가 세 번 돌렸다.
+  - 첫 실행(14:4x): backend `417 passed`, frontend `ContractAndMsw.test.ts` 2개 실패(`last_run_summary carries adopt_failed (v1.4)`) 로 종료 2. 그 시각에 다른 에이전트가 `frontend/src/tests/chat/ContractAndMsw.test.ts`(14:49:54), `frontend/src/types/news.ts`·`frontend/src/mocks/handlers/ops.ts`(14:50:24)를 고치고 있었다(계약 반영 진행 중). 끝난 뒤 그 파일만 다시 돌려 `136 passed`.
+  - 둘째 실행(14:50:59~14:51:35): 종료 0, backend `417 passed`, frontend `70 files / 829 tests`. D-54(`main.py` 14:51:42, 테스트 14:51:35)는 이 실행 뒤에 들어왔다.
+  - 셋째 실행(14:53:35~14:54:07, D-54 포함), 종료 **0**:
+```
+============================= 418 passed in 11.46s =============================
+ Test Files  70 passed (70)
+      Tests  831 passed (831)
+EXIT=0
+```
+  eslint·`tsc --noEmit` 출력 없음. 셋째 실행 중 다른 에이전트가 `docs/spec-writer/01_PRD.md`·`02_FUNCTIONAL_SPECIFICATION.md`·`frontend/src/tests/modals/NewsDetailModal.test.tsx` 를 고쳤다. backend 파일은 전후 md5 가 같다. 앞서 backend pytest 단독 실행에서도 전후 파일 변화가 없었다(`418 passed in 11.87s`). `sources.json` 두 곳(md5 `32ed0854…`, Evil Martians 그대로)·`config.json`(`0654cac2…`, 버전 0.4.2) 은 이번 리뷰 동안 바뀌지 않았다.
+- **지적 수**: 머지 전 필수 0, 권장 0. 범위 밖 6건(9절)은 판정에 넣지 않았다.
+- **판정 결과**: **APPROVED**

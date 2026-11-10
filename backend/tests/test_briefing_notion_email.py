@@ -52,7 +52,12 @@ async def test_notion_test_connection_mock():
         assert "AgentLens Bot" in msg
 
 @pytest.mark.asyncio
-async def test_notion_export_page_mock():
+async def test_notion_export_page_mock(fake_llm):
+    # 부모가 데이터베이스인지 묻는 GET 은 흉내 Notion 이 404(페이지)로 답한다 (실제 api.notion.com 으로 나가지 않는다)
+    fake_llm.register_web(
+        "https://api.notion.com/v1/databases/12345678-90ab-cdef-1234-567890abcdef",
+        status=404, text='{"object":"error","code":"object_not_found"}', content_type="application/json",
+    )
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_res = MagicMock()
         mock_res.status_code = 200
@@ -115,11 +120,15 @@ async def test_email_test_connection_mock():
         assert "성공적으로" in msg
 
 @pytest.mark.asyncio
-async def test_email_api_endpoints():
+async def test_email_api_endpoints(monkeypatch, fake_smtp):
+    from app.config import settings
+    # 요청과 설정 모두 SMTP 호스트가 없을 때 400 (설정 사본의 smtp_host 에 기대지 않는다)
+    monkeypatch.setattr(settings, "SMTP_HOST", "")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # Missing host returns 400
         res = await ac.post("/api/briefing/test/email", json={"smtp_host": ""})
         assert res.status_code == 400
+        assert fake_smtp.connections == []
 
         # Send email with mock
         with patch.object(email_service, "send_briefing_email", new_callable=AsyncMock) as mock_send:

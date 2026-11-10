@@ -199,3 +199,35 @@ describe('AskAiPanel 2차 (R16·R28·R15)', () => {
     }
   });
 });
+
+describe('AskAiPanel 응답 엔진 표기 (리뷰 FE-25, QA D-25)', () => {
+  function renderWith(chatHistory: React.ComponentProps<typeof AskAiPanel>['chatHistory']) {
+    return render(
+      <AskAiPanel
+        item={mockItem}
+        question=""
+        setQuestion={vi.fn()}
+        asking={false}
+        chatHistory={chatHistory}
+        copiedIndex={null}
+        onAsk={vi.fn()}
+        onCopy={vi.fn()}
+        onClearChat={vi.fn()}
+      />
+    );
+  }
+
+  it('질문 전에는 특정 엔진 이름을 고정해 보이지 않는다', () => {
+    renderWith([]);
+    expect(screen.getByText('실시간 스트리밍')).toBeInTheDocument();
+    expect(screen.queryByText(/Gemini/)).not.toBeInTheDocument();
+  });
+
+  it('머리줄에 마지막 답변의 실제 응답 엔진(meta)을 보인다', () => {
+    renderWith([
+      { q: '첫 질문', a: '첫 답변', model: 'AgentLens Heuristic Engine', time: '14:30' },
+      { q: '둘째 질문', a: '둘째 답변', model: 'claude-sonnet-5-5', time: '14:31' },
+    ]);
+    expect(screen.getByText('응답 엔진: claude-sonnet-5-5')).toBeInTheDocument();
+  });
+});

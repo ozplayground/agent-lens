@@ -47,27 +47,34 @@ async def fetch_github() -> List[Dict[str, Any]]:
             except Exception:
                 continue
 
-    # Fallback/enrich with monitored repositories from sources.json
+    # Fallback/enrich with monitored repositories from sources.json.
+    # 저장소 API 의 실제 별·포크·최근 push 시각을 쓴다. 못 받으면 지표·시각을 지어내지 않고 건너뛴다 (BUG-18)
     if len(items) < 5 and monitored_repos:
-        now = datetime.now(timezone.utc)
-        for entry in monitored_repos:
-            repo_name = entry.get("repo", "")
-            if not repo_name:
-                continue
-            url = f"https://github.com/{repo_name}"
-            if url not in seen:
+        async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
+            for entry in monitored_repos:
+                repo_name = entry.get("repo", "")
+                if not repo_name or f"https://github.com/{repo_name}" in seen:
+                    continue
+                try:
+                    resp = await client.get(f"https://api.github.com/repos/{repo_name}")
+                    if resp.status_code != 200:
+                        continue
+                    repo = resp.json()
+                    pub_date = datetime.fromisoformat((repo.get("pushed_at") or repo["updated_at"]).replace("Z", "+00:00"))
+                except Exception:
+                    continue
+                url = repo.get("html_url") or f"https://github.com/{repo_name}"
                 seen.add(url)
-                desc = entry.get("description", "Open-source repository")
-                stars = entry.get("stars_hint", 5000)
+                desc = repo.get("description") or entry.get("description") or "Open-source repository"
                 items.append({
                     "title": f"{repo_name}: {desc[:110]}",
                     "url": url,
                     "source": "github",
                     "summary": desc,
-                    "author": repo_name.split("/")[0] if "/" in repo_name else "github",
-                    "published_at": now,
-                    "raw_score": stars,
-                    "comments_count": int(stars * 0.12),
+                    "author": repo.get("owner", {}).get("login") or repo_name.split("/")[0],
+                    "published_at": pub_date,
+                    "raw_score": repo.get("stargazers_count", 0) or 0,
+                    "comments_count": repo.get("forks_count", 0) or 0,
                 })
 
     return items

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within, waitFor } from '@testing-library/rea
 import { http, HttpResponse } from 'msw';
 import { server } from '@/mocks/server';
 import SourcesModal from '@/components/SourcesModal';
+import { mockSourcesResponse } from '@/mocks/handlers';
 
 const deleteCalls: string[] = [];
 let confirmSpy: ReturnType<typeof vi.spyOn>;
@@ -141,5 +142,63 @@ describe('SourcesModal add-feed form (R19, R24)', () => {
       ['ai_news', '최신 AI 동향'],
     ]);
     expect(select).toHaveValue('ai_news');
+  });
+});
+
+/** UI 5대 상태 공백 (리뷰 FE-30 남은 부분): 소스·딥 리서치 대화상자의 Error·Empty. */
+describe('SourcesModal — Error·Empty (FE-30)', () => {
+  it('Error: 불러오기가 실패하면 0건처럼 보이지 않고 오류와 다시 시도를 보이며, 다시 시도하면 목록을 그린다', async () => {
+    let fail = true;
+    server.use(
+      http.get('*/api/sources', () =>
+        fail
+          ? HttpResponse.json({ error_code: 'INTERNAL_ERROR', message: '서버 오류', details: null }, { status: 500 })
+          : HttpResponse.json(mockSourcesResponse)
+      )
+    );
+    render(<SourcesModal isOpen onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: '소스 & 리서처' });
+
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent('소스 정보를 불러오지 못했습니다');
+    // 딥 리서치 탭이 빈 기록 안내를 보이지 않는다 (실패를 '없음' 으로 보이지 않는다).
+    expect(within(dialog).queryByText(/아직 기록된 딥 리서치 이력이 없습니다/)).not.toBeInTheDocument();
+
+    fail = false;
+    fireEvent.click(within(alert).getByRole('button', { name: '다시 시도' }));
+    fireEvent.click(within(dialog).getByRole('tab', { name: /등록된 수집원/ }));
+    expect(await within(dialog).findByText('GeekNews (긱뉴스)')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('Empty: 등록된 RSS 피드·GitHub 저장소가 없으면 빈 표 대신 안내를 보인다', async () => {
+    server.use(
+      http.get('*/api/sources', () =>
+        HttpResponse.json({
+          ...mockSourcesResponse,
+          data: {
+            ...mockSourcesResponse.data,
+            rss_feeds: [],
+            github_sources: { ...mockSourcesResponse.data.github_sources, monitored_repos: [] },
+          },
+        })
+      )
+    );
+    render(<SourcesModal isOpen onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: '소스 & 리서처' });
+    fireEvent.click(within(dialog).getByRole('tab', { name: /등록된 수집원/ }));
+
+    expect(await within(dialog).findByText('등록된 RSS 피드가 없습니다.')).toBeInTheDocument();
+    expect(within(dialog).getByText('모니터링 중인 GitHub 저장소가 없습니다.')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('Empty: 딥 리서치 이력이 없으면 빈 기록 안내를 보이고, 실행 시각이 없으면 가동됐다고 하지 않는다', async () => {
+    render(<SourcesModal isOpen onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: '소스 & 리서처' });
+
+    expect(await within(dialog).findByText(/아직 기록된 딥 리서치 이력이 없습니다/)).toBeInTheDocument();
+    expect(within(dialog).getByText('실행 기록 없음')).toBeInTheDocument();
+    expect(within(dialog).queryByText('최근 가동됨')).not.toBeInTheDocument();
   });
 });

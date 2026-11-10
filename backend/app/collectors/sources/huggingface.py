@@ -30,8 +30,8 @@ async def fetch_huggingface() -> List[Dict[str, Any]]:
                         "summary": p.get("summary", "")[:300],
                         "author": "Hugging Face Daily Papers",
                         "published_at": pub_date,
-                        "raw_score": paper.get("numComments", 0) + 40,
-                        "comments_count": paper.get("numComments", 0),
+                        "raw_score": p.get("upvotes", 0) or 0,  # 실제 추천 수 (BUG-18, 예전 numComments + 40)
+                        "comments_count": paper.get("numComments", 0) or 0,
                     })
         except Exception:
             pass

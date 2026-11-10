@@ -43,3 +43,40 @@ describe('DeepResearcherTab — 지표 값 줄바꿈 (ui-redesign 29, R16)', () 
     }
   );
 });
+
+describe('DeepResearcherTab — 평가 방식 문구 (리뷰 FE-25, QA D-25)', () => {
+  it('적합도 평가가 LLM 이 아니라 키워드 규칙 기반임을 밝힌다', () => {
+    renderTab();
+    expect(screen.getByText(/키워드 규칙 기반 적합도 점수/)).toBeInTheDocument();
+    expect(screen.queryByText(/LLM/)).not.toBeInTheDocument();
+  });
+});
+
+describe('DeepResearcherTab — 판정 사유 라벨 (D-25 원칙)', () => {
+  it('키워드 규칙이 만든 사유를 AI 판정이라고 부르지 않는다', () => {
+    render(
+      <DeepResearcherTab
+        researchStatus={null}
+        auditLogs={[
+          {
+            id: 1,
+            source_name: 'Example Blog',
+            site_url: 'https://example.com',
+            feed_url: 'https://example.com/feed',
+            category: 'harness',
+            relevance_score: 8.5,
+            verdict: 'AUTO_ADOPTED',
+            verdict_reason: '하네스 키워드 3건 일치',
+            analyzed_articles_count: 5,
+            created_at: '2026-11-10T00:00:00+00:00',
+          },
+        ]}
+        loading={false}
+        onRefresh={noop}
+        showToast={noop}
+      />
+    );
+    expect(screen.getByText('판정 사유:')).toBeInTheDocument();
+    expect(screen.queryByText(/AI 판정/)).not.toBeInTheDocument();
+  });
+});

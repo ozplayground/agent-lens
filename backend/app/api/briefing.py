@@ -1,3 +1,4 @@
+import copy
 import logging
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,32 +26,7 @@ router = APIRouter(prefix="/briefing", tags=["Daily Briefing"])
 @router.get("/today", response_model=DailyBriefingResponse)
 async def get_today_briefing(db: AsyncSession = Depends(get_db)):
     data = await briefing_service.generate_daily_briefing(session=db)
-    return DailyBriefingResponse(
-        title=data.get("title", "오늘의 AI 브리핑"),
-        date=data["date"],
-        headline=data["headline"],
-        overview=data.get("overview", ""),
-        categories=data.get("categories", []),
-        action_items=data.get("action_items", []),
-        markdown_report=data["markdown_report"],
-        featured_items_count=data["featured_items_count"],
-        generated_at=data["generated_at"]
-    )
-
-@router.post("/generate", response_model=DailyBriefingResponse)
-async def regenerate_briefing(db: AsyncSession = Depends(get_db)):
-    data = await briefing_service.generate_daily_briefing(session=db)
-    return DailyBriefingResponse(
-        title=data.get("title", "오늘의 AI 브리핑"),
-        date=data["date"],
-        headline=data["headline"],
-        overview=data.get("overview", ""),
-        categories=data.get("categories", []),
-        action_items=data.get("action_items", []),
-        markdown_report=data["markdown_report"],
-        featured_items_count=data["featured_items_count"],
-        generated_at=data["generated_at"]
-    )
+    return DailyBriefingResponse(**data)
 
 @router.post("/export/notion", response_model=NotionExportResponse)
 async def export_to_notion(
@@ -154,13 +130,13 @@ async def get_briefing_settings():
             "slack_webhook_url": webhooks.get("slack_webhook_url", ""),
             "discord_webhook_url": webhooks.get("discord_webhook_url", ""),
             "auto_dispatch_daily_briefing": webhooks.get("auto_dispatch_daily_briefing", True),
-            "auto_alert_high_signal": webhooks.get("auto_alert_high_signal", True)
         }
     }
 
 @router.post("/settings")
 async def update_briefing_settings(update: BriefingSettingsUpdate):
-    raw = dict(settings.raw_json_config)
+    # 깊은 사본: 저장이 실패해도 메모리 설정(_json_data)이 바뀌지 않게 한다 (BUG-21)
+    raw = copy.deepcopy(settings.raw_json_config)
     if "briefing" not in raw:
         raw["briefing"] = {}
     if "notion" not in raw["briefing"]:

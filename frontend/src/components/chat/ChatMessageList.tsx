@@ -5,7 +5,6 @@ import { Bot, ArrowRight, Server, GitBranch, ChartColumn, TrendingUp, type Lucid
 import { ChatMessage, ChatTimelineItem } from '@/types/chat';
 import ChatMessageItem from './ChatMessageItem';
 import ModelChangeDivider from './ModelChangeDivider';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export interface ChatMessageListProps {
   messages: ChatMessage[];
@@ -13,10 +12,12 @@ export interface ChatMessageListProps {
   streamingMessageId?: string;
   onSelectPromptSuggestion: (promptText: string) => void;
   onRetryMessage: (messageId: string) => void;
-  onCopyMessage: (content: string) => void;
-  onOpenSourceDetail?: (sourceId: number) => void;
+  onCopyMessage?: (content: string) => void;
   timelineItems?: ChatTimelineItem[];
 }
+
+/** 맨 아래에서 이 거리 안이면 '맨 아래를 보고 있다' 로 본다. */
+const STICK_THRESHOLD_PX = 24;
 
 // 추천 질문: 글자에는 그림 이모지를 두지 않고 카드 앞에 lucide 아이콘을 그린다 (R44).
 const DEFAULT_SUGGESTIONS: { icon: LucideIcon; text: string }[] = [
@@ -33,18 +34,39 @@ export default function ChatMessageList({
   onSelectPromptSuggestion,
   onRetryMessage,
   onCopyMessage,
-  onOpenSourceDetail,
   timelineItems,
 }: ChatMessageListProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
-  // 줄어든 움직임을 원하면 부드러운 스크롤 대신 바로 이동한다 (spec 1.2).
-  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const logRef = useRef<HTMLDivElement>(null);
+  // 맨 아래를 보고 있을 때만 새 내용을 따라 내려간다. 위로 올려 읽는 중이면 그대로 둔다 (FE-36).
+  const stickToBottomRef = useRef(true);
+  const messageCountRef = useRef(messages.length);
+
+  const handleScroll = () => {
+    const log = logRef.current;
+    if (!log) return;
+    stickToBottomRef.current = log.scrollHeight - log.scrollTop - log.clientHeight <= STICK_THRESHOLD_PX;
+  };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
-  }, [messages, timelineItems, isStreaming, reduceMotion]);
+    // 새 메시지(질문 전송·세션 열기)는 언제나 맨 아래로 간다.
+    if (messages.length !== messageCountRef.current) {
+      messageCountRef.current = messages.length;
+      stickToBottomRef.current = true;
+    }
+    const log = logRef.current;
+    // scrollIntoView 는 overflow-hidden 인 조상 상자까지 스크롤해 입력창을 밀어 올린다 (FE-36).
+    // 목록 상자의 scrollTop 만 바꾼다. 토큰마다 부드러운 스크롤을 걸지 않는다 (FE-10).
+    if (log && stickToBottomRef.current) {
+      log.scrollTop = log.scrollHeight;
+    }
+  }, [messages, timelineItems, isStreaming]);
 
   const hasItems = (timelineItems && timelineItems.length > 0) || messages.length > 0;
+  const lastMessage = messages[messages.length - 1];
+  const completionNotice =
+    !isStreaming && lastMessage?.role === 'assistant' && lastMessage.status === 'completed'
+      ? '답변이 완료되었습니다.'
+      : '';
 
   if (!hasItems) {
     return (
@@ -89,11 +111,18 @@ export default function ChatMessageList({
   }
 
   return (
+    <>
+    {/* relative: 모바일 `max-md:sr-only` 라벨(position:absolute)의 기준 상자를 목록으로 묶어,
+        라벨이 overflow-hidden 인 바깥 열을 넘치게 하지 않는다 (FE-36).
+        aria-relevant=additions + aria-busy: 토큰마다 읽지 않고, 끝나면 아래 status 로 한 번 알린다 (FE-14). */}
     <div
+      ref={logRef}
+      onScroll={handleScroll}
       role="log"
       aria-live="polite"
-      aria-relevant="additions text"
-      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full px-4 py-4 md:px-6"
+      aria-relevant="additions"
+      aria-busy={isStreaming}
+      className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full px-4 py-4 md:px-6"
     >
       <div data-chat-column="" className="mx-auto w-full max-w-3xl min-w-0">
         {timelineItems && timelineItems.length > 0
@@ -105,7 +134,6 @@ export default function ChatMessageList({
                   isStreaming={isStreaming && item.data.id === streamingMessageId}
                   onRetry={onRetryMessage}
                   onCopy={onCopyMessage}
-                  onOpenSourceDetail={onOpenSourceDetail}
                 />
               ) : (
                 <ModelChangeDivider
@@ -123,11 +151,14 @@ export default function ChatMessageList({
                 isStreaming={isStreaming && msg.id === streamingMessageId}
                 onRetry={onRetryMessage}
                 onCopy={onCopyMessage}
-                onOpenSourceDetail={onOpenSourceDetail}
               />
             ))}
-        <div ref={bottomRef} className="h-2" />
+        <div className="h-2" />
       </div>
     </div>
+    <div role="status" className="sr-only">
+      {completionNotice}
+    </div>
+    </>
   );
 }

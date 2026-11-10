@@ -2,10 +2,10 @@
 
 - **작성일자**: 2026-11-09
 - **작성자**: UI 시스템 디자이너 (`ui-system-designer`)
-- **문서 버전**: v1.0 (as-built, 지금 코드를 그대로 설명한다)
+- **문서 버전**: v1.1 (as-built, 지금 코드를 그대로 설명한다. 변경 이력은 10절)
 - **상태**: Draft
-- Updated: 2026-11-09
-- 기준: v0.4.1 (main)
+- Updated: 2026-11-10
+- 기준: v0.4.2 (main)
 - **본문**: [`01_COMPONENT_SPEC.md`](01_COMPONENT_SPEC.md) (`docs/templates/07_COMPONENT_SPEC_TEMPLATE.md` 구조). 이 문서는 그 5절 '반응형 브레이크포인트 및 접근성' 의 토큰·부품·검사 상세를 나눠 적은 부록이다. 단축키 규칙은 `01_COMPONENT_SPEC.md` 7절에 있다.
 
 AgentLens 프론트엔드(`frontend/`)의 색·글꼴·간격 토큰, 공통 부품, 오버레이 규칙, 디자인 검사를 적는다. 값은 지금 코드가 기준이다. 토큰 원본은 `frontend/src/app/globals.css`, 공통 부품은 `frontend/src/components/ui/` 에 있다. 이 문서의 hex 값은 `globals.css` 의 토큰 정의를 옮긴 것이고, 화면 코드(`.tsx`)는 hex 를 쓰지 않고 토큰 유틸리티만 쓴다.
@@ -57,6 +57,8 @@ AgentLens 프론트엔드(`frontend/`)의 색·글꼴·간격 토큰, 공통 부
 
 대비 값은 WCAG 2.x 상대 휘도 공식으로 `globals.css` 의 값에서 계산했다. `frontend/src/tests/design/TokenContrast.test.ts` 가 같은 공식으로 이 표의 조합을 매번 다시 확인한다.
 
+`canvas` 값은 `globals.css` 밖 한 곳에 hex 로 복사돼 있다: `layout.tsx` 의 `viewport.themeColor`(모바일 브라우저 상단 색)는 CSS 변수를 받지 못해 라이트 `#f8fafc`·다크 `#0e1013` 을 직접 적는다 (`frontend/src/app/layout.tsx:11-14`). `frontend/src/tests/design/ThemeColor.test.ts`(v0.4.2, 리뷰 FE-16)가 두 값이 `:root`·`.dark` 의 `--al-canvas` 와 같은지 `make check` 에서 확인한다. `canvas` 를 바꾸면 `themeColor` 도 같이 바꾼다.
+
 색 사용 규칙:
 
 | 규칙 | 내용 |
@@ -106,7 +108,7 @@ Tailwind 기본 팔레트(`--color-slate-*` 등)는 지우지 않았다 (`bg-tra
 | 첫 그리기 전 적용 | `frontend/src/app/layout.tsx:22-26`, `:32` `<head>` 인라인 스크립트 | `localStorage.agentlens_theme`(`light`/`dark`/`system`, 그 밖은 `system`)과 `prefers-color-scheme` 로 `<html>` 에 `dark` 또는 `light` 클래스 하나, `data-theme`, `style.colorScheme` 를 단다. 예외는 무시한다. 깜빡임이 없다 |
 | 저장소 | `frontend/src/lib/theme-store.ts` | `createThemeStore(storageKey, defaultTheme)` 의 외부 저장소. 스냅샷 `<mode>\|<시스템 light/dark>` 는 매번 `localStorage` 와 `matchMedia` 를 새로 읽는다 (읽기 예외면 인스턴스 안 대체값 또는 `defaultTheme`, `matchMedia` 가 없으면 light). 구독: 같은 탭 `agentlens:theme-change` 이벤트, 다른 탭 `storage`, 시스템 `matchMedia change`(없으면 `addListener`). 순환 순서 `light → dark → system → light` (`nextThemeMode`). 쓰기 예외면 인스턴스 안 대체값에 둔다 |
 | 프로바이더 | `frontend/src/context/ThemeContext.tsx` | props `defaultTheme`(`'system'`), `storageKey`(`'agentlens_theme'`), `attribute`(`'class'`). `useSyncExternalStore` 로 저장소를 읽고 `useLayoutEffect` 에서 `applyThemeToDocument` 로 DOM 에 다시 적용한다. 서버 스냅샷은 `defaultTheme` + `light`. Provider 밖 `useTheme()` 는 기본값(`theme: 'system'`, `resolvedTheme: 'light'`, 아무것도 안 하는 함수) |
-| viewport | `layout.tsx:6-15` `viewport` | `width=device-width`, `initialScale: 1`, `interactiveWidget: 'resizes-content'`, `colorScheme: 'light dark'`, `themeColor` 라이트 `#f8fafc` / 다크 `#0e1013`. `maximumScale`·`userScalable` 을 두지 않는다 (확대 허용) |
+| viewport | `layout.tsx:6-15` `viewport` | `width=device-width`, `initialScale: 1`, `interactiveWidget: 'resizes-content'`, `colorScheme: 'light dark'`, `themeColor` 라이트 `#f8fafc` / 다크 `#0e1013`(토큰 `canvas` 와 같은 값, `ThemeColor` 테스트가 지킨다, 2절). `maximumScale`·`userScalable` 을 두지 않는다 (확대 허용) |
 | 레이아웃 | `layout.tsx:34-40` | `<body className="min-h-dvh bg-canvas text-fg overflow-x-hidden">` → `ThemeProvider` → `<div id="app-shell">` + `<ToastRegion />`. `#app-shell` 은 오버레이 스택이 `inert` 를 다는 대상이다 (6절) |
 
 ## 4. 글꼴·크기·간격·반경·그림자·z-index·모션·브레이크포인트
@@ -183,11 +185,11 @@ Tailwind 기본 팔레트(`--color-slate-*` 등)는 지우지 않았다 (`bg-tra
 | 고정 툴바 | `z-10` | 피드 필터 영역(md 이상 sticky), 대화상자 안 sticky 탭 머리 |
 | 챗 사이드바 | `z-20` | 데스크톱 대화 기록 |
 | 헤더 | `z-30` | `/` 헤더, `/chat` 헤더 |
-| 메뉴·팝오버 | `z-40` | 더보기 메뉴, 테마 메뉴, 모델 선택, 인용 팝오버, 삭제 확인 팝오버. 건너뛰기 링크(포커스 때) |
+| 메뉴·팝오버 | `z-40` | 더보기 메뉴, 테마 메뉴, 모델 선택, 인용 팝오버(`body` 포털, `fixed`), 삭제 확인 팝오버. 건너뛰기 링크(포커스 때) |
 | 대화상자 | `z-50` | 배경막 + 대화상자·시트·드로어. 겹치면 포털에 나중에 붙은 것이 위 |
 | 토스트 | `z-60` | 알림 영역 |
 
-`Popover`·`MenuButton` 은 포털을 쓰지 않고 트리거의 `relative` 부모 안에 그린다. 대화상자 안의 팝오버는 대화상자 쌓임 맥락 안에서 그려진다.
+`MenuButton` 은 포털을 쓰지 않고 트리거의 `relative` 부모 안에 그린다. `Popover` 는 v0.4.2 부터 포털이 선택(opt-in `portal`, 기본 false)이다: 기본은 `MenuButton` 과 같이 트리거 부모 안에 그리고, 대화상자 안의 팝오버는 대화상자 쌓임 맥락 안에서 그려진다. `portal` 을 켠 것은 지금 인용 팝오버 하나다. `Popover portal` 은 `document.body` 에 `fixed z-40` 으로 그려 `#app-shell` 밖이다. 대화상자(`z-50`, 역시 `body` 포털) 안에서 `portal` 을 켜면 팝오버가 대화상자 아래에 깔리고 대화상자의 포커스 가두기 밖이 되므로, 대화상자 안 팝오버에는 켜지 않는다.
 
 ### 4.7 모션
 
@@ -204,7 +206,7 @@ Tailwind 기본 팔레트(`--color-slate-*` 등)는 지우지 않았다 (`bg-tra
 - 들어오는 애니메이션은 `motion-safe:animate-*` 로만 붙인다. `prefers-reduced-motion: reduce` 에서는 붙지 않는다.
 - 닫힘 애니메이션은 없다. 닫으면 바로 언마운트한다.
 - 반복 애니메이션은 진행 표시(`Spinner` 의 `animate-spin`, `Skeleton` 의 `motion-safe:animate-pulse`)와 그에 준하는 것(딥 리서처 새로고침 아이콘 회전, 챗 스트리밍 커서 `motion-safe:animate-pulse`)에만 쓴다.
-- JS 부드러운 스크롤(`behavior: 'smooth'`)은 `useMediaQuery('(prefers-reduced-motion: reduce)')` 가 참이면 `'auto'` 로 바꾼다. 지금 쓰는 곳(`AskAiPanel`, `ChatMessageList`, `ChatPromptInput`, `ScrollRow` 스크롤 버튼) 모두 이 규칙을 따른다.
+- JS 부드러운 스크롤(`behavior: 'smooth'`)은 `useMediaQuery('(prefers-reduced-motion: reduce)')` 가 참이면 `'auto'` 로 바꾼다. 지금 쓰는 곳(`AskAiPanel` 답 끝 보이기, `ChatPromptInput` 포커스 때 입력창 보이기, `ScrollRow` 스크롤 버튼) 모두 이 규칙을 따른다. `ChatMessageList` 는 v0.4.2 부터 부드러운 스크롤을 쓰지 않고 목록 상자의 `scrollTop` 을 바로 옮긴다 (토큰마다 애니메이션을 걸지 않는다, `01_COMPONENT_SPEC.md` 1.5절).
 
 ### 4.8 브레이크포인트
 
@@ -216,18 +218,18 @@ Tailwind 기본 팔레트(`--color-slate-*` 등)는 지우지 않았다 (`bg-tra
 
 - Tailwind 기본값(`sm` 640, `md` 768, `lg` 1024, `xl` 1280)만 쓴다. 정의되지 않은 변형(`xs:` 등)을 쓰지 않는다.
 - JS 너비 판정은 `useMediaQuery('(min-width: 1024px)')` 처럼 `frontend/src/hooks/useMediaQuery.ts` 만 쓴다. `window.innerWidth` 를 직접 읽지 않는다. 서버·하이드레이션 첫 렌더는 `false` 다.
-- 주요 조작 요소(모바일 44×44 대상): 헤더·메뉴 항목, 칩, 탭, 정렬·검색 입력, 카드의 북마크·챗 분석·원문, 페이지 이동, 대화상자 닫기·바닥 버튼, 스위치, 챗 입력·전송·중단, 세션 카드·삭제, 모델 칩, 인용 배지, 내보내기 버튼. 마크다운 본문 안 문장 속 링크는 제외한다 (WCAG 2.5.8 인라인 예외). 마크다운 밖의 문장 속 링크는 44px 로 키운다.
+- 주요 조작 요소(모바일 44×44 대상): 헤더·메뉴 항목, 칩, 탭, 정렬·검색 입력, 카드 제목 버튼(`min-h-12` 48px, v0.4.2)·북마크·챗 분석·원문, 페이지 이동, 대화상자 닫기·바닥 버튼, 스위치, 챗 입력·전송·중단, 세션 카드·삭제, 모델 칩, 인용 배지, 내보내기 버튼. 마크다운 본문 안 문장 속 링크는 제외한다 (WCAG 2.5.8 인라인 예외). 마크다운 밖의 문장 속 링크는 44px 로 키운다.
 
 ## 5. 공통 부품
 
 ### 5.1 부품 목록과 API
 
-모든 부품은 `frontend/src/components/ui/<이름>.tsx` 에 있고 named export 와 default export 를 함께 둔다. 묶음 `index.ts` 는 없다 (`import { Button } from '@/components/ui/Button'`). 표의 props 외에 대부분 네이티브 요소 속성을 그대로 받는다. RSC/RCC 구분은 `01_COMPONENT_SPEC.md` 2절.
+모든 부품은 `frontend/src/components/ui/<이름>.tsx` 에 있고 named export 와 default export 를 함께 둔다. 묶음 `index.ts` 는 없다 (`import { Button } from '@/components/ui/Button'`). 표의 props 외에 대부분 네이티브 요소 속성을 그대로 받는다. RSC/RCC 구분은 `01_COMPONENT_SPEC.md` 2절: v0.4.2 부터 훅이나 인라인 이벤트 처리 함수가 있는 부품(`SearchField`, `SegmentedControl`, `Select`, `Switch`, `TextField`, `Textarea`, `ErrorState` 와 오버레이 부품)은 모두 `'use client'` 로 시작하고 `tests/ui/ClientBoundaryGuard.test.ts` 가 지킨다. 지시어가 없는 부품은 `Badge`, `Button`, `Card`, `Chip`, `EmptyState`, `IconButton`, `InlineAlert`, `Kbd`, `Skeleton`, `Spinner` 다.
 
 | 부품 | 주요 props (기본값) | 접근성·동작 |
 |---|---|---|
 | `Button` | `variant: 'primary'\|'secondary'\|'ghost'\|'danger'` (`secondary`), `size: 'sm'\|'md'\|'lg'` (`md`), `loading?`, `leadingIcon?`, `button` 속성. `buttonClasses(variant, size, className?)`, `BUTTON_VARIANT_CLASSES` 를 함께 내보낸다 | `type="button"` 기본. `loading` 이면 `disabled` + `aria-busy="true"`, 아이콘 자리에 `Spinner`. 글자 있는 버튼만 (아이콘만이면 `IconButton`). `<Link>`·`<a>` 를 버튼 모양으로 할 때 `buttonClasses`. 변형 색: primary `bg-accent-solid text-on-accent`, secondary `border-border-strong bg-surface`, ghost `bg-transparent text-fg-muted`, danger `bg-danger-solid text-on-accent` (`Button.tsx:11-16`) |
-| `IconButton` | `label` (필수), `icon`, `variant` (`ghost`), `size` (`md`), `pressed?` | `aria-label={label}`, `title` 기본 `label`. `pressed` 를 주면 `aria-pressed` (ghost 는 눌림 배경 `accent-soft`) |
+| `IconButton` | `label` (필수), `icon`, `variant` (`ghost`), `size` (`md`), `pressed?`, `ref?` | `aria-label={label}`, `title` 기본 `label`. `pressed` 를 주면 `aria-pressed` (ghost 는 눌림 배경 `accent-soft`). 크기 `sm` `size-11 md:size-8`, `md` `size-11 md:size-9`, `lg` `size-12 md:size-10`, 아이콘 모바일 20px·md 이상 16px (`IconButton.tsx:6-10`, `:50`). 글자 없이 아이콘만 있는 버튼은 모두 이 부품이다: 대화상자·드로어 닫기, 알림 닫기, 스크롤 줄 버튼, 북마크, 세션 카드 삭제, 인용 팝오버 닫기(v0.4.2 에서 직접 만든 `<button>` 을 `size="sm"` 으로 바꿨다, 리뷰 FE-16) |
 | `TextField` | `label`, `hideLabel?`, `description?`, `error?`, `leadingIcon?`, `trailing?`, `containerClassName?`, `input` 속성 (`className` 은 `<input>` 에) | `<label htmlFor>` 연결 (`hideLabel` 이면 `sr-only`), 설명·오류를 `aria-describedby` 로, `error` 면 `aria-invalid` + `danger` 문구. 글자 `text-base md:text-sm`. 입력 글자가 넘치면 말줄임(`text-ellipsis`) |
 | `SearchField` | `TextField` props + `onSubmit?(value)`, `onClear?`, `formClassName?` | `<form role="search">`, `type="search"`, `enterKeyHint="search"`. `onClear` 가 있고 값이 있으면 `IconButton label="검색어 지우기"`, 누르면 입력창으로 포커스 |
 | `Textarea` | `label`, `hideLabel?`, `description?`, `error?`, `autoResize` (true), `maxHeight` (240), `rows` (3), `containerClassName?` | `TextField` 와 같은 라벨 규칙. 내용에 맞춰 높이를 늘리고 `maxHeight` 를 넘으면 세로 스크롤 (챗 입력은 180) |
@@ -245,16 +247,16 @@ Tailwind 기본 팔레트(`--color-slate-*` 등)는 지우지 않았다 (`bg-tra
 | `Drawer` | `Dialog` props (`size`·`mobile`·`placement` 제외) + `side: 'left'` | 6절 규칙 + 너비 `min(320px, 85vw)`, 높이 화면 전체 |
 | `ConfirmDialog` | `open`, `title`, `description?`, `confirmLabel`, `cancelLabel` (`'취소'`), `tone: 'danger'\|'default'` (`default`), `busy?`, `error?`, `onConfirm`, `onCancel` | `role="alertdialog"`, 크기 `sm` 바텀시트, 처음 포커스는 취소 버튼. `busy` 동안 두 버튼 비활성(확인은 스피너), Escape·배경막 무시, 포커스는 대화상자 컨테이너에 둔다. `busy` 가 풀리면 실패 시 오류 문구로, 그 밖에는 확인 버튼으로 포커스를 돌린다. `error` 는 대화상자 안 `InlineAlert tone="danger"` |
 | `MenuButton` (= `Menu`) | `label`, `icon?`, `items: MenuItem[]`, `align: 'start'\|'end'` (`start`), `variant?`, `className?`(트리거), `menuClassName?` | 6.5절 |
-| `Popover` | `open`, `onClose`, `anchorRef`, `label`, `role: 'dialog'\|'radiogroup'` (`dialog`), `focusOnOpen` (false), `side: 'bottom'\|'top'` (`bottom`), `align: 'start'\|'end'` (`start`), `id?`, `className?`. `useOutsidePointerDown(refs, active, onOutside)` 를 함께 내보낸다 | 6.5절 |
+| `Popover` | `open`, `onClose`, `anchorRef`, `label`, `role: 'dialog'\|'radiogroup'` (`dialog`), `focusOnOpen` (false), `side: 'bottom'\|'top'` (`bottom`), `align: 'start'\|'end'` (`start`), `id?`, `className?`, `portal` (false, v0.4.2 opt-in). `useOutsidePointerDown(refs, active, onOutside)` 를 함께 내보낸다 | 6.5절. 기본은 포털 없이 앵커 부모 안 `absolute`. `portal` 을 주면 `body` 에 `fixed` 로 그리고 앵커 좌표로 위치를 잡는다 (지금 인용 팝오버만). `portal` 을 켜면 `focusOnOpen` 도 함께 켠다 (5.3절, 6.5절) |
 | `ToastRegion`, `useToast`, `showToast` | `ToastRegion`: `placement: 'global'\|'composer'` (`global`), `className?`. `useToast()` → `{ show, dismiss }`. `show({ message, tone: 'info'\|'success'\|'warning'\|'danger' ('info'), duration (3500 = `DEFAULT_TOAST_DURATION`, 0 이하면 자동으로 닫지 않음) })` → id. `showToast`·`dismissToast`·`clearToasts` 는 컴포넌트 밖에서도 부른다 | 5.1.2절 |
 | `InlineAlert` | `tone: 'info'\|'success'\|'warning'\|'danger'` (`info`), `title?`, `children`, `action?`, `className?` | 대화상자·영역 안 결과·오류 표시. `danger` 는 `role="alert"`, 나머지는 `role="status"`. `info` 는 `accent-soft` 색. 톤 아이콘 `Info`·`CircleCheck`·`TriangleAlert`·`CircleAlert` |
 | `Spinner` | `label?`, `className?` | 회전 아이콘은 `aria-hidden`, `label` 이 있으면 `sr-only` 글자 |
 | `Skeleton` | `className` (크기) | `bg-surface-muted motion-safe:animate-pulse`, `aria-hidden` |
 | `EmptyState` | `icon?`, `title`, `description?`, `action?`, `className?` | 안내 문구와 다음 행동 버튼 |
-| `ErrorState` | `title`, `message`, `onRetry?`, `retryLabel` (`'다시 시도'`), `retrying?`, `className?` | `role="alert"`, 재시도 `Button` (`retrying` 이면 스피너) |
+| `ErrorState` | `title`, `message`, `onRetry?`, `retryLabel` (`'다시 시도'`), `retrying?`, `className?` | `'use client'`(v0.4.2). `role="alert"`, 재시도 `Button` (`retrying` 이면 스피너). 피드 목록 오류, 챗 대화 기록 오류, 라우트 오류 경계 `app/error.tsx` 가 쓴다 |
 | `Kbd` | `children`, `className?` | `<kbd>`, 640px 미만에서 숨김 (`hidden sm:inline-flex`) |
 | `CodeBlock` | `code`, `language?` (없으면 `snippet`), `className?`, `codeClassName?`, `copyValue?` | 언어 표시 + 복사 버튼(`useCopyToClipboard`, 문구 `복사`/`복사됨`/`복사 실패`, `aria-live="polite"`) + 가로 스크롤 `<pre tabIndex={0} aria-label="가로 스크롤 가능한 코드 블록">`. 기본 복사 값은 끝 줄바꿈 하나를 뺀 `code`. 바깥 클래스 `code-block-wrapper` |
-| `ThemeMenu` | `align` (`end`), `variant?`, `className?` | `MenuButton label="테마 선택"` + `menuitemradio` 3개(라이트·다크·시스템). 트리거 아이콘은 현재 모드(해·달·노트북). `ThemeToggle showDropdown` 도 이것을 그린다 (`ThemeToggle` 은 지금 렌더되지 않는다) |
+| `ThemeMenu` | `align` (`end`), `variant?`, `className?` | `MenuButton label="테마 선택"` + `menuitemradio` 3개(라이트·다크·시스템). 트리거 아이콘은 현재 모드(해·달·노트북). 피드 헤더(768px 이상)가 쓴다. 이것을 감싸던 `ThemeToggle` 은 v0.4.2 에서 지웠다 |
 
 입력 계열을 새로 만들 때는 `TextField.tsx` 가 내보내는 도우미를 쓴다: `FieldFrame`(라벨·설명·오류 틀), `useFieldIds(id, hasDescription, hasError, extraDescribedBy?)`, `FIELD_CONTROL_CLASSES`, `fieldBorderClasses(invalid)`, `FIELD_LABEL_CLASSES`, `FIELD_DESCRIPTION_CLASSES`, `FIELD_ERROR_CLASSES`.
 
@@ -294,7 +296,7 @@ Tailwind 기본 팔레트(`--color-slate-*` 등)는 지우지 않았다 (`bg-tra
 | `ALL_CATEGORY_LABEL`, `SCOPE_LABELS`·`scopeLabel(mode)` | `frontend/src/lib/labels.ts` | `ALL_CATEGORY_LABEL = '전체 소식'` 은 카테고리 '전체' 의 화면 문구(피드 `전체 소식` 칩, 챗 포커스 캡슐 기본값, 포커스 필터 창 `all` 칩). 검색 범위 라벨은 `scoped` → `단일 기사`, `global` → `ALL_CATEGORY_LABEL`. 챗 모드 버튼, 대화 목록 배지·접근 이름(`… 모드`), 없는 기사 알림이 쓴다 |
 | `ScoreMetric`·`SOURCE_SCORE_METRICS`·`SCORE_METRIC_LABELS`·`scoreMetric(source)`, `CountMetric`·`COUNT_METRIC_LABELS`·`countMetric(source)` | `frontend/src/lib/labels.ts` | 카드 통계의 지표 표. 원천 점수(`raw_score`)는 `github` → `stars`(`스타`), `hackernews` → `points`(`포인트`), `reddit` → `upvotes`(`추천`)이고 표에 없는 소스는 `null`(점수를 그리지 않음). 개수(`comments_count`)는 `github` → `forks`(`포크`), 그 밖 → `comments`(`댓글`). 아이콘은 두지 않는다 (`NewsCard` 가 `Star`·`ArrowBigUp`·`GitFork`·`MessageSquare` 로 고른다). `scoreMetric(source)` 는 카드의 원천 점수와 인기 점수(`hotness_score`, `Flame`) 둘 다의 표시 조건이다: `null` 인 소스는 둘 다 그리지 않는다. 인기 점수는 그 위에 `hotness_score > 25` 일 때만 그린다 |
 | `FEED_CATEGORIES`(id·lucide 아이콘), `feedCategoryLabel(id)` | `frontend/src/components/feed/FeedToolbar.tsx` | 카테고리 아이콘 표 한 곳: `all` `Compass`, `harness` `ShieldCheck`, `mcp_plugins_skills` `Cpu`, `agent_tech` `Bot`, `ai_news` `Sparkles`. 피드 카테고리 칩과 일일 브리핑 분야 머리글이 같은 표를 쓴다 (표에 없는 분야는 아이콘 없음) |
-| `TIER_META`, `TierIcon({ tier, className? })` | `frontend/src/components/chat/ModelTierBadge.tsx` | 모델 티어 표(이름·lucide 아이콘·비용·지연·설명·배지 색 토큰): `haiku` `Zap`(`Haiku 5.5`, `$`, `~0.3s`, `bg-success-soft text-success`), `sonnet` `Target`(`Sonnet 5.5`, `$$`, `~0.6s`, `bg-accent-soft text-accent-soft-fg`), `opus` `Brain`(`Opus 5.5`, `$$$`, `~1.8s`, `bg-surface-muted text-fg border-border`). Claude 밖 티어 이름은 `gemini` 포함 `Sparkles`, `gpt` 포함 `Bot`, 그 밖 `Target`. `TierIcon` 은 `aria-hidden="true"`·`data-tier-icon="<티어>"`·`size-3.5` 로 그리고, `ModelTierBadge`·`ChatModelSelector`(트리거·목록)·`ModelChangeDivider` 가 같이 쓴다. 비용·지연 값은 고정 문자열이다 |
+| `TIER_META`, `TierIcon({ tier, className? })`, `RELATIVE_COST_LABEL` | `frontend/src/components/chat/ModelTierBadge.tsx` | 모델 티어 표(이름·lucide 아이콘·상대 비용·설명·배지 색 토큰, `:8-48`): `haiku` `Zap`(`Haiku 5.5`, `$`, `bg-success-soft text-success`), `sonnet` `Target`(`Sonnet 5.5`, `$$`, `bg-accent-soft text-accent-soft-fg`), `opus` `Brain`(`Opus 5.5`, `$$$`, `bg-surface-muted text-fg border-border`). 비용 기호는 측정값이 아니라 같은 세대 Haiku < Sonnet < Opus 의 상대 순서이고, 그리는 곳마다 앞에 `sr-only` `RELATIVE_COST_LABEL`(`상대 비용`, `:76-77`)을 둔다. 근거 없던 지연 표기(`latencyDesc`, `~0.3s` 등)는 v0.4.2 에서 지웠다 (리뷰 FE-25). Claude 밖 티어 이름은 `gemini` 포함 `Sparkles`, `gpt` 포함 `Bot`, 그 밖 `Target` 이고 비용을 보이지 않는다. `TierIcon` 은 `aria-hidden="true"`·`data-tier-icon="<티어>"`·`size-3.5` 로 그리고, `ModelTierBadge`·`ChatModelSelector`(트리거·목록)·`ModelChangeDivider` 가 같이 쓴다. 답변 하단 배지의 지연 `· {n}ms` 는 응답의 실제 `latency_ms` 다 |
 | `useScrollOverflow(ref)` → `'none'\|'start'\|'end'\|'both'`, `measureScrollOverflow(el)` | `frontend/src/hooks/useScrollOverflow.ts` | 가로 스크롤 줄이 어느 쪽으로 넘치는지(아직 볼 것이 남은 쪽). `scrollWidth − clientWidth` 와 `scrollLeft` 로 정하고 1px 이하 차이는 넘침으로 보지 않는다. `ResizeObserver`(줄과 자식), `MutationObserver`(자식 추가·삭제), 줄 `scroll`, 창 `resize` 에서 다시 잰다. 상태는 관찰자·이벤트·`requestAnimationFrame` 콜백 안에서만 바꾼다. `ResizeObserver` 가 없으면(jsdom) 처음 한 번과 `scroll`·`resize` 로만 잰다. `ScrollRow` 가 쓴다 |
 | `findRepeatedInsights(items)` → `Set<id>` | `frontend/src/lib/feed-insights.ts` | 현재 목록에서 같은 시사점(`why_it_matters`)이 2번 이상 나온 기사 id. 공백을 정리한 문장의 끝 40자(코드 포인트)를 키로 세고, 20자 미만이거나 빈 문장은 세지 않는다. 피드가 이 집합의 카드에 `NewsCard preferSummary` 를 넘겨 시사점 대신 요약을 보인다 |
 | `createThemeStore`, `applyThemeToDocument`, `nextThemeMode` | `frontend/src/lib/theme-store.ts` | 3.3절 |
@@ -323,6 +325,9 @@ Tailwind 기본 팔레트(`--color-slate-*` 등)는 지우지 않았다 (`bg-tra
 | 라벨 | 카테고리·소스 표시는 `lib/labels.ts` 에서 가져온다 (5.2절). 피드 카테고리 필터 칩은 `전체 소식` 외에는 긴 라벨이라 상세 배지와 같은 문구다. 챗 포커스 필터 창의 카테고리 칩도 같은 긴 라벨이다. 검색 범위(`단일 기사`·`전체 소식`)와 카드 지표 라벨도 이 모듈에서 가져온다. 화면 안에 라벨 표를 따로 두지 않는다 |
 | 브라우저 기본 대화상자 금지 | `window.confirm`/`alert` 대신 `ConfirmDialog`, 실패는 확인 창 안 `InlineAlert` |
 | 제목이 두 줄 이상인 대화상자 | `Dialog` 기본 머리줄 제목은 한 줄(`truncate`)이다. 길게 보여야 하면 `header` 로 머리줄을 직접 그리고 제목 id 를 `labelledBy` 로 넘긴다. 닫기 버튼(`닫기`)도 그 안에 둔다 |
+| 버튼 안에 버튼을 두지 않는다 | 카드 전체를 누르는 버튼과 카드 안 보조 버튼(삭제 등)이 함께 필요하면 둘을 형제로 두고 보조 버튼을 `absolute` 로 겹친 뒤, 카드 버튼의 안쪽 여백으로 그 자리를 비운다. 버튼 안은 `span` 같은 구문 요소만 둔다. 예: 세션 카드(선택 `<button>` + 형제 삭제 `IconButton`, 카드 `pr-14 md:pr-12`, v0.4.2 리뷰 FE-12). `role="button"` `div` 로 카드를 만들지 않는다 |
+| 문단 안에서 여는 팝오버는 `portal` | `<p>`·인라인 문맥 안의 트리거(답변 문단의 인용 배지 등)가 여는 `Popover` 는 `portal` 을 켠다. 블록 요소를 `<p>` 안에 넣지 않고, 스크롤 상자(`overflow`)에 잘리지 않는다 (v0.4.2 리뷰 FE-13). 그 밖의 팝오버는 켜지 않는다(기본 false). `portal` 을 켜면 `focusOnOpen` 도 켜서 열릴 때 포커스를 팝오버 안으로 옮기고, 닫히면 앵커로 돌아오게 한다 (6.5절, FE-37) |
+| 아이콘만 있는 버튼은 `IconButton` | 닫기·삭제처럼 글자 없는 버튼을 `<button>` 으로 직접 만들지 않는다. 접근 이름(`label`)·모바일 44×44·아이콘 크기를 부품이 맞춘다 (v0.4.2 리뷰 FE-16) |
 
 ## 6. 오버레이 규칙
 
@@ -396,12 +401,12 @@ Tailwind 기본 팔레트(`--color-slate-*` 등)는 지우지 않았다 (`bg-tra
 | 성격 | WAI-ARIA 메뉴 버튼 | 비모달 팝오버 (`role="dialog"` 또는 `radiogroup`, `aria-label`) |
 | 트리거 | `icon` 이 있으면 `IconButton`(`aria-label`), 없으면 보이는 글자 버튼. `aria-haspopup="menu"`, `aria-expanded`, 열렸을 때 `aria-controls` | 호출자가 그린다 (`anchorRef`) |
 | 항목 | `MenuItem = {type:'item', label, icon?, onSelect?, tone?:'danger', href?, external?, disabled?} \| {type:'radio', label, checked, onSelect, disabled?} \| {type:'separator'} \| {type:'group', label}`. 역할 `menuitem`/`menuitemradio`(`aria-checked`), `href` 면 `<a>` (`external` 이면 새 탭). 비활성은 `aria-disabled` | 자유 내용 |
-| 열 때 포커스 | 첫 항목 (트리거에서 ↑ 로 열면 끝 항목). ref 콜백에서 한 번만 옮긴다 | `focusOnOpen` 이면 안의 첫 포커스 가능 요소(없으면 팝오버) |
+| 열 때 포커스 | 첫 항목 (트리거에서 ↑ 로 열면 끝 항목). ref 콜백에서 한 번만 옮긴다 | `focusOnOpen` 이면 안의 첫 포커스 가능 요소(없으면 팝오버). `portal` 팝오버는 문서 끝(`body`)에 붙어 Tab 순서가 앵커 다음이 아니므로 반드시 `focusOnOpen` 을 켠다: 인용 팝오버는 열리면 포커스가 팝오버 안 첫 요소(닫기 `팝오버 닫기`)로 들어간다 (`CitationPopover.tsx:45-47`, FE-37) |
 | 키보드 | ↑↓ 순환, Home·End, Enter·Space 실행, Escape 닫고 트리거로 포커스, Tab 은 닫기 | Escape 닫고 앵커로 포커스 |
 | 바깥 클릭 | 바깥 pointerdown 이면 닫는다 (`useOutsidePointerDown`) | 같음 |
-| 닫힐 때 포커스 | 항목 실행·Escape 는 트리거로 | 포커스가 안에 있었거나 `body` 로 갔으면 앵커로 |
-| 크기·위치 | 트리거 아래 `top-full mt-2`, `align` 쪽 끝 맞춤. 너비 `min(280px, 100vw-32px)`, 최대 높이 `min(70dvh, 32rem)` 넘으면 세로 스크롤 (`Menu.tsx:182`). 항목 `h-11 md:h-9`. `z-40` | `side` 아래/위, `align` 쪽 끝. `min-w-48`, `max-w-[calc(100vw-2rem)]`, `z-40` (`Popover.tsx:120`) |
-| 포털 | 없음 | 없음 |
+| 닫힐 때 포커스 | 항목 실행·Escape 는 트리거로 | Escape 는 앵커로(`Popover.tsx:109-116`). 그 밖의 닫기(닫기 버튼, 링크 실행 등)는 닫힐 때 포커스가 팝오버 안에 있었거나 `body` 로 갔으면 앵커로 돌려준다 (`:126-137`). 바깥 pointerdown 으로 닫으면 사용자가 누른 곳에 포커스가 있으므로 옮기지 않는다. 인용 팝오버의 앵커는 그 인용 배지다 |
+| 크기·위치 | 트리거 아래 `top-full mt-2`, `align` 쪽 끝 맞춤. 너비 `min(280px, 100vw-32px)`, 최대 높이 `min(70dvh, 32rem)` 넘으면 세로 스크롤 (`Menu.tsx:182`). 항목 `h-11 md:h-9`. `z-40` | 기본 `absolute`: `side` 아래/위(`top-full mt-2`/`bottom-full mb-2`), `align` 쪽 끝. `portal` 이면 `fixed`(아래 포털 행). 공통 `min-w-48`, `max-w-[calc(100vw-2rem)]`, `z-40` (`Popover.tsx:165-171`) |
+| 포털 | 없음 | 기본 없음 (opt-in, 지금 인용 팝오버만). `portal` 이면 `createPortal(…, document.body)` 에 `fixed`: 열릴 때와 창 `resize`·`scroll`(캡처, 조상 스크롤 포함)마다 앵커 `getBoundingClientRect()` 로 위치를 다시 잡는다. 가로는 `align` 쪽 끝에 맞추되 화면 좌우 16px 안으로 당기고, `side="top"` 이면 위에 자리가 있을 때(앵커 top − 8px − 팝오버 높이 ≥ 16px) 위, 없으면 앵커 아래 8px 로 뒤집는다. 상태 대신 요소 `style` 을 바로 고친다 (`Popover.tsx:66-86`, `:140-154`, `:177`) |
 
 ## 7. 하지 말 것
 
@@ -415,6 +420,11 @@ Tailwind 기본 팔레트(`--color-slate-*` 등)는 지우지 않았다 (`bg-tra
 | 임의 글자 크기(`text-[11px]`), 12px 미만 글자 | 4.2절 스케일 |
 | 정해지지 않은 그림자(`shadow-lg` 등), 정해지지 않은 z-index(`z-[9999]`) | `shadow-card`·`shadow-overlay`, 4.6절 값 |
 | 브라우저 기본 대화상자(`window.confirm`, `alert`) | `ConfirmDialog`, `InlineAlert`, 토스트 |
+| `role="button"` 카드 안에 버튼, 버튼 안 블록 요소 | 선택 `<button>` + 형제 보조 `IconButton` (5.3절) |
+| 문단(`<p>`) 안 트리거가 여는 포털 없는 팝오버 | `Popover portal` (5.3절) |
+| 직접 만든 아이콘만 있는 `<button>` | `IconButton` |
+| 훅·인라인 처리 함수가 있는데 `'use client'` 없는 부품 | 맨 위 `'use client'` (`ClientBoundaryGuard`) |
+| `themeColor` 만 또는 `--al-canvas` 만 바꾸기 | 둘을 함께 바꾼다 (`ThemeColor`) |
 | 컴포넌트별 Escape 리스너, 직접 만든 포커스 가두기 | 오버레이 스택과 `Dialog`·`Popover`·`MenuButton` |
 | `window.innerWidth` 로 너비 판정, 정의되지 않은 `xs:` | `useMediaQuery`, 4.8절 브레이크포인트 |
 | viewport 의 `maximumScale`, `userScalable: false` | 확대를 허용한다 |
@@ -429,6 +439,8 @@ Tailwind 기본 팔레트(`--color-slate-*` 등)는 지우지 않았다 (`bg-tra
 |---|---|---|---|
 | `TokenGuard` | `frontend/src/tests/design/TokenGuard.test.ts` | `make check` (vitest) | `src/**/*.tsx`(테스트 파일 포함)에 hex 색 클래스(`-\[#[0-9a-fA-F]{3,8}\]`), 팔레트 색 유틸리티(접두 변형 포함, `bg\|text\|border\|ring\|ring-offset\|outline\|divide\|from\|via\|to\|fill\|stroke\|placeholder\|decoration\|caret\|accent\|shadow` × 팔레트 22색 + `white`·`black`), `animate-in`·`zoom-in`·`slide-in-from` 이 0개. `globals.css` 에 `!important`·`html:not(.dark)`·`html.dark` 가 0개 |
 | `TokenContrast` | `frontend/src/tests/design/TokenContrast.test.ts` | `make check` | `globals.css` 의 `:root`·`.dark` 블록 값을 읽어 2절 조합을 WCAG 공식으로 계산. 글자 4.5:1, `border-strong` 3:1, 포커스 링(`accent`) 3:1 을 canvas·surface·surface-muted 모두에서 |
+| `ThemeColor` (v0.4.2) | `frontend/src/tests/design/ThemeColor.test.ts` | `make check` | `layout.tsx` 의 `viewport.themeColor` 라이트·다크 hex 가 `globals.css` `:root`·`.dark` 의 `--al-canvas` 와 같음 (2절). 처음부터 통과하는 지킴 테스트다 |
+| `ClientBoundaryGuard` (v0.4.2) | `frontend/src/tests/ui/ClientBoundaryGuard.test.ts` | `make check` | `src/components/**/*.tsx` 중 훅 호출(`useXxx(`)이나 JSX 인라인 처리 함수(`onXxx={(…) =>`)가 있는 파일이 모두 `'use client'` 로 시작함. `ErrorState` 는 따로 단언 (`01_COMPONENT_SPEC.md` 2.4절) |
 | `IconGuard` | `frontend/src/tests/ui/IconGuard.test.ts` | `make check` | `src/components/**`·`src/app/**` 의 `.ts`·`.tsx` 파일 글자에서 그림 이모지(`/\p{Emoji_Presentation}\|\p{Extended_Pictographic}\u{FE0F}/gu`)가 0개. 판정식이 그림 이모지는 잡고 텍스트 표현 기호(`©`·`®`·`↔`·`➔`·`✓`)는 잡지 않는지도 확인한다. 허용 목록은 없다. 실패하면 `파일:줄 글자(U+XXXX)` 목록을 낸다 |
 | 부품 단위 테스트 | `frontend/src/tests/ui/` (`ChipGroup`, `ConfirmDialog`, `Dialog`, `OverlayStack`, `Menu`, `Tabs`, `FormControls`, `Primitives`, `Toast`, `useCopyToClipboard`) | `make check` | 역할·이름·포커스·키보드 패턴, 겹친 대화상자 Escape, `busy` 중 Escape 무시, 같은 렌더에서 열린 부모·자식의 스택 순서, 스크롤 줄 `data-overflow` 네 상태·흐림·스크롤 버튼과 그 포커스 유지·넘친 쪽마다 넘침 표시와 보이지 않는 자리·상태별 `bleed` 클래스·`scroll-px-6`·선택 항목 보이기(`selectedSelector`, 스냅 위치 고르기), `Badge shrink` 클래스, `aria-controls` 대상, 알림 영역 고르기와 한 번만 알림, 라벨 표 |
 | 단축키 | `frontend/src/tests/HotkeyGating.test.tsx`, `HotkeyListener.test.tsx` | `make check` | 레이어가 열리면 단일 키 무시, 버튼 위 Enter·Space 를 막지 않음, `e.code` 판정 |
@@ -524,9 +536,9 @@ node scripts/ui-audit.mjs --routes feed --themes dark --viewports 390x844 --skip
 | `data-card-stat="score\|count\|hotness"`, `data-metric` | `NewsCard` 바닥 통계 (`data-metric` 은 `stars`·`points`·`upvotes`·`forks`·`comments`, 인기에는 없음) | `cardMetric`, `NewsCard` 테스트 |
 | `data-card-meta` | `NewsCard` 머리줄 | `rowAlign`, `cardMetric`(`data-source` 가 없을 때 소스 찾기), `NewsCard` 테스트 |
 | `data-card-badges` | `NewsCard` 배지 줄 | `NewsCard` 테스트 |
-| `data-focused="true"` | j/k 포커스 카드 (`NewsCard.tsx:108`) | `NewsCard` 테스트 |
+| `data-focused="true"` | j/k 포커스 카드 (`NewsCard.tsx:106`) | `NewsCard` 테스트 |
 | `data-insights-bar` | 요약 바 (스켈레톤 포함) | `vRhythm` |
-| `data-feed-search` | 피드 검색 영역 (`FeedToolbar` 의 첫 형제) | `feedAreas`, `vRhythm`, `/` 단축키 스크롤 (`page.tsx:150`), `FeedToolbar` 테스트 |
+| `data-feed-search` | 피드 검색 영역 (`FeedToolbar` 의 첫 형제) | `feedAreas`, `vRhythm`, `/` 단축키 스크롤 (`page.tsx:156`), `FeedToolbar` 테스트 |
 | `data-feed-toolbar`, `data-toolbar-row` | 피드 필터 영역과 그 줄 | `vRhythm`, `scrollRow`(Must-Read 증거는 `data-feed-toolbar` 마다), `toolbarLayout`, `feedAreas`(콘텐츠 상자 = 그 부모), `FeedToolbar` 테스트 |
 | `data-feed-list-header` | 피드 목록 머리줄 (`FeedStatusBar` 바깥, 상태 + 정렬) | `feedAreas`, `vRhythm`, `FeedStatusBar` 테스트 |
 | `data-feed-status` | 목록 머리줄 안 상태 (`role="status"`) | `FeedStatusBar` 테스트 |
@@ -534,7 +546,7 @@ node scripts/ui-audit.mjs --routes feed --themes dark --viewports 390x844 --skip
 | `data-chat-sidebar-head` | 챗 사이드바 머리 영역 | `chatAlign` |
 | `data-chat-context-bar` | 챗 맥락 줄 | `chatAlign`, `chatScope` |
 | `data-chat-column` | 챗 메시지 열 (`ChatMessageList`) | `chatAlign`, `toast` |
-| `data-composer` | 챗 입력 영역 안쪽 열 (`ChatWorkspace.tsx:670`) | `chatAlign`, `toast` |
+| `data-composer` | 챗 입력 영역 안쪽 열 (`ChatWorkspace.tsx:667`) | `chatAlign`, `toast` |
 | `data-toast-region` | `ToastRegion` 영역 (`global`/`composer`) | `toast`, `occluded`(면제), `Toast` 테스트 |
 
 ### 8.4 자체 검증 (`--self-test`)
@@ -596,7 +608,7 @@ node scripts/ui-audit.mjs --routes feed --themes dark --viewports 390x844 --skip
 | 다크 `shadow-card` | `none` | `0 0 #0000` (box-shadow 목록 안에서 유효한 투명 그림자) |
 | 탭 높이 | 조작 요소 md 이상 36px | `Tabs` 는 `h-11 md:h-10` (40px) |
 | `MenuButton.align` 기본값 | `end` | `start` (`ThemeMenu` 는 `end`) |
-| `Popover` | 포털 여부를 정하지 않음 | 포털 없이 앵커 부모 안 `absolute`. `side`·`align`·`id`·`className` 이 더 있다. 인용 팝오버는 `<p>` 안에 `div` 로 그려지고, 조상의 `overflow-hidden` 에 잘릴 수 있다. `Popover` 는 `onKeyDown`·ref 를 넘기지 않아 `ChatModelSelector` 는 감싼 요소에서 키를 받는다 |
+| `Popover` | 포털 여부를 정하지 않음 | 포털은 opt-in 이다: 기본은 포털 없이 앵커 부모 안 `absolute`, `portal` 이면 `body` 에 `fixed`(v0.4.2, 인용 팝오버만 켠다, 그때 `focusOnOpen` 도 켠다). `side`·`align`·`id`·`className`·`portal` 이 더 있다. `Popover` 는 `onKeyDown`·ref 를 넘기지 않아 `ChatModelSelector` 는 감싼 요소에서 키를 받는다 |
 | `Chip` 톤 | tone 없음 | `tone: 'accent'\|'warning'` 추가. 피드 `Must-Read` 토글이 `warning` |
 | `InlineAlert`·`Toast` 톤 | `tone` 이름을 정하지 않음 | `info\|success\|warning\|danger`. `InlineAlert` 는 `danger` 외 `role="status"`, 토스트 `danger` 는 `aria-live="assertive"` |
 | 대화상자 처음 포커스 | `initialFocusRef` → 본문 첫 요소 → 컨테이너 | 본문 첫 요소가 없으면 패널 전체의 첫 포커스 가능 요소(보통 머리줄 `닫기`)를 거쳐 컨테이너 |
@@ -616,5 +628,13 @@ node scripts/ui-audit.mjs --routes feed --themes dark --viewports 390x844 --skip
 | 인라인 테마 스크립트와 CSP | 지금은 CSP 가 없다. `'unsafe-inline'` 을 금지하는 CSP 를 도입하면 `layout.tsx` 의 테마 스크립트에 nonce 가 필요하다 |
 | `ui-audit` 는 수동 | 프로덕션 빌드로 띄운 앱·로컬 Chrome 이 필요해 `make check` 에 없다. 화면을 바꿨을 때 사람이 돌린다. 수집된 데이터가 없으면 첫 화면 카드·뉴스 상세·브리핑·레이더 측정이 `skipped` 로 빠지고, `rowAlign` 은 '대상 없음' 실패가 된다 |
 | 전역 `code` 배경 없음 | 옛 전역 덮어쓰기를 지워 `<code>` 에는 전역 스타일이 없다. 마크다운 밖에서 `<code>` 를 쓰면 배경·테두리 클래스를 직접 준다 (`McpModal` 제목 안의 `claude_desktop_config.json` 처럼). 주지 않으면 고정폭 글자로만 보인다 |
-| `HotkeyListener` 선언만 있는 필드 | `HotkeyMapping.modifiers`·`allowInInputs` 는 타입에만 있고 동작에 쓰이지 않는다. 입력 요소 판정(`isEditableTarget`)이 `HotkeyListener` 와 `useHotkey` 에 따로 있다 |
+| 입력 요소 판정 중복 | 입력 요소 판정(`isEditableTarget`)이 `HotkeyListener.tsx:43-49` 와 `hooks/useHotkey.ts:76` 에 따로 있다. 선언만 있던 `HotkeyMapping`(`modifiers`·`allowInInputs`)은 v0.4.2 에서 지웠다 |
 | 테마 저장 키 중복 | `agentlens_theme` 가 `layout.tsx:23` 인라인 스크립트 문자열과 `ThemeContext.tsx:47` 기본값 두 곳에 있다. 한쪽만 바꾸면 첫 그림과 이후 상태가 어긋난다 |
+
+## 10. 변경 이력
+
+| 버전 | 날짜 | 바뀐 절 | 내용 |
+|---|---|---|---|
+| v1.1 2차 (앱 v0.4.2) | 2026-11-10 | 4.8, 6.5 | 카드 제목 버튼 48px 를 주요 조작 요소에 더함, 포털 팝오버 포커스 근거 줄 번호(`Popover.tsx:126-137`, `:140-154`)를 지금 코드로 맞춤 |
+| v1.1 (앱 v0.4.2) | 2026-11-10 | 머리, 2, 3.3, 4.6, 4.7, 5.1, 5.2, 5.3, 6.5, 7, 8, 9.1, 9.2 | `Popover portal`(opt-in, 인용 팝오버만, `body` 에 `fixed`·앵커 좌표 위치)과 포털 팝오버 포커스 규칙(열면 안으로, 닫으면 앵커로, FE-37), `IconButton` 사용 확대(인용 팝오버 닫기)와 크기 표, `'use client'` 부품 목록과 `ClientBoundaryGuard`, `themeColor` 와 `--al-canvas` 일치 `ThemeColor` 테스트, `TIER_META` 지연 표기 삭제·상대 비용(`RELATIVE_COST_LABEL`), `ChatMessageList` 부드러운 스크롤 제거, `ThemeToggle`·`HotkeyMapping` 삭제 반영, 부품 사용 규칙 3개(버튼 안 버튼 금지, 문단 안 팝오버 `portal`, 아이콘 버튼은 `IconButton`) |
+| v1.0 (앱 v0.4.1) | 2026-11-09 | 전체 | 하네스 산출물로 처음 작성 (옛 `docs/design-system.md` 대체) |

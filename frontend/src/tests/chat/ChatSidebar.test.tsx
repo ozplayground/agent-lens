@@ -1,11 +1,10 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { ToastRegion, clearToasts } from '@/components/ui/Toast';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import ChatHistoryDrawer from '@/components/chat/ChatHistoryDrawer';
 import SessionItemCard from '@/components/chat/SessionItemCard';
-import DeleteConfirmPopover from '@/components/chat/DeleteConfirmPopover';
-import SessionList from '@/components/chat/SessionList';
 import { ChatSessionMeta } from '@/types/chat';
 
 const mockSessions: ChatSessionMeta[] = [
@@ -287,6 +286,53 @@ describe('ChatSidebar & Session UI Components (FUNC-CHAT-012 TDD)', () => {
       );
       expect(screen.getByRole('button', { name: /단일 기사 모드$/ })).toBeInTheDocument();
       expect(screen.queryByText(/Scoped|Global/)).toBeNull();
+    });
+
+    it('FE-12: 카드 선택 버튼과 삭제 버튼이 중첩되지 않은 형제 버튼이다', () => {
+      const handleSelect = vi.fn();
+      render(
+        <SessionItemCard
+          session={mockSessions[0]}
+          isActive={false}
+          onSelect={handleSelect}
+          onDelete={vi.fn().mockResolvedValue(undefined)}
+        />
+      );
+
+      const card = screen.getByRole('button', { name: /대화:.*LangGraph/i });
+      expect(card.tagName).toBe('BUTTON');
+      expect(within(card).queryByRole('button')).toBeNull();
+
+      const deleteBtn = screen.getByRole('button', { name: /대화 'LangGraph.*' 삭제/ });
+      expect(card.contains(deleteBtn)).toBe(false);
+
+      fireEvent.click(deleteBtn);
+      expect(handleSelect).not.toHaveBeenCalled();
+      fireEvent.click(card);
+      expect(handleSelect).toHaveBeenCalledWith('session-1');
+    });
+
+    it('FE-15: 삭제가 실패하면 오류 알림을 보이고 처리하지 않은 거부로 끝나지 않는다', async () => {
+      clearToasts();
+      const handleDelete = vi.fn().mockRejectedValue(new Error('대화를 삭제하지 못했습니다.'));
+      render(
+        <>
+          <SessionItemCard
+            session={mockSessions[0]}
+            isActive={false}
+            onSelect={vi.fn()}
+            onDelete={handleDelete}
+          />
+          <ToastRegion />
+        </>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /대화 'LangGraph.*' 삭제/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /^삭제$|삭제 확정/i }));
+
+      expect(await screen.findByText('대화를 삭제하지 못했습니다.')).toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: /대화 삭제|이 대화를 삭제하시겠습니까/i })).not.toBeInTheDocument();
+      clearToasts();
     });
 
     it('opens delete confirmation popover on delete click, cancels on 취소, and executes onDelete on 삭제', async () => {

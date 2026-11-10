@@ -108,7 +108,6 @@ async def test_dynamic_rag_retrieval_returns_distinct_articles_by_query():
     """Verify that different technical queries dynamically return distinct and relevant articles."""
     async with AsyncSessionLocal() as session:
         retriever = SqliteFtsRetriever(session)
-        await retriever._ensure_fts_table()
 
         claude_results = await retriever.retrieve("Claude", top_k=3)
         mcp_results = await retriever.retrieve("MCP", top_k=3)
@@ -138,7 +137,6 @@ async def test_conversational_queries_extract_keywords_and_return_distinct_artic
     """Verify conversational queries with Korean stopwords dynamically return relevant articles."""
     async with AsyncSessionLocal() as session:
         retriever = SqliteFtsRetriever(session)
-        await retriever._ensure_fts_table()
 
         claude_conv = await retriever.retrieve("최신 Claude 관련 소식 알려줘", top_k=3)
         mcp_conv = await retriever.retrieve("최신 MCP 관련 소식 알려줘", top_k=3)
@@ -161,18 +159,17 @@ async def test_conversational_queries_extract_keywords_and_return_distinct_artic
 
 @pytest.mark.asyncio
 async def test_ensure_fts_table_creates_table_and_indexes_items():
-    """Verify _ensure_fts_table creates news_fts and synchronizes index with news_items."""
+    """ensure_db_schema 가 news_fts 를 만들고 news_items 와 색인을 맞춘다 (v0.4.2 CC-03: 검색 경로는 만들지 않는다)."""
     from sqlalchemy import text
+    from app.database import ensure_db_schema
+    await ensure_db_schema()
     async with AsyncSessionLocal() as session:
-        retriever = SqliteFtsRetriever(session)
-        await retriever._ensure_fts_table()
-
         # Check virtual table exists
         res = await session.execute(text("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='news_fts';"))
         assert res.scalar() == 1, "news_fts virtual table must exist"
 
         # Check index is populated
-        fts_cnt = (await session.execute(text("SELECT count(*) FROM news_fts;"))).scalar()
+        fts_cnt = (await session.execute(text("SELECT count(*) FROM news_fts_docsize;"))).scalar()
         items_cnt = (await session.execute(text("SELECT count(*) FROM news_items;"))).scalar()
         assert fts_cnt >= items_cnt, f"news_fts count ({fts_cnt}) should match news_items ({items_cnt})"
 
@@ -255,13 +252,13 @@ async def test_generate_live_answer_honestly_routes_to_gemini_when_requested():
 
 
 def test_version_0_2_2_consistency():
-    """Verify version 0.4.1 is synchronized across configuration sources."""
-    assert settings.VERSION == "0.4.1"
+    """Verify version 0.4.2 is synchronized across configuration sources."""
+    assert settings.VERSION == "0.4.2"
     cfg_path = find_config_json()
     assert cfg_path is not None
     with open(cfg_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    assert data.get("app", {}).get("version") == "0.4.1"
+    assert data.get("app", {}).get("version") == "0.4.2"
 
 
 @pytest.mark.asyncio
@@ -269,7 +266,6 @@ async def test_dynamic_retrieval_returns_only_relevant_articles_without_stuffing
     """Verify retriever dynamically returns only truly relevant articles without force-filling top_k."""
     async with AsyncSessionLocal() as session:
         retriever = SqliteFtsRetriever(session)
-        await retriever._ensure_fts_table()
 
         # Query targeting WinDbg MCP server: only item 9004 is relevant.
         # Unrelated MCP spec (9002) which only shares generic term 'MCP' must be pruned.
@@ -286,7 +282,6 @@ async def test_dynamic_retrieval_returns_empty_when_no_relevant_articles_exist()
     """Verify retriever returns empty list (0 articles) when query has no relevant matches in corpus."""
     async with AsyncSessionLocal() as session:
         retriever = SqliteFtsRetriever(session)
-        await retriever._ensure_fts_table()
 
         # Query with completely unrelated domain/topic
         unrelated_results = await retriever.retrieve("전혀 무관한 화성 외계인 우주선 탐사선", top_k=5)

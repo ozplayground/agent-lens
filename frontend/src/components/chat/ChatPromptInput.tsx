@@ -104,7 +104,6 @@ export default function ChatPromptInput({
               selectedTier={selectedTier}
               onSelectTier={onSelectTier}
               isStreaming={isStreaming}
-              variant="inline-chip"
             />
           )}
           <span className="hidden truncate lg:inline">Enter: 전송, Shift+Enter: 줄바꿈</span>

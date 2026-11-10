@@ -1,4 +1,6 @@
 import json
+import uuid
+import logging
 from typing import Optional, List
 from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -6,13 +8,10 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.api.errors import error_response
 from app.schemas.chat import (
     ChatStreamRequest,
-    ChatQueryRequest,
-    ChatQueryResponse,
     ChatSourceDetailResponse,
-    ChatSearchResponse,
-    ChatFocusFilter,
     ChatSessionSummary,
     ChatSessionDetail,
     ChatSessionCreateRequest,
@@ -23,6 +22,7 @@ from app.services.chat_session_service import (
     ChatSessionService,
     SessionNotFoundException,
     InvalidSessionUUIDException,
+    MessageIdConflictException,
     SessionDeleteFailedException,
 )
 from app.services.chat_service import (
@@ -31,7 +31,6 @@ from app.services.chat_service import (
     ChatPayloadEmptyException,
     ChatPayloadTooLargeException,
     InvalidScopeException,
-    SearchQueryTooShortException,
     LLMProviderUnavailableException,
     LLMUpstreamException,
     LLMQuotaExceededException,
@@ -44,7 +43,19 @@ from app.services.llm_providers.anthropic_provider import (
 )
 from app.services.llm_processor import llm_processor
 
+logger = logging.getLogger("agentlens.chat")
+
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
+# 스트림 시작 전 LLM 가용성 검사의 예외 → (상태, 오류 코드, 기본 문장)
+LLM_ERROR_MAP = {
+    AnthropicKeyMissingException: (401, "ERR_CLAUDE_API_KEY_MISSING", "Anthropic Claude API 키가 설정되지 않았습니다."),
+    AnthropicQuotaExceededException: (429, "ERR_CLAUDE_QUOTA_EXCEEDED", "Anthropic Claude 호출 한도 초과"),
+    AnthropicOverloadedException: (529, "ERR_CLAUDE_OVERLOADED", "Anthropic 서버 과부하"),
+    LLMProviderUnavailableException: (503, "ERR_LLM_PROVIDER_UNAVAILABLE", "가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)"),
+    LLMUpstreamException: (502, "ERR_LLM_UPSTREAM_FAILED", "외부 LLM 업스트림 통신 실패 / API 장애"),
+    LLMQuotaExceededException: (429, "ERR_LLM_QUOTA_EXCEEDED", "외부 LLM API 호출 한도 초과"),
+}
 
 @router.get("/sources/{source_id}", response_model=ChatSourceDetailResponse)
 async def get_chat_source(source_id: int, db: AsyncSession = Depends(get_db)):
@@ -54,225 +65,7 @@ async def get_chat_source(source_id: int, db: AsyncSession = Depends(get_db)):
         detail = await service.get_source_detail(source_id)
         return detail
     except HandoverSourceNotFoundException as e:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error_code": "ERR_HANDOVER_SOURCE_NOT_FOUND",
-                "message": f"기사 ID {source_id}를 데이터베이스에서 찾을 수 없습니다.",
-                "details": None
-            }
-        )
-
-@router.get("/search", response_model=ChatSearchResponse)
-async def search_chat_corpus(
-    q: Optional[str] = Query(None, description="Search query string"),
-    top_k: int = Query(5, ge=1, le=20),
-    min_quality: float = Query(5.0, ge=1.0, le=10.0),
-    category: Optional[str] = Query("all"),
-    time_range: Optional[str] = Query("all"),
-    sort: Optional[str] = Query("hot"),
-    high_signal_only: bool = Query(False),
-    source: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db)
-):
-    """Corpus knowledge search preview using SQLite FTS5 + BM25 + Quality + Recency with Focus Filters."""
-    if not q or len(q.strip()) < 2:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_SEARCH_QUERY_TOO_SHORT",
-                "message": "검색어는 최소 2글자 이상이어야 합니다.",
-                "details": None
-            }
-        )
-
-    service = ChatService(db)
-    try:
-        filters = ChatFocusFilter(
-            category=category or "all",
-            time_range=time_range or "all",
-            sort=sort or "hot",
-            high_signal_only=high_signal_only
-        )
-        result = await service.search_corpus(
-            query=q,
-            top_k=top_k,
-            min_quality=min_quality,
-            category=category,
-            source=source,
-            filters=filters,
-        )
-        return result
-    except SearchQueryTooShortException as e:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_SEARCH_QUERY_TOO_SHORT",
-                "message": str(e),
-                "details": None
-            }
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error_code": "ERR_RETRIEVER_INDEX_ERROR",
-                "message": "검색 인덱스 처리 중 오류가 발생했습니다.",
-                "details": {"error": str(e)}
-            }
-        )
-
-@router.post("/query", response_model=ChatQueryResponse)
-async def chat_query(request: Request, db: AsyncSession = Depends(get_db)):
-    """Synchronous single-shot chat question answering."""
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_INVALID_PAYLOAD",
-                "message": "요청 본문 형식이 올바르지 않습니다.",
-                "details": None
-            }
-        )
-
-    question = body.get("question", "")
-    if not isinstance(question, str) or not question.strip():
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_CHAT_PAYLOAD_EMPTY",
-                "message": "질문 본문이 비어있습니다.",
-                "details": None
-            }
-        )
-
-    if len(question) > 2000:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_CHAT_PAYLOAD_TOO_LARGE",
-                "message": "질문은 최대 2,000자까지 입력 가능합니다.",
-                "details": None
-            }
-        )
-
-    scope = body.get("scope", "global")
-    if scope not in ("scoped", "global"):
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_INVALID_SCOPE_PARAM",
-                "message": "유효하지 않은 검색 스코프 모드입니다.",
-                "details": None
-            }
-        )
-
-    service = ChatService(db)
-    try:
-        req = ChatQueryRequest(**body)
-        res = await service.query_chat(req)
-        return res
-    except HandoverSourceNotFoundException as e:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error_code": "ERR_HANDOVER_SOURCE_NOT_FOUND",
-                "message": f"기사 ID {e.source_id}를 데이터베이스에서 찾을 수 없습니다.",
-                "details": None
-            }
-        )
-    except ChatPayloadEmptyException as e:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_CHAT_PAYLOAD_EMPTY",
-                "message": str(e),
-                "details": None
-            }
-        )
-    except ChatPayloadTooLargeException as e:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_CHAT_PAYLOAD_TOO_LARGE",
-                "message": str(e),
-                "details": None
-            }
-        )
-    except InvalidScopeException as e:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_INVALID_SCOPE_PARAM",
-                "message": str(e),
-                "details": None
-            }
-        )
-    except AnthropicKeyMissingException as e:
-        return JSONResponse(
-            status_code=401,
-            content={
-                "error_code": "ERR_CLAUDE_API_KEY_MISSING",
-                "message": str(e) or "Anthropic Claude API 키가 설정되지 않았습니다.",
-                "details": None
-            }
-        )
-    except AnthropicQuotaExceededException as e:
-        return JSONResponse(
-            status_code=429,
-            content={
-                "error_code": "ERR_CLAUDE_QUOTA_EXCEEDED",
-                "message": str(e) or "Anthropic Claude 호출 한도 초과",
-                "details": None
-            }
-        )
-    except AnthropicOverloadedException as e:
-        return JSONResponse(
-            status_code=529,
-            content={
-                "error_code": "ERR_CLAUDE_OVERLOADED",
-                "message": str(e) or "Anthropic 서버 과부하",
-                "details": None
-            }
-        )
-    except LLMProviderUnavailableException as e:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "error_code": "ERR_LLM_PROVIDER_UNAVAILABLE",
-                "message": str(e) or "가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)",
-                "details": None
-            }
-        )
-    except LLMUpstreamException as e:
-        return JSONResponse(
-            status_code=502,
-            content={
-                "error_code": "ERR_LLM_UPSTREAM_FAILED",
-                "message": str(e) or "외부 LLM 업스트림 통신 실패 / API 장애",
-                "details": None
-            }
-        )
-    except LLMQuotaExceededException as e:
-        return JSONResponse(
-            status_code=429,
-            content={
-                "error_code": "ERR_LLM_QUOTA_EXCEEDED",
-                "message": str(e) or "외부 LLM API 호출 한도 초과",
-                "details": None
-            }
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error_code": "ERR_SERVER_INTERNAL",
-                "message": "서버 내부 처리 중 오류가 발생했습니다.",
-                "details": {"error": str(e)}
-            }
-        )
+        return error_response(404, "ERR_HANDOVER_SOURCE_NOT_FOUND", f"기사 ID {source_id}를 데이터베이스에서 찾을 수 없습니다.")
 
 @router.post("/stream")
 async def chat_stream(request: Request, db: AsyncSession = Depends(get_db)):
@@ -280,56 +73,21 @@ async def chat_stream(request: Request, db: AsyncSession = Depends(get_db)):
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_INVALID_PAYLOAD",
-                "message": "요청 본문 형식이 올바르지 않습니다.",
-                "details": None
-            }
-        )
+        return error_response(400, "ERR_INVALID_PAYLOAD", "요청 본문 형식이 올바르지 않습니다.")
 
     if not isinstance(body, dict):
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_INVALID_PAYLOAD",
-                "message": "요청 본문은 JSON 객체여야 합니다.",
-                "details": None
-            }
-        )
+        return error_response(400, "ERR_INVALID_PAYLOAD", "요청 본문은 JSON 객체여야 합니다.")
 
     question = body.get("question", "")
     if not isinstance(question, str) or not question.strip():
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_CHAT_PAYLOAD_EMPTY",
-                "message": "질문 본문이 비어있습니다.",
-                "details": None
-            }
-        )
+        return error_response(400, "ERR_CHAT_PAYLOAD_EMPTY", "질문 본문이 비어있습니다.")
 
     if len(question) > 2000:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_CHAT_PAYLOAD_TOO_LARGE",
-                "message": "질문은 최대 2,000자까지 입력 가능합니다.",
-                "details": None
-            }
-        )
+        return error_response(400, "ERR_CHAT_PAYLOAD_TOO_LARGE", "질문은 최대 2,000자까지 입력 가능합니다.")
 
     scope = body.get("scope", "global")
     if scope not in ("scoped", "global"):
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_INVALID_SCOPE_PARAM",
-                "message": "유효하지 않은 검색 스코프 모드입니다.",
-                "details": None
-            }
-        )
+        return error_response(400, "ERR_INVALID_SCOPE_PARAM", "유효하지 않은 검색 스코프 모드입니다.")
 
     try:
         req = ChatStreamRequest(**body)
@@ -338,92 +96,31 @@ async def chat_stream(request: Request, db: AsyncSession = Depends(get_db)):
             code, message = "ERR_INVALID_MODEL_TIER", f"유효하지 않은 모델 티어입니다: {body.get('model_tier')}"
         else:
             code, message = "ERR_INVALID_PAYLOAD", "요청 필드 형식이 올바르지 않습니다."
-        return JSONResponse(
-            status_code=400,
-            content={"error_code": code, "message": message, "details": None}
-        )
+        return error_response(400, code, message)
+
+    # 세션 POST 와 같은 규칙: session_id 는 UUID 여야 한다 (없으면 서버가 만든다)
+    if req.session_id is not None:
+        try:
+            uuid.UUID(req.session_id)
+        except ValueError:
+            return error_response(400, "ERR_SESSION_INVALID_UUID", "유효하지 않은 세션 UUID 형식입니다.")
 
     source_id = body.get("source_id")
     # Pre-validate scoped article existence to return clean 404 before opening stream
     if scope == "scoped":
         if not source_id:
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "error_code": "ERR_HANDOVER_SOURCE_NOT_FOUND",
-                    "message": "지정된 기사를 찾을 수 없습니다.",
-                    "details": None
-                }
-            )
-        from app.models.news import NewsItem
-        item = await db.get(NewsItem, source_id)
-        if not item:
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "error_code": "ERR_HANDOVER_SOURCE_NOT_FOUND",
-                    "message": f"기사 ID {source_id}를 데이터베이스에서 찾을 수 없습니다.",
-                    "details": None
-                }
-            )
+            return error_response(404, "ERR_HANDOVER_SOURCE_NOT_FOUND", "지정된 기사를 찾을 수 없습니다.")
+        try:
+            await ChatService(db).get_source_detail(source_id)
+        except HandoverSourceNotFoundException:
+            return error_response(404, "ERR_HANDOVER_SOURCE_NOT_FOUND", f"기사 ID {source_id}를 데이터베이스에서 찾을 수 없습니다.")
 
     # Pre-stream LLM availability check
     try:
-        llm_processor.check_provider_available()
-    except AnthropicKeyMissingException as e:
-        return JSONResponse(
-            status_code=401,
-            content={
-                "error_code": "ERR_CLAUDE_API_KEY_MISSING",
-                "message": str(e) or "Anthropic Claude API 키가 설정되지 않았습니다.",
-                "details": None
-            }
-        )
-    except AnthropicQuotaExceededException as e:
-        return JSONResponse(
-            status_code=429,
-            content={
-                "error_code": "ERR_CLAUDE_QUOTA_EXCEEDED",
-                "message": str(e) or "Anthropic Claude 호출 한도 초과",
-                "details": None
-            }
-        )
-    except AnthropicOverloadedException as e:
-        return JSONResponse(
-            status_code=529,
-            content={
-                "error_code": "ERR_CLAUDE_OVERLOADED",
-                "message": str(e) or "Anthropic 서버 과부하",
-                "details": None
-            }
-        )
-    except LLMProviderUnavailableException as e:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "error_code": "ERR_LLM_PROVIDER_UNAVAILABLE",
-                "message": str(e) or "가용한 LLM 프로바이더 엔진 미설정 (API 키 미등록)",
-                "details": None
-            }
-        )
-    except LLMUpstreamException as e:
-        return JSONResponse(
-            status_code=502,
-            content={
-                "error_code": "ERR_LLM_UPSTREAM_FAILED",
-                "message": str(e) or "외부 LLM 업스트림 통신 실패 / API 장애",
-                "details": None
-            }
-        )
-    except LLMQuotaExceededException as e:
-        return JSONResponse(
-            status_code=429,
-            content={
-                "error_code": "ERR_LLM_QUOTA_EXCEEDED",
-                "message": str(e) or "외부 LLM API 호출 한도 초과",
-                "details": None
-            }
-        )
+        await llm_processor.check_provider_available()
+    except tuple(LLM_ERROR_MAP) as e:
+        status, code, default_message = next(v for k, v in LLM_ERROR_MAP.items() if isinstance(e, k))
+        return error_response(status, code, str(e) or default_message)
 
     service = ChatService(db)
 
@@ -452,15 +149,9 @@ async def list_chat_sessions(
     try:
         sessions = await service.list_sessions(limit=limit, offset=offset)
         return sessions
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error_code": "ERR_SERVER_INTERNAL",
-                "message": f"세션 목록 인출 중 내부 오류가 발생했습니다: {str(e)}",
-                "details": None
-            }
-        )
+    except Exception:
+        logger.exception("chat session list failed")
+        return error_response(500, "ERR_SERVER_INTERNAL", "대화 목록을 불러오지 못했습니다.")
 
 @router.post("/sessions", response_model=ChatSessionDetail, status_code=201)
 async def create_or_upsert_chat_session(
@@ -471,49 +162,31 @@ async def create_or_upsert_chat_session(
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_SESSION_INVALID_UUID",
-                "message": "요청 본문 형식이 올바르지 않습니다.",
-                "details": None
-            }
-        )
+        return error_response(400, "ERR_INVALID_PAYLOAD", "요청 본문이 올바른 JSON 이 아닙니다.")
+    if not isinstance(body, dict):
+        return error_response(400, "ERR_INVALID_PAYLOAD", "요청 본문은 JSON 객체여야 합니다.")
 
     try:
         req = ChatSessionCreateRequest(**body)
-    except Exception as e:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_SESSION_INVALID_UUID",
-                "message": f"요청 유효성 검증 실패: {str(e)}",
-                "details": None
-            }
-        )
+    except ValidationError as e:
+        details = [{"loc": list(err.get("loc", ())), "msg": str(err.get("msg", ""))} for err in e.errors()]
+        return error_response(400, "ERR_INVALID_PAYLOAD", "요청 필드 형식이 올바르지 않습니다.", details)
 
     service = ChatSessionService(db)
     try:
         detail = await service.create_or_upsert_session(req)
         return JSONResponse(status_code=201, content=json.loads(detail.model_dump_json()))
     except InvalidSessionUUIDException as e:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error_code": "ERR_SESSION_INVALID_UUID",
-                "message": str(e),
-                "details": None
-            }
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error_code": "ERR_SESSION_CREATE_FAILED",
-                "message": f"데이터베이스 세션 트랜잭션 커밋에 실패했습니다: {str(e)}",
-                "details": None
-            }
-        )
+        await db.rollback()
+        return error_response(400, "ERR_SESSION_INVALID_UUID", str(e))
+    except MessageIdConflictException as e:
+        await db.rollback()
+        return error_response(400, "ERR_INVALID_PAYLOAD", str(e), {"message_ids": e.message_ids})
+    except Exception:
+        logger.exception("chat session upsert failed")
+        # 오류 응답을 정상 반환하면 get_db 가 커밋하므로 부분 변경을 여기서 버린다 (ARCH-03R)
+        await db.rollback()
+        return error_response(500, "ERR_SESSION_CREATE_FAILED", "대화 세션을 저장하지 못했습니다.")
 
 @router.get("/sessions/{session_id}", response_model=ChatSessionDetail)
 async def get_chat_session_detail(
@@ -526,23 +199,10 @@ async def get_chat_session_detail(
         detail = await service.get_session_detail(session_id)
         return detail
     except SessionNotFoundException as e:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error_code": "ERR_SESSION_NOT_FOUND",
-                "message": str(e),
-                "details": None
-            }
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error_code": "ERR_SERVER_INTERNAL",
-                "message": f"세션 상세 인출 중 오류가 발생했습니다: {str(e)}",
-                "details": None
-            }
-        )
+        return error_response(404, "ERR_SESSION_NOT_FOUND", str(e))
+    except Exception:
+        logger.exception("chat session detail failed")
+        return error_response(500, "ERR_SERVER_INTERNAL", "대화 내용을 불러오지 못했습니다.")
 
 @router.delete("/sessions/{session_id}", response_model=GenericSuccessResponse)
 async def delete_chat_session(
@@ -555,29 +215,8 @@ async def delete_chat_session(
         res = await service.delete_session(session_id)
         return res
     except SessionNotFoundException as e:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "error_code": "ERR_SESSION_NOT_FOUND",
-                "message": str(e),
-                "details": None
-            }
-        )
-    except SessionDeleteFailedException as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error_code": "ERR_SESSION_DELETE_FAILED",
-                "message": str(e),
-                "details": None
-            }
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error_code": "ERR_SESSION_DELETE_FAILED",
-                "message": f"세션 삭제 중 오류가 발생했습니다: {str(e)}",
-                "details": None
-            }
-        )
+        return error_response(404, "ERR_SESSION_NOT_FOUND", str(e))
+    except Exception:  # SessionDeleteFailedException 포함. DB 예외 문장은 로그에만 남긴다
+        logger.exception("chat session delete failed")
+        await db.rollback()  # ARCH-03R
+        return error_response(500, "ERR_SESSION_DELETE_FAILED", "대화를 삭제하지 못했습니다.")

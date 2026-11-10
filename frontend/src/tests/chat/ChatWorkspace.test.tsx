@@ -223,7 +223,7 @@ describe('ChatWorkspace Container', () => {
     await waitFor(
       () => {
         expect(
-          screen.getByText(/외부 LLM 스트리밍 중 통신 연결이 단절되었습니다/i)
+          screen.getByText(/LLM 스트리밍 도중 외부 프로바이더 오류가 발생했습니다/i)
         ).toBeInTheDocument();
       },
       { timeout: 4000 }
@@ -232,7 +232,7 @@ describe('ChatWorkspace Container', () => {
     expect(screen.getByRole('button', { name: /다시 시도|재시도/i })).toBeInTheDocument();
   });
 
-  it('receives SSE status events, renders WorkflowStepTracker and dual citations upon completion', async () => {
+  it('receives SSE status events, renders WorkflowStepTracker and citations when sources arrive after tokens (backend global order, D-29)', async () => {
     render(<ChatWorkspace />);
 
     const textarea = screen.getByRole('textbox', { name: /질문 입력/i });
@@ -252,13 +252,14 @@ describe('ChatWorkspace Container', () => {
     // 2. Check 4-stage engineering report markdown is rendered
     expect(screen.getByText(/1\. 핵심 아키텍처 및 동작 원리/i)).toBeInTheDocument();
 
-    // 3. Check dual citations: Primary [1] and Supplementary [S1] are rendered as buttons
-    const primaryCitations = screen.getAllByRole('button', { name: /출처 1번/i });
+    // 3. global 모드 backend 순서: token* 다음에 sources 가 온다 (MSW 도 같은 순서).
+    //    [1] 은 출처가 붙어야 버튼이 되므로, 토큰 뒤에 온 sources 가 답에 반영됐는지 확인한다.
+    const primaryCitations = screen.getAllByRole('button', { name: /출처 1번: FastMCP/i });
     expect(primaryCitations.length).toBeGreaterThan(0);
+    expect(primaryCitations[0]).toHaveAttribute('data-tone', 'primary');
 
-    const suppCitations = screen.getAllByRole('button', { name: /보충.*출처.*S1/i });
-    expect(suppCitations.length).toBeGreaterThan(0);
-    expect(suppCitations[0]).toHaveAttribute('data-tone', 'supplementary'); expect(suppCitations[0].className).toContain('text-success');
+    // backend 는 보충 출처를 만들지 않는다 (D-28)
+    expect(screen.queryAllByRole('button', { name: /보충.*출처/i })).toHaveLength(0);
   });
 
   it('switches Claude model mid-session and renders ModelChangeDivider in timeline', async () => {
@@ -441,7 +442,7 @@ describe('ChatWorkspace Container', () => {
       },
     });
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       if (url.includes('/api/chat/stream')) {
         return new Response(customStream, {

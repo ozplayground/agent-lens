@@ -27,7 +27,6 @@ BACKEND_CHECKS = [
     ("/api/briefing/settings", 200),
     ("/api/chat/sessions", 200),
     ("/api/research/status", 200),
-    ("/api/mcp/info", 200),
 ]
 FRONTEND_CHECKS = [
     ("/api/health", 200),

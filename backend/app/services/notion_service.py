@@ -6,6 +6,8 @@ from app.config import settings
 
 logger = logging.getLogger("agentlens.notion")
 
+NOTION_NETWORK_ERROR = "Notion API 에 연결하지 못했습니다. 네트워크 상태를 확인해주세요."
+
 class NotionService:
     NOTION_API_URL = "https://api.notion.com/v1"
     NOTION_VERSION = "2022-06-28"
@@ -64,10 +66,12 @@ class NotionService:
                         return False, f"대상 페이지 접근 권한 오류: {err_msg}"
 
                 return True, f"Notion 연동 성공! (연결된 통합: {bot_name})"
-        except httpx.RequestError as e:
-            return False, f"Notion API 네트워크 오류: {str(e)}"
-        except Exception as e:
-            return False, f"Notion 검증 중 오류: {str(e)}"
+        except httpx.RequestError:
+            logger.exception("Notion connection test network error")
+            return False, NOTION_NETWORK_ERROR
+        except Exception:
+            logger.exception("Notion connection test failed")
+            return False, "Notion 연동 확인 중 오류가 발생했습니다."
 
     def _build_blocks(self, briefing: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Converts structured briefing data into native Notion API blocks."""
@@ -76,7 +80,7 @@ class NotionService:
         # 1. Headline Callout
         headline = briefing.get("headline", "오늘의 AI 핵심 동향")
         overview = briefing.get("overview", "")
-        callout_text = f"📌 {headline}"
+        callout_text = headline
         if overview:
             callout_text += f"\n\n{overview}"
 
@@ -85,7 +89,6 @@ class NotionService:
             "type": "callout",
             "callout": {
                 "rich_text": [{"type": "text", "text": {"content": callout_text[:1900]}}],
-                "icon": {"type": "emoji", "emoji": "🌅"},
                 "color": "blue_background"
             }
         })
@@ -96,7 +99,6 @@ class NotionService:
         categories = briefing.get("categories", [])
         for cat in categories:
             cat_name = cat.get("name", "카테고리")
-            cat_icon = cat.get("icon", "🎯")
             cat_summary = cat.get("summary", "")
             items = cat.get("items", [])
 
@@ -105,7 +107,7 @@ class NotionService:
                 "object": "block",
                 "type": "heading_2",
                 "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": f"{cat_icon} {cat_name}"}}],
+                    "rich_text": [{"type": "text", "text": {"content": cat_name}}],
                     "color": "default"
                 }
             })
@@ -117,7 +119,7 @@ class NotionService:
                     "type": "paragraph",
                     "paragraph": {
                         "rich_text": [
-                            {"type": "text", "text": {"content": "💡 동향: "}, "annotations": {"bold": True}},
+                            {"type": "text", "text": {"content": "동향: "}, "annotations": {"bold": True}},
                             {"type": "text", "text": {"content": cat_summary[:1900]}}
                         ],
                         "color": "gray"
@@ -151,12 +153,12 @@ class NotionService:
                 if why:
                     rich_texts.append({
                         "type": "text",
-                        "text": {"content": f"\n↳ 💡 시사점: {why[:250]}"}
+                        "text": {"content": f"\n↳ 시사점: {why[:250]}"}
                     })
                 elif summary:
                     rich_texts.append({
                         "type": "text",
-                        "text": {"content": f"\n↳ 📝 요약: {summary[:250]}"}
+                        "text": {"content": f"\n↳ 요약: {summary[:250]}"}
                     })
 
                 blocks.append({
@@ -176,7 +178,7 @@ class NotionService:
                 "object": "block",
                 "type": "heading_2",
                 "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": "✅ 오늘의 실무 Action Items"}}],
+                    "rich_text": [{"type": "text", "text": {"content": "오늘의 실무 Action Items"}}],
                     "color": "green"
                 }
             })
@@ -226,7 +228,7 @@ class NotionService:
 
         headers = self.get_headers(key)
         date_str = briefing.get("date", "")
-        title_text = f"오늘의 AI 브리핑 - {date_str}"
+        title_text = f"{settings.BRIEFING_TITLE} - {date_str}"
 
         # Determine parent type (page or database)
         parent_payload: Dict[str, Any] = {"page_id": parent_id}
@@ -254,7 +256,6 @@ class NotionService:
 
         payload = {
             "parent": parent_payload,
-            "icon": {"type": "emoji", "emoji": "🌅"},
             "properties": properties_payload,
             "children": initial_blocks
         }
@@ -288,9 +289,11 @@ class NotionService:
                         )
 
                 return True, "Notion 페이지가 성공적으로 생성되었습니다!", page_url
-        except httpx.RequestError as e:
-            return False, f"Notion API 통신 실패: {str(e)}", None
-        except Exception as e:
-            return False, f"Notion 페이지 생성 중 예외 발생: {str(e)}", None
+        except httpx.RequestError:
+            logger.exception("Notion page create network error")
+            return False, NOTION_NETWORK_ERROR, None
+        except Exception:
+            logger.exception("Notion page create failed")
+            return False, "Notion 페이지 생성 중 오류가 발생했습니다.", None
 
 notion_service = NotionService()

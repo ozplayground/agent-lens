@@ -1,10 +1,7 @@
 import {
   ChatSourceDetailResponse,
   ChatSearchChunk,
-  ChatSourceItem,
   ChatSessionDetail,
-  ChatSessionSummary,
-  ChatMessageItem,
 } from '@/types/chat';
 
 /** 고신호 테스트 기사 상세 메타데이터 픽스처 (Primary Articles) */
@@ -190,30 +187,6 @@ export const mockSearchChunks: ChatSearchChunk[] = [
   },
 ];
 
-/** 자율 에이전틱 리서치 보충 웹 출처 픽스처 (Supplementary Web Citations) */
-export const mockSupplementarySources: ChatSourceItem[] = [
-  {
-    index: 'S1',
-    type: 'supplementary',
-    title: 'Model Context Protocol (MCP) Official Architecture & Spec',
-    url: 'https://modelcontextprotocol.io/docs/concepts/architecture',
-    source: 'web_search',
-    domain: 'modelcontextprotocol.io',
-    snippet: 'The Model Context Protocol establishes an open, extensible JSON-RPC 2.0 protocol for connecting AI agents to external tools and context.',
-    relevance_score: 0.96,
-  },
-  {
-    index: 'S2',
-    type: 'supplementary',
-    title: 'FastMCP Installation & Production Deployment Guide',
-    url: 'https://github.com/jlowin/fastmcp/blob/main/docs/deployment.md',
-    source: 'web_search',
-    domain: 'github.com',
-    snippet: 'Deploy FastMCP servers using Docker, ASGI uvicorn workers, and Claude Desktop stdio transport.',
-    relevance_score: 0.91,
-  },
-];
-
 /** 대화 세션 영속화 및 히스토리 모의 픽스처 데이터 (Chat Sessions Fixtures) */
 export const initialMockSessions: ChatSessionDetail[] = [
   {
@@ -255,7 +228,6 @@ export const initialMockSessions: ChatSessionDetail[] = [
             category: mockArticles[102].category,
             quality_score: mockArticles[102].quality_score,
           },
-          mockSupplementarySources[0],
         ],
         status: 'completed',
         model: 'claude-sonnet-5-5',
@@ -295,7 +267,7 @@ export const initialMockSessions: ChatSessionDetail[] = [
         session_id: '8c7b59e3-3084-56a7-9d57-0673836c932b',
         role: 'assistant',
         content:
-          '## 1. 핵심 아키텍처 및 동작 원리\n\nFastMCP[1]는 파이썬 데코레이터 문법 기반으로 초경량 Model Context Protocol[S1] 서버를 구축할 수 있습니다.',
+          '## 1. 핵심 아키텍처 및 동작 원리\n\nFastMCP[1]는 파이썬 데코레이터 문법 기반으로 초경량 Model Context Protocol 서버를 구축할 수 있습니다.',
         created_at: '2026-09-28T07:00:04Z',
         sources: [
           {
@@ -308,7 +280,6 @@ export const initialMockSessions: ChatSessionDetail[] = [
             category: mockArticles[101].category,
             quality_score: mockArticles[101].quality_score,
           },
-          mockSupplementarySources[1],
         ],
         status: 'completed',
         model: 'claude-sonnet-5-5',
@@ -318,7 +289,7 @@ export const initialMockSessions: ChatSessionDetail[] = [
     ],
   },
   {
-    id: '9d8c60f4-4195-67b8-0e68-1784947da43c',
+    id: '9d8c60f4-4195-47b8-8e68-1784947da43c',
     title: 'SWE-bench 멀티모달 벤치마크 평가',
     scope_mode: 'scoped',
     active_source_id: 103,
@@ -329,7 +300,7 @@ export const initialMockSessions: ChatSessionDetail[] = [
     messages: [
       {
         id: '5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b',
-        session_id: '9d8c60f4-4195-67b8-0e68-1784947da43c',
+        session_id: '9d8c60f4-4195-47b8-8e68-1784947da43c',
         role: 'user',
         content: 'SWE-bench Multimodal 벤치마크의 평가 방식은 어떻게 되나요?',
         created_at: '2026-09-27T14:00:00Z',
@@ -340,7 +311,7 @@ export const initialMockSessions: ChatSessionDetail[] = [
       },
       {
         id: '6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c',
-        session_id: '9d8c60f4-4195-67b8-0e68-1784947da43c',
+        session_id: '9d8c60f4-4195-47b8-8e68-1784947da43c',
         role: 'assistant',
         content:
           '## 1. 핵심 아키텍처 및 동작 원리\n\nSWE-bench Multimodal[1]은 실세계 웹 및 GUI 렌더링 결함을 해결하는 자율 코딩 에이전트 평가 하네스입니다.',
@@ -398,7 +369,7 @@ export function generateArticleScopedAnswerTokens(
     '## 3. 도입 필요성 및 가치 (Why it matters)\n\n',
     `${article.why_it_matters || '프로덕션 AI 에이전트 시스템의 안정성과 확장성을 극대화합니다.'}[1]\n\n`,
     '## 4. 실무 도입 시 고려사항 및 추천 적용 방안\n\n',
-    `• **원본 참조 및 아키텍처 연계**: \`${article.source}\` 출처의 공식 명세(${article.url})를 바탕으로 단계적 검증을 수행하십시오[S1].\n`,
+    `• **원본 참조 및 아키텍처 연계**: \`${article.source}\` 출처의 공식 명세(${article.url})를 바탕으로 단계적 검증을 수행하십시오.\n`,
     `• **품질 점수 기반 프로덕션 배포**: 품질 지표 ${article.quality_score}점 기준의 엔터프라이즈 거버넌스 가이드라인을 준수하십시오.`,
   ];
 }

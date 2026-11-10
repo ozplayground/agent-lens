@@ -152,7 +152,7 @@ async def test_upsert_existing_session():
             "scope_mode": "scoped",
             "active_source_id": 1
         })
-        assert res2.status_code in (200, 201)
+        assert res2.status_code == 201
         data = res2.json()
         assert data["id"] == custom_id
         assert data["title"] == "변경된 제목"
@@ -311,12 +311,15 @@ async def test_fifo_30_retention_eviction():
 # ==============================================================================
 
 @pytest.mark.asyncio
-async def test_chat_stream_auto_persists_turn_and_auto_titles():
+async def test_chat_stream_auto_persists_turn_and_auto_titles(fake_llm):
     """Verify POST /api/chat/stream persists user & assistant messages upon completion and auto-titles the session."""
+    import llm_fakes
+    # 스크래퍼가 여는 기사 페이지는 흉내가 답한다 (실제 네트워크로 나가지 않는다, TEST-03)
+    fake_llm.register_web("https://github.com/example/langgraph-harness", text=llm_fakes.FAKE_ARTICLE_HTML)
     session_id = str(uuid.uuid4())
     question = "LangGraph v0.3 Functional API 상태 머신 원리를 설명해줘"
 
-    async def mock_stream_tokens(prompt):
+    async def mock_stream_tokens(prompt, **kwargs):
         yield ("LangGraph v0.3은 ", "Mock Gemini")
         yield ("함수형 API를 지원합니다.", "Mock Gemini")
 

@@ -6,8 +6,8 @@ from app.services.llm_providers.anthropic_provider import AnthropicLLMProvider
 from app.services.llm_processor import llm_processor, LLMUpstreamException, LLMProviderUnavailableException
 
 def test_version_is_0_2_2():
-    """Verify application version is synchronized to 0.4.1 per release mandate."""
-    assert settings.VERSION == "0.4.1"
+    """Verify application version is synchronized to 0.4.2 per release mandate."""
+    assert settings.VERSION == "0.4.2"
 
 
 def test_mock_llm_provider_removed_from_production():
@@ -136,7 +136,7 @@ async def test_no_mock_fallback_on_provider_absence():
     """Verify check_provider_available and generate_live_answer fail-fast without fake mock text."""
     with patch.object(llm_processor, "has_live_provider", return_value=False):
         with pytest.raises(LLMProviderUnavailableException):
-            llm_processor.check_provider_available()
+            await llm_processor.check_provider_available()
 
         with pytest.raises(LLMProviderUnavailableException):
             await llm_processor.generate_live_answer("Test prompt")

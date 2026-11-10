@@ -27,7 +27,8 @@ class ChatFocusFilter(BaseModel):
 
 class ChatStreamRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
-    model: Optional[str] = Field(default_factory=get_default_chat_model)
+    # 기본값을 채우지 않는다: 명시 model > model_tier > 기본 챗 모델 순으로 고른다 (BUG-14)
+    model: Optional[str] = None
     model_tier: Optional[ModelTier] = None
     scope: Literal["scoped", "global"] = "global"
     source_id: Optional[int] = None
@@ -45,28 +46,15 @@ class ChatStreamRequest(BaseModel):
             raise ValueError("user_message_id 와 assistant_message_id 는 서로 달라야 합니다.")
         return self
 
-class ChatQueryRequest(BaseModel):
-    question: str = Field(..., min_length=1, max_length=2000)
-    model: Optional[str] = Field(default_factory=get_default_chat_model)
-    model_tier: Optional[ModelTier] = None
-    scope: Literal["scoped", "global"] = "global"
-    source_id: Optional[int] = None
-    session_id: Optional[str] = None
-    history: Optional[List[ChatMessageHistory]] = None
-    top_k: int = Field(5, ge=1, le=10)
-    filters: Optional[ChatFocusFilter] = None
-
 # ============================================================================
 # v2.4 Status & Dual Source Schemas
 # ============================================================================
 
+# stream_chat 이 실제로 보내는 단계만 둔다 (scoped: extracting_source → synthesizing, global: thinking → [tool_calling] → synthesizing)
 ChatStatusStep = Literal[
     "thinking",
     "tool_calling",
-    "observing",
     "extracting_source",
-    "evaluating_sufficiency",
-    "agentic_searching",
     "synthesizing",
 ]
 
@@ -126,20 +114,6 @@ class DonePayload(BaseModel):
     latency_ms: int
     usage: Optional[TokenUsageMeta] = None
 
-class ChatQueryResponse(BaseModel):
-    answer: str
-    sources: List[ChatSourceItem]
-    session_id: str
-    model: Optional[str] = Field(default_factory=get_default_chat_model)
-    model_tier: Optional[ModelTier] = "sonnet"
-    scope: Literal["scoped", "global"]
-    applied_filters: Optional[ChatFocusFilter] = None
-    is_relaxed: bool = False
-    primary_count: Optional[int] = None
-    supplementary_count: Optional[int] = None
-    latency_ms: int
-    usage: Optional[TokenUsageMeta] = None
-
 class ChatSourceDetailResponse(BaseModel):
     id: int
     title: str
@@ -175,16 +149,11 @@ class ChatSearchChunk(BaseModel):
     bm25_score: float
     rag_score: float
 
-class ChatSearchResponse(BaseModel):
-    query: str
-    total_matches: int
-    chunks: List[ChatSearchChunk]
-    latency_ms: int
-
 class ErrorResponse(BaseModel):
     error_code: str
     message: str
-    details: Optional[Dict[str, Any]] = None
+    # 객체·배열·null. 요청 검증 실패는 [{"loc": [...], "msg": "..."}] (app/api/errors.py)
+    details: Optional[Union[Dict[str, Any], List[Any]]] = None
 
 class GenericSuccessResponse(BaseModel):
     status: str = "success"

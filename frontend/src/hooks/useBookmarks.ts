@@ -41,11 +41,19 @@ function getServerSnapshot(): string | null {
   return null;
 }
 
+/** 화면이 쓰는 최소 모양(숫자 id, 문자열 title)을 갖춘 원소만 북마크로 본다. */
+function isBookmarkItem(value: unknown): value is NewsItem {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as { id?: unknown; title?: unknown };
+  return typeof v.id === 'number' && typeof v.title === 'string';
+}
+
+/** 저장값이 배열이 아니거나 깨졌으면 북마크 0개로 본다 (다른 탭·수동 편집·이전 형식, FE-17). */
 function parseBookmarks(raw: string | null): NewsItem[] {
   if (!raw) return [];
   try {
-    const parsed: NewsItem[] = JSON.parse(raw);
-    return parsed;
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isBookmarkItem) : [];
   } catch (e) {
     console.error('Failed to parse bookmarks from localStorage', e);
     return [];

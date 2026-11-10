@@ -16,6 +16,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Tabs, TabPanel } from '@/components/ui/Tabs';
 import { Button } from '@/components/ui/Button';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { cn } from '@/lib/cn';
 import DeepResearcherTab from './sources/DeepResearcherTab';
 import SourcesListTab from './sources/SourcesListTab';
@@ -52,6 +53,8 @@ export default function SourcesModal({ isOpen, onClose, onSourcesUpdated }: Sour
   const [researchStatus, setResearchStatus] = useState<ResearchStatus | null>(null);
   const [auditLogs, setAuditLogs] = useState<ResearchAuditLog[]>([]);
   const [loading, setLoading] = useState(false);
+  // 불러오기 실패. 받은 데이터가 없으면 탭 대신 오류와 다시 시도를 보인다 (0건처럼 보이지 않게, FE-30).
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -69,9 +72,10 @@ export default function SourcesModal({ isOpen, onClose, onSourcesUpdated }: Sour
           setSourcesData(srcRes);
           setResearchStatus(statRes);
           setAuditLogs(logsRes.logs);
+          setLoadError(null);
         })
         .catch(() => {
-          setMsg({ type: 'error', text: '데이터를 불러오지 못했습니다.' });
+          setLoadError('소스 정보를 불러오지 못했습니다.');
         })
         .finally(() => {
           setLoading(false);
@@ -198,6 +202,9 @@ export default function SourcesModal({ isOpen, onClose, onSourcesUpdated }: Sour
 
         {/* 결과 안내: 대화상자 안의 live 영역 */}
         <div aria-live="polite" aria-atomic="true" className="px-4 md:px-5">
+          {loadError && sourcesData ? (
+            <p className="mt-3 rounded-lg border border-border bg-danger-soft px-3 py-2 text-sm text-danger">{loadError}</p>
+          ) : null}
           {msg ? (
             <p
               className={cn(
@@ -211,7 +218,14 @@ export default function SourcesModal({ isOpen, onClose, onSourcesUpdated }: Sour
         </div>
 
         <TabPanel id={activeTab} idPrefix={TAB_ID_PREFIX}>
-          {activeTab === 'deep_research' ? (
+          {loadError && !sourcesData ? (
+            <ErrorState
+              title={loadError}
+              message="백엔드 서버 연결 상태를 확인해주세요."
+              onRetry={loadData}
+              retrying={loading}
+            />
+          ) : activeTab === 'deep_research' ? (
             <DeepResearcherTab
               researchStatus={researchStatus}
               auditLogs={auditLogs}
